@@ -1,0 +1,447 @@
+
+sb7 command add BOTSEND 700 -none BS
+sb7 register global BOTSEND
+
+proc @botsend { nick host handle chan arg } {
+	sb7 parseflags
+	switch -exact -- $1l {
+
+		help {
+			print -help $nick "\[BOTSEND\]:"
+			print -help $nick "Syntax: $::botnick BOTSEND HELP"
+			print -help $nick "Syntax: $::botnick BOTSEND HINT"
+			print -help $nick "Syntax: $::botnick BOTSEND SEND \[-NOENCRYPT\] <bot list> \":\" <file list>"
+			print -help $nick "Syntax: $::botnick BOTSEND STATUS"
+			print -help $nick "Syntax: $::botnick BOTSEND SHIFT \[wildcard\]"
+			print -help $nick "Syntax: $::botnick BOTSEND SET <option> \[value\]"
+			print -help $nick ""
+			print -help $nick "The BOTSEND command is a rudimentary re-write of the SB5/SB6 command which sends files from one bot to another (via the botnet). Obviously, both sending and target bots must be connected into the same botnet (anywhere / any configuration will do)."
+			print -help $nick "For now, BOTSEND can NOT handle file names with spaces in them. All file names must be without any spaces (underscore, dash, and other printable characters are legal)."
+			print -help $nick "All files will default to the \"botsend\" sub-directory ( [sb7 target dir .]/botsend/ ), unless AUTOSHIFT is on (see \"SET\" below)."
+			print -help $nick ""
+			print -help $nick "SHIFT: move the files from the \"incoming directory\" ( [sb7 target dir .]/botsend/ ) to a more-logical directory. Example: SB7 component files (say.sb7) would be moved to: [sb7 target dir .]/scripts/sb7/"
+			print -help $nick "SET / GET / LIST: adjust options for $0u"
+		}
+
+		hint {
+			print -help $nick "New syntax for SB7 (note the literal colon \[\":\"\]):"
+			print -help $nick "$::botnick BOTSEND SEND <target 1> \[target 2\] \[target 3\] ... \[target N\] : <file 1> \[file 2\] \[file 3\] ... \[file n\]"
+			return
+		}
+
+		status { print -help -header -return $nick "Option is not available at this time." }
+
+		shift {
+			if ![access check 1000 $handle] { print -error -header -return $nick "You don't have access to use this option." }
+#debug =0
+			if [string eq LIST $2u] {
+#debug =1
+				set files [glob -nocomplain -tails -directory [sb7 target dir ""]/botsend -- *]
+#debug =1.5
+				if [isempty files] { print -header -return $nick "No files need to be shifted." }
+#debug =1.6
+				foreach file [lsort -inc -dict $files] { print $nick "${file} -> [sb7 target dir $file]" }
+#debug =1.7
+				print $nick "Done."
+#debug =1.8
+				return 
+			}
+#debug =2
+			if [isempty 2] { set pattern * } { if [string eq ALL $2u] { set pattern * } { set pattern $2 } }
+			set path [file dirname [file normalize $::config]]/botsend
+			set files [glob -nocomplain -directory $path -tails -- $pattern]
+			if [isempty files] { print -short -help -return $nick "No files to shift." }
+			empty ok bad
+			array set dirs [list]
+			foreach file $files {
+				set dir [sb7 target dir $file]
+				set error [ catch { file rename -force ${path}/$file ${dir}/ } crap ]
+				if $error { lappend bad "$file (-> ${dir}): $crap" } { lappend ok $file ; lappend dirs($dir) $file }
+			}
+			if [notempty ok] {
+				foreach a [lsort -increasing -dictionary [array names dirs]] {
+					print -header $nick "Shifted OK ($a) [join $dirs($a) " - "]"
+				}
+			}
+			if [notempty bad] { foreach a $bad { print -header $nick "Shift Error: $a" } }
+			return
+		}
+
+		alias {
+			switch -exact -- [string tolower $2] {
+
+				add {
+					if [isempty 3] { print -short -return $nick "What alias am I editing?" }
+					if [isempty 4] { print -short -return $nick "What am I adding to that alias?" }
+					set alias [data array get BOTSEND ALIAS:$3]
+					empty ok bad
+					foreach bot $4e { 
+						set m [lsearch -exact [string tolower $alias] [string tolower $bot]]
+						if { $m == -1 } { lappend ok $bot ; lappend alias $bot } { lappend bad $bot }
+					}
+					data array set BOTSEND ALIAS:$3 $alias
+					if [notempty ok] { saveme data ; print -short $nick "Added: [ajl $ok]" }
+					if [notempty bad] { print -short $nick "Already added: [ajl $bad]" }
+					print $nick "Current alias: [none [ajl $alias] <none>]"
+					return
+				}
+
+				del {
+					if [isempty 3] { print -short -return $nick "What alias am I editing?" }
+					if [isempty 4] { print -short -return $nick "What alias am I removing from that alias?" }
+					if [string eq * $4] {
+						data array set BOTSEND ALIAS:$3 ""
+						saveme data
+						print -return -short $nick "The \"${3}\" alias has been cleared."
+					} {
+						set alias [data array get BOTSEND ALIAS:$3]
+						empty ok bad
+						foreach bot $4e { 
+							set m [lsearch -exact [string tolower $alias] [string tolower $bot]]
+							if { $m == -1 } { lappend bad $bot } { lappend ok $bot ; set alias [lreplace $alias $m $m] }
+						}
+						data array set BOTSEND ALIAS:$3 $alias
+						if [notempty ok] { saveme data ; print -short $nick "Added: [ajl $ok]" }
+						if [notempty bad] { print -short $nick "Never existed: [ajl $bad]" }
+					}
+					print $nick "Current alias: [none [ajl $alias] <none>]"
+					return
+				}
+
+				list {
+					if [isempty 3] {
+						# List all
+						foreach group [lsort -unique -dictionary -increasing [data array names BOTSEND ALIAS:*]] {
+							print -return -short $nick "\"[string toupper [mid $group 7]]\" group: [none [ajl [data array get BOTSEND $group]] <none>]"
+						}
+					} {
+						# List specific
+						print -return -short $nick "\"${3}\" group: [none [ajl [data array get BOTSEND ALIAS:$3]] <none>]"
+					}
+					return
+				}
+
+				clear {
+					if ![string eq -nocase CLEAR $3] { print -help -short -return $nick "Are you \002\037SURE\002\037?! Use \"CLEAR CLEAR\" to convince me." }
+					foreach a [data array names BOTSEND ALIAS:*] { data array set BOTSEND $a "" }
+					saveme data
+					print -return -header $nick "All aliases have been cleared."
+				}
+
+				default { error "\[BOTSEND ALIAS\] Unknown option: $2" }
+
+			}
+		}
+
+		send {
+			array set status [list ok "" utl "" perm "" botnet "" open ""]
+			array set send [list bots "" files ""]
+
+			flags:simple $2e [list -noencryption] data flags
+			if { [llength $data] == 2 } { set data [linsert $data 1 :] }
+			lassign [split $data :] bots files
+
+#%# Is file already being sent?
+
+			set tempbots ""
+			foreach bot $bots {
+				set alias [data array get BOTSEND ALIAS:$bot]
+				if [isempty alias] { lappend tempbots $bot } { set tempbots [concat $tempbots $alias] }
+			}
+			foreach bot $tempbots { set bot [trim $bot] ; if [islinked $bot] { lappend send(bots) $bot } { lappend status(botnet) $bot } }
+			foreach file $files {
+				set file [sb7 component [trim $file]]
+				if [file exists $file] { lappend send(files) $file } { lappend status(utl) $file }
+			}
+			if [notempty status(botnet)] { print -help $nick "\[BOTSEND\] Not part of the botnet: [ajl $status(botnet)]" }
+			if [notempty status(utl)] { print -help $nick "\[BOTSEND\] Unable to locate the following files: [ajl $status(utl)]" }
+			if [isempty send(bots)] return
+			if [isempty send(files)] return
+
+			if [isempty ::botnet-nick] { set id $::botnick } { set id ${::botnet-nick} }
+			append id :[clock seconds]:[expr abs([clock clicks -milli])]:[addzero [rand 10000000] 7]
+			data set @BOTSEND:$id $send(bots)
+			set buffer_timeout 30
+			set clock [clock seconds]
+			foreach file $send(files) {
+				set error [ catch { set data [readfile $file "" true] } crap ]
+				if $error { lappend status(open) $file ; continue }
+
+				set tail [file tail $file]
+				binary scan $data H* binary
+
+				# Transmit header then flood-send data. Don't wait for ACK!
+				# Botnet payload (including all headers): 400 chars max
+
+				set length 300 ; # 250
+				foreach bot $send(bots) {
+					if [validflag -noencryption] { set buffer $binary } { set buffer [encrypt sb7:botsend:01 $binary] }
+					data incr @BOTSEND:${id}:SIZE [string length $buffer]
+					putbot $bot [list botsend:receive header $id $nick $host $handle $chan $tail [clock seconds] [expr abs([clock clicks -milli])]]
+					if [validflag -noencryption] { empty header } { set header + }
+					while { [notempty buffer] } {
+						if { ( [clock seconds] - $clock ) >= $buffer_timeout } {
+							update
+							pingpong
+							set clock [clock seconds]
+						}
+						putbot $bot [list botsend:receive data $id ${header}[left $buffer $length]]
+						set buffer [right $buffer -$length]
+					}
+					putbot $bot [list botsend:receive eof $id [clock seconds] [expr abs([clock clicks -milli])]]
+				}
+			}
+			if [notempty send(bots)] { print $nick "\[BOTSEND\] Sending data to [ajl $send(bots)]: [ajl $send(files)]. Due to the linear nature of botnet data streams, it may take a few moments for each bot to acknowledge the file." }
+			if [notempty status(open)] { print $nick "\[BOTSEND\] Failures (unable to open file): [ajl $status(open)]" }
+#debug =DATA([data list @botsend:${id}*])
+			return
+		}
+
+		set {
+			if ![access check 1000 $handle] { print -error -header -return $nick "You don't have access to use this option." }
+
+			if [isempty 2] { print -error -header -return $nick "Options: [ajl [data get BOTSEND:OPTIONS]]" }
+			if { [lsearch -exact [data get BOTSEND:OPTIONS] $2l] == -1 } { print -error -header -return $nick "Illegal option: $2u" }
+			switch -exact -- $2l {
+
+				autoshift {
+					if [isempty 3] { print -error -header -return $nick "What value am I setting to $0u ${2u}?" }
+					set autoshift [boolean -falsetrue $3]
+					data set botsend:option:autoshift $autoshift
+					data save
+					print -header $nick "[iff $autoshift Activating Deactivating] $0u $2u"
+					return
+				}
+
+				autoload {
+					if [isempty 3] { print -error -header -return $nick "What value am I setting to $0u ${2u}?" }
+					set autoload [boolean -falsetrue $3]
+					data set botsend:option:autoload $autoload
+					data save
+					print -header $nick "[iff $autoload Activating Deactivating] $0u $2u"
+					return
+				}
+
+				dir {
+					if [isempty 3] { print -error -header -return $nick "What value am I setting to $0u ${2u}?" }
+					set dir [join $3e]
+					data set botsend:option:dir $dir
+					data save
+					print -header $nick "New save directory: $dir"
+					return
+				}
+
+				default { ? BOTSEND SET }
+			}
+		}
+
+		get {
+			if [isempty 2] { print -error -header -return $nick "Options: [ajl [data get BOTSEND:OPTIONS]]" }
+			if { [lsearch -exact [data get BOTSEND:OPTIONS] $2l] == -1 } { print -error -header -return $nick "Illegal option: $2u" }
+			set value [data get BOTSEND:OPTION:$2]
+			if [isempty value] { set value <undefined> }
+			print -header $nick "$0u ${2u}: $value"
+			return
+		}
+
+		list {
+			print -header $nick "List of $0u settings:"
+			foreach a [lsort -increasing -dictionary [data get BOTSEND:OPTIONS]] {
+				set value [data get BOTSEND:OPTION:$a]
+				if [isempty value] { set value <undefined> }
+				print $nick "[string totitle $a]: $value"
+			}
+			print $nick "Done."
+			return
+		}
+
+		clear {
+			if ![string eq -nocase CLEAR $2] { print -header -return $nick "Are you \002\037SURE\037\002?! Use \"$0u $1u CLEAR\" to convince me." }
+			foreach a [data get BOTSEND:OPTIONS] { data set BOTSEND:OPTION:$a }
+			data set BOTSEND:OPTIONS
+			@botsend:bootstrap ; # Restore all default settings
+			print -header $nick "Cleared all BOTSEND settings: defaults have been re-installed."
+			return
+		}
+
+		default { print -help -error -header -return $nick "I have no idea what you mean by: $1u" }
+
+	}
+}
+
+# Short syntax:
+# Sending bot: send SYN code, begin burst, send EOF
+# Receiving bot: verifies incoming data. If BAD, set "reject" code & ignore all until EOF. Otherwise, store it
+
+proc @botsend:receive { bot - arg } {
+	lassign $arg cmd id 0 1 2 3 4 5 6
+	switch -exact -- [string tolower $cmd] {
+
+		header {
+			# Does user have priviliges to send this file here?
+			set ok 1
+			if ![validuser $2] { set ok 0 }
+			if ![string eq -nocase $2 [handle ${0}!${1}]] { set ok 0 }
+
+			# If not, set up a "dev/null" marker
+			data set @BOTSEND:$id [list $ok $0 $1 $2 $3 $4 $5 $6]
+			data set @BOTSEND:${id}:DATA ""
+			data set @BOTSEND:${id}:encryption 0
+			if $ok {
+				putbot $bot "botsend:gimme $4"
+				print -home "\[BOTSEND\] Received attention signal: [nph $0 $2]@${bot}: $4"
+			} {
+				print -home "\[BOTSEND\] Rejecting send of \"${4}\" by [nph $0 $2]@$bot"
+			}
+
+			# Let's presume we're in for a long haul. Even though BOTNET receives are event-driven,
+			# presume we're gonna lock up ....
+			update
+			pingpong
+			data array set @botsend clock [clock seconds]
+			return
+		}
+
+		data {
+			# Collect into bucket only (no parsing)
+			if [data array get -notempty @botsend clock] {
+				if { ( [clock seconds] - [data array get @botsend clock] ) > 30 } {
+					update
+					pingpong
+					data array set @botsend clock [clock seconds]
+				}
+			}
+			set ok [data lindex @BOTSEND:$id 0]
+			if !$ok return ; # Silent reject
+			switch -exact -- [left $0 1] {
+				+ { data set @BOTSEND:${id}:encryption 1 ; data append @BOTSEND:${id}:DATA [mid $0 2] }
+				- { data set @BOTSEND:${id}:encryption 2 ; data append @BOTSEND:${id}:DATA [mid $0 2] }
+				= { data set @BOTSEND:${id}:encryption 3 ; data append @BOTSEND:${id}:DATA [mid $0 2] }
+				default { data set @BOTSEND:${id}:encryption 0 ; data append @BOTSEND:${id}:DATA $0}
+			}
+			return
+		}
+
+		eof {
+#debug =BOTSEND =EOF =0 arg cmd id =DATA([data get @BOTSEND:$id])
+
+			# Do one last update / pingpong and clear the clock data
+			update
+			pingpong
+			data array set @botsend clock
+
+			# write file; report errors to $HOME
+			lassign [data get @BOTSEND:$id] ok nick host handle chan filename time milli
+#debug =BOTSEND =EOF =0.5 ok nick host handle chan filename time milli
+			if !$ok { data set @BOTSEND:$id ; data set @BOTSEND:${id}:DATA ; return }
+#debug =BOTSEND =EOF =1
+			#set path [sb7 target dir $filename]
+			set path [data get BOTSEND:OPTION:DIR]
+			if [isempty path] { set path [sb7 target dir ""]/botsend }
+#debug =BOTSEND =EOF =2
+
+			# Auto-shift?
+			set text_autoshift ""
+			if [data get -boolean BOTSEND:option:AUTOSHIFT] {
+				set text_autoshift " (auto-shifted)" ; # Space!
+				set path [sb7 target dir $filename]
+			}
+#debug =BOTSEND =EOF =3
+#debug =[data get -boolean BOTSEND:option:AUTOSHIFT]
+#debug =1 path text_autoshift
+
+			if ![file isdirectory $path] { file mkdir $path }
+
+			# Decrypt HERE, not line-by-line (might allow corruption)
+			set data [data get @BOTSEND:${id}:DATA]
+
+#debug =BOTSEND =EOF =4
+			set error [catch {
+				switch -exact -- [data get @BOTSEND:${id}:encryption] {
+					0 { # Do Nothing # }
+					1 - 2 - 3 { set data [decrypt sb7:botsend:[addzero [data get @BOTSEND:${id}:encryption] 2] $data] }
+					default { # Do Nothing # }
+				}
+			} crap]
+#debug =BOTSEND =EOF =5
+			if $error { print -return -error "\[BOTSEND\] Error while decompressing data: $crap" }
+			set error [ catch {
+				set w [open ${path}/$filename w]
+				fconfigure $w -translation binary
+				puts $w [binary format H* $data]
+				flush $w
+				close $w
+				set size [file size ${path}/$filename]
+			} crap]
+#debug =([data get @BOTSEND:$id]) arg 0 milli
+#debug =BOTSEND =EOF =6
+			data set @BOTSEND:$id
+			data set @BOTSEND:${id}:DATA
+			if $error { set m "\[BOTSEND\] Unable to write ${path}/${filename}: $crap" ; print -home $m ; error $m }
+			set elapsed [expr abs( $milli - $1 )]
+			if { $elapsed > 1000 } { set time "[expr $elapsed / 1000.0] s" } { set time "$elapsed ms" }
+			set speed [expr ( $size / ( $elapsed / 1000.0 ) ) / 1024 ]
+			set text_autoload ""
+#debug =BOTSEND =EOF =7
+			if [data get -boolean BOTSEND:option:AUTOLOAD] {
+				set text_autoload " (auto-loaded)" ; # Space!
+				[sb7 command get maintenance proc] $nick $host $handle $chan "maintenance load [file tail $filename]"
+			}
+			putbot $bot [list botsend:complete $id]
+#debug =BOTSEND =EOF =8
+			print -home "\[BOTSEND\] Successfully saved${text_autoshift}${text_autoload}: [file tail ${path}/$filename] ([comma $size] bytes / ${time} / [format %.3f $speed] KiB/s)"
+#debug =BOTSEND =EOF =9
+			return
+		}
+
+		default { set m "\[BOTSEND\] Unknown data type received from ${bot}: $cmd" ; print -home $m ; error $m }
+
+	}
+	putbot $bot [list sb7:botsend header $id $nick $host $handle $chan $file]
+	while { [notempty buffer] } {
+		putbot $bot [list sb7:botsend data $id [left $buffer 300]]
+		set buffer [right $buffer -300]
+	}
+	putbot $bot [list sb7:botsend eof $id]
+}
+
+proc @botsend:gimme { bot cmd file } { print -home -return "\[BOTSEND\] $bot is ready to receive: $file" }
+
+proc @botsend:complete { bot cmd id } {
+	set data [data get @BOTSEND:$id]
+	set data [ldestroy -nocase $data $bot]
+	data set @BOTSEND:$id $data
+	if [notempty data] return
+	set size [data get @BOTSEND:${id}:SIZE]
+	data set @BOTSEND:${id}:SIZE ""
+	lassign [split $id :] nick time milli random
+	set now [clock seconds]
+	set now_milli [expr abs([clock clicks -milli])]
+	set elapsed [expr $now - $time]
+	set elapsed_milli [expr abs( $now_milli - $milli )]
+	if { $elapsed_milli > 1000 } { set elapsed_milli [expr $elapsed_milli / 1000.0] ; set word seconds } { set word milliseconds }
+	print -home "\[BOTSEND\] Transfers complete: [comma $size] bytes ([bytes $size 1]) in [comma $elapsed_milli] $word"
+	return
+}
+
+proc @botsend:bootstrap args {
+	set options [list autoshift:false autoload:false dir:[sb7 target dir ""]/botsend]
+	empty defaults
+	foreach option $options {
+		lassign [split $option :] a b
+		if [data isempty BOTSEND:OPTION:$a] { data set BOTSEND:OPTION:$a $b }
+		lappend defaults $a
+	}
+	data clear @BOTSEND:*
+	data set BOTSEND:OPTIONS $defaults
+}
+
+#####
+# Bootstrap
+
+bind bot - botsend:gimme @botsend:gimme
+bind bot - botsend:receive @botsend:receive
+bind bot - botsend:complete @botsend:complete
+
+@botsend:bootstrap
+

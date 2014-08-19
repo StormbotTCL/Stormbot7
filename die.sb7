@@ -1,0 +1,57 @@
+sb7 command add DIE 800 -core
+#SB:command add JISATSU 1000 -core -locklevel SHINE
+#SB:command add HIBERNATE 800 -core SAVEPOINT
+#SB:register variable GLOBAL DIE:REASON
+
+proc @die { nick host handle chan arg } {
+	sb7 parseflags -default -quick
+
+	if [string eq HELP $1u] {
+		print -help $nick "\[DIE\]:"
+		print -help $nick "Syntax: $::botnick DIE \[reason\]"
+		print -help $nick "Syntax: $::botnick DIE -QUICK \[reason\]"
+		print -help $nick "Syntax: $::botnick DIE -default \[default reason\]"
+		print -help $nick "Kills the bot (the bot need to be started again from the shell). You may specify a death message."
+		print -help $nick "-DEFAULT: set a default death message, to be used when DIE is used without a reason."
+		print -help $nick "-QUICK: DIE quickly w/o saving any files (to avoid corruption), by asking the system to kill its PID via KILL -9. May / may not work, depending on your OS' interpretation of KILL -9. It will remove the bot's PID file manually (because the bot's clean-up routine won't be allowed to happen)."
+		return 0
+	}
+
+	if [validflag -default] {
+		if [isempty 1] { print -return $nick "Default DIE reason: [ifemptyval [sbdget DIE:REASON] <none>]" }
+		data array set DIE REASON $1e
+		saveme data
+		print $nick "New default DIE reason: [join $1e]"
+		return 0
+	}
+
+	#%# Replace $NICK with [NICK $NICK] ????? #%#
+	print -home "I know when I'm not wanted (DIE Command by ${nick})"
+	if [isempty 1] {
+		set death [data array value DIE REASON]
+		if [string eq "" $death] { set death "DIE by $nick" }
+	} {
+		set death "[join $1e] (DIE by $nick)"
+	}
+	if [validflag -quick] {prepend death "\[QUICK DEATH\] "}
+	set ::servers ""; # Keep bot from returning after dying.
+
+	raw "QUIT :$death"
+	putcmdlog "DIE command issued by ${nick}: $death"
+
+	if [validflag -quick] {# Don't save anything!
+		die $death; # Does DIE cause a file save? (no mention of it in docs)
+		set pid [pid]
+		if [notempty ::pidfile] { file delete $::pidfile }
+		exec kill -9 $pid
+		return 0; # Unnecesary?
+	}
+
+#	SB:deauth *; # Log everyone out before dying (SB:logoutall allows PROTECTAUTHS to avoid the logout!)
+#	SB:registerdeath -execute
+	saveme all true
+
+	#after 1000; # Pause for a second [let the /QUIT register].
+	die $death
+	return 0
+}

@@ -1,0 +1,765 @@
+# When a note is sent somewhere else (FWD / copy / BOTNET), restore the modes to the original note text!
+
+sb7 command add note 0 -core notes ntoe no
+sb7 register user note:setting:*
+sb7 register global note
+sb7 register global notes:!
+
+proc @note { nick host handle chan arg } {
+	# Old flags: -global -archive -name -shortdate -private -receipt -urgent -important -none -unread -quiet -show -bcc -notme -copyme -delete -strip -doublespace -debug -nohexconvert -forcehexconvert -tab2space -notabs -noread
+	# Include shortcut for note name archives: --NAME (instead of -name NAME)
+
+	if ![info exists ::max-notes] { set max-notes 100 } ; # A fair value (I think)
+	set validalias [list {^[A-Z][0-9A-Z_\.\-]*$} {0-9 A-Z _ . -}] ; # REGEXP then text
+
+	set setlevel 600 ; # Level to change settings (the entire bead itself is bound to 0)
+
+	empty validflags
+	if ![string eq "" [@notes archives $handle]] { set validflags [concat $validflags --[join [@notes archives $handle] " --"]] }
+	sb7 parseflags $validflags
+
+	# Select archive (always lowercase archive names!)
+	set archivename main
+	if [validflag -archive] {set archivename archive}
+	if [validflag -name] {
+		set archivename $1l
+		# Re-shift the variables!
+		set arg [concat $0 $flags $2e]
+		sb7 parseflags $validflags
+	}
+
+	# Assign archive name using new shortcut method (use last one listed)
+	foreach a $flags { if [left $a 2 --] { set archivename [mid $a 3] } }
+
+	set archivename [string tolower $archivename]; # Force lowercase!
+	if ![regexp -- {^[a-z][a-z0-9]*$} $archivename] {print -help $nick "\[NOTE\] Illegal archive name \"${archivename}\" (must start with \"A-Z\" and otherwise must consist of: \"0-9\" or \"A-Z\")" ; return }
+
+	switch -exact -- [string tolower $1] {
+ 
+		help {
+			# Regardless of syntax or params / args needed, FLAGS goes before the target user
+			print -help $nick "\[NOTE\]:"
+			print -help $nick "Syntax: $::botnick NOTE HELP"
+			print -help $nick "Syntax: $::botnick NOTE \[flags*\] <target> <message> (<-- this is a syntax change from SB6!)"
+			print -help $nick "Syntax: $::botnick NOTE READ \[--<archive name>\] \[-show -noread\] <number list>"
+			print -help $nick "Syntax: $::botnick NOTE DELETE \[--<archive name>\] <number list>"
+			print -help $nick "Syntax: $::botnick NOTE REPLY \[--<archive name>\] <number> <message>"
+			print -help $nick "Syntax: $::botnick NOTE FORWARD \[--<archive name>\] <target user> \[flags*\] <number list (using commas, not spaces)> \[additional message\]"
+			print -help $nick "Syntax: $::botnick NOTE INDEX"
+			print -help $nick "Syntax: $::botnick NOTE LIST"
+			print -help $nick "Syntax: $::botnick NOTE MARK (marks all notes as read)"
+			print -help $nick "Syntax: $::botnick NOTE ALIAS <help | add | del | list | clear>"
+			#print -help $nick "Syntax: $::botnick NOTE UNSEND <target> <CHECK | DEL> <NOTE number | list of numbers>"
+			#print -help $nick "Syntax: $::botnick NOTE CHGFLAGS <note range>"
+			#print -help $nick "Syntax: $::botnick NOTE LIFE <max days>"
+			#print -help $nick "Syntax: $::botnick NOTE MAX <max notes>"
+			print -help $nick "Syntax: $::botnick NOTE SET <private | hourly | onjoin>"
+			print -help $nick ""
+			print -help $nick "The SB7 NOTE bead is yet ANOTHER rewrite of the forever-beleaguering SB6 NOTE bead with simplifications."
+			print -help $nick "Keeping with SB6's version, notes are being kept in \"archives\" (think of them as \"note directories\"), each kept separate from the other."
+			print -help $nick "This allows you to organize your notes into categories. This way, you don't have to keep your notes alive because you haven't dealt with them yet (and, thus, get constant hourly reminders of them when you really want to save them for later)."
+			print -help $nick "For now, the NOTE command has limited functions\; new ones will be added as the code is adapted for SB7 use."
+			print -help $nick "All previous formats of notes will be automatically converted to SB7 (internal) format. Also, all notes sent via the eggdrop-included \"notes.tcl\" and \"notes2.tcl\" will be converted automatically as well."
+			print -help $nick ""
+			print -help $nick "Note: functions not programmed yet: recycle bin, alias, block, hex-encoded messages, line-breaks (\"||\")"
+			print -help $nick "Note: several SB6 functions will NOT be included \[intentionally deprecated\]: multi-line notes, auto forwarding to another bot, changing importance flags, unsend, vacation message, settings (copyme & shortdate), retrieve, & E-mail"
+			return
+		}
+
+		hint { print -short -help -return $nick "There are no HINTs available for this bead." }
+
+		unread - read {
+			flags:simple $2e [list -show -unread -noread] range flags
+
+			# Wedge
+			if [string eq -nocase UNREAD $1] { lappend flags -unread }
+
+			if [validflag -unread] { set range 1- } 
+			if [isempty range] { set range 1- }
+			set count [@notes count $handle $archivename]
+			if !$count { print -short -return $nick "You have no notes to read." }
+			set range [get range $range 1 $count]
+			set range [lunique [concat [@notes list $handle $archivename urgent] $range]]
+			if [isempty range] { print -short -return $nick "You have no notes to read." }
+			set alwaysprivate [boolean [userinfo get $handle note:setting:private:read]]
+			set lastread [userinfo get $handle note:setting:lastread]
+			if [isempty lastread] { zero lastread ; userinfo set $handle note:setting:lastread 0 }
+			zero shown
+			foreach item $range {
+				set outputflag -none
+				set note [@notes get $handle $archivename $item]
+				lassign [lindex $note 0] number max who when what modes
+				set what [@notes mode strip $what]
+				empty color_header color_open color_close tag
+				if [validflag -unread] { if { $when < $lastread } continue } ; # Must be "<" and not "<=" (new SB7 definition of UNREAD!)
+
+				# Priority order: private, important, urgent
+				if { [lsearch -exact $modes private] != -1 } { set outputflag -private ; set color_header "" ; set color_open [color 15,14] ; set color_close [color] ; lappend tag private }
+				if { [lsearch -exact $modes important] != -1 } { set color_header [color 4] ; set color_open [color 4] ; set color_close [color] ; lappend tag important }
+				if { [lsearch -exact $modes urgent] != -1 } { set color_header [color 4,5] ; set color_open [color 8,4] ; set color_close [color] ; lappend tag urgent }
+				if [notempty tag] { set tag " \{${color_header}[join [string toupper $tag] " -- "]${color_close}\}" }
+
+				# Override all but -show
+				if $alwaysprivate { set outputflag -private }
+
+				# Override all
+				if [validflag -show] { set outputflag -none }
+
+				one shown
+ 				set what [join $what] ; # LIST issues: do this AFTER all other manipulating!
+				print $outputflag $nick "${number}/${max}:$tag $who ([formatdate $when $handle]): ${color_open}${what}${color_close}"
+			}
+			if !$shown { print -short $nick "No valid notes within requested range." }
+			if ![validflag -noread] { userinfo set $handle note:setting:lastread [clock seconds] ; saveme user }
+			return
+		}
+
+		mark {
+			# Let's presume that the timestamp means: "all notes FROM-THIS-POINT-ON are unread."
+			# This differs from SB6 where the timestamp as interpretted as:
+			# "all notes AFTER this timestamp are unread." This solves a race condition where a
+			# note may have arrived the same second (but chronologically after) a user read her/his notes.
+			# Side effect: due to the same race condition, additional notes may qualify as unread
+			# (thus, a user indicating note #5 as a refernce might also be including notes #3-4).
+
+			if [isempty 2] { userinfo set $handle note:setting:lastread [clock seconds] ; saveme data ; print -return -short $nick "All notes marked as read." }
+			if [string eq -nocase HELP $2] {
+				print -help $nick "The MARK option sets when you last \"read\" your notes. This allows you to specifically alter the \"you have # unread notes pending\" alerts. Options:"
+				print -help $nick "MARK: set all notes as read"
+				print -help $nick "MARK 0: mark all notes as unread"
+				print -help $nick "MARK 1 to ${max-notes}: mark all notes that arrived BEFORE that note number as read, all notes arriving after as unread"
+				print -help $nick "MARK <valid unix / epoch timestamp>: set the timestamp manually (advanced users only)"
+				print -help $nick "MARK <any valid ISO-readable date string>: set the timestamp manually (advanced users only)"
+				return
+			}
+			if [isnum -integer $2] { 
+				set markme $2 
+				if !$markme {
+					userinfo set $handle note:setting:lastread $markme
+					saveme data
+					print -short -return $nick "All notes are now marked as: unread"
+				} elseif { $markme <= ${::max-notes} } {
+					# Use a specific note number for reference (from MAIN archive only!)
+					set count [@notes count $handle main]
+					if { $markme > $count } { set markme $count }
+					lassign [lindex [@notes get $handle main $markme] 0] - - - when
+					userinfo set $handle note:setting:lastread $when
+					saveme data
+					print -short -return $nick "Marking notes unread as of: [formatdate $when $handle]"
+				} {
+					# An actual timestamp was used
+					userinfo set $handle note:setting:lastread $markme
+					saveme data
+					print -short -return $nick "Marking notes unread as of: [formatdate $markme $handle]"
+				}
+			} {
+				# A convertable time string was used?
+				set markme [clock scan $2e]
+				userinfo set $handle note:setting:lastread $markme
+				saveme data
+				print -short -return $nick "Marking notes unread as of: [formatdate $when $handle]"
+			}
+		}
+
+		erase - del - delete {
+			set range $2e
+			if [isempty range] { print -short -return $nick "What notes are we deleting?" }
+			set deleted [@notes delete $handle $archivename $range]
+			print $nick "Notes numbers deleted: [process numberlist $deleted]"
+			saveme data
+			return
+		}
+
+		index {
+			set ok false
+			foreach a [lsort -inc -dict -unique [@notes names $handle]] {
+				set count [@notes count $handle $a]
+				if $count { set ok true }
+				print $nick "\[[string toupper $a]\] [comma $count] [plural note $count]"
+			}
+			if !$ok { print -short $nick "You have no notes." }
+			return
+		}
+
+		list {
+			set count [@notes count $handle main]
+			if !$count { print -return -short $nick "You have no notes." }
+			array set from [list]
+			foreach note [@notes get $handle main 1-] {
+				lassign $note count max who when what
+				lappend from([string tolower $who]) $count
+			}
+			print -short $nick "You have [comma $count] [plural note $count]:"
+			if { [llength [array names from]] == 1 } { 
+				print $nick "[array names from]: all"
+			} {
+				foreach a [lsort -increasing -dictionary -unique [array names from]] { print $nick "[handle $a]: [process numberlist $from($a)]" }
+			}
+			return
+		}
+
+		alias {
+			switch -exact -- [string tolower $2] {
+
+				help {
+					print -help $nick "Syntax: $::botnick $0u $1u add <alias name> <alias members> (add members to the alias)"
+					print -help $nick "Syntax: $::botnick $0u $1u del <alias name> <alias members> (removes members from the alias)"
+					print -help $nick "Syntax: $::botnick $0u $1u del <alias name> * (deletes all members of the alias)"
+					print -help $nick "Syntax: $::botnick $0u $1u list \[wildcard\] (shows members of all aliases, or, of a specific alias)"
+					print -help $nick "Syntax: $::botnick $0u $1u clear (clears all aliases)"
+					return
+				}
+
+				add {
+					if [isempty 3] { print -short -help -return "To what alias name are we adding?" }
+					if ![regexp -nocase -- [lindex $validalias 0] $3] { print -short -help -return "Illegal alias name. Valid characters: [lindex $validalias 1]" }
+					if [isempty 4] { print -short -help -return "What alias targets are we adding to ${3}?" }
+					set temp [concat [userinfo get $handle note:setting:alias:$3] $4e]
+					empty alias
+					foreach a [lsort -increasing -unique [string tolower $temp]] { lappend alias [handle $a] }
+					userinfo set $handle note:setting:alias:$3 $alias
+					saveme user
+					print -short -return $nick "\[[string toupper $3]\] [ajl $alias]"
+				}
+
+				delete - del {
+					if [isempty 3] { print -short -help -return "From what alias name are we deleting?" }
+					if ![regexp -nocase -- [lindex $validalias 0] $3] { print -short -help -return "Illegal alias name. Valid characters: [lindex $validalias 1]" }
+					if [isempty 4] { print -short -help -return "What alias targets are we removing from ${3}?" }
+					set alias [lremove -all -multiple -nocase [userinfo get $handle note:setting:alias:$3] $4e]
+					userinfo set $handle note:setting:alias:$3 $alias
+					saveme user
+					print -short -return $nick "\[[string toupper $3]\] [ajl $alias]"
+				}
+
+				list {
+					if [isempty 3] { set matchme * } { set matchme $3e }
+					set aliases [lremove -not -all -glob -nocase -multiple [regsub -all -- note:setting:alias: [userinfo list $handle note:setting:alias:*] ""] $matchme]
+					if [isempty aliases] { print -short -return $nick "No matching aliases defined." }
+					foreach alias [lsort -increasing -unique -dictionary $aliases] {
+						set name [lindex [split $alias :] end]
+						print $nick "\[[string toupper $name]\] [ajl [userinfo get $handle note:setting:alias:$alias]]"
+					}
+					return
+				}
+
+				clear {
+					if ![string eq -nocase CLEAR $3] { print -help -short -return "Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." }
+					foreach alias [userinfo list $handle note:setting:alias:*] { userinfo set $handle $alias "" }
+					saveme user
+					print -short -return $nick "Your note alias data has cleared."
+				}
+
+				default { print -return -short $nick "Unknown option: $2" }
+
+			}
+		}
+
+		set {
+			# For each option, check access levels against $SETLEVEL
+			switch -exact -- [string tolower $2] {
+
+				help {
+					# Visible to all users
+					print -help $nick "Available to admins only[lindex [list "" " (including you)"] [access check $setlevel $handle]]:"
+					print -help $nick "Syntax: $::botnick NOTE SET HOURLY <off | on> (if turned on, you will be notified of any new (pending) notes every hour)"
+					print -help $nick "Syntax: $::botnick NOTE SET ONJOIN <off | on> (if turned on, you will be notified of any new (pending) notes when you join the channel)"
+					print -help $nick ""
+					print -help $nick "Available to all users:"
+					print -help $nick "Syntax: $::botnick NOTE SET PRIVATE READ <off | on> (if turned on, all of your notes will be processed with the \"-private\" flag automatically active. You have to use the -SHOW flag to display your notes to channel, even if your output is already set to in-channel)"
+					print -help $nick "Syntax: $::botnick NOTE SET PRIVATE SEND <off | on> (if turned on, all of your notes will be delivered with the \"-private\" flag automatically added)"
+					print -help $nick "Syntax: $::botnick NOTE SET VACATION <off | message> (if turned on, anyone who sends you notes will automatically be sent a \"vacation reply\" message. Please don't abuse this or I'll disable it)"
+					return
+				}
+
+				private {
+					# Visible to all users
+					switch -exact -- [string tolower $3] {
+
+						read {
+							if [isempty 4] { print -help -short -return $nick "Current setting: [boolean -on [userinfo get $handle note:setting:private:read]]" }
+							userinfo set $handle note:setting:private:read [boolean -on $4]
+							saveme user
+							print -short -return $nick "Your private-read setting is now: [boolean -on $4]"
+						}
+
+						send {
+							if [isempty 4] { print -help -short -return $nick "Current setting: [boolean -on [userinfo get $handle note:setting:private:send]]" }
+							userinfo set $handle note:setting:private:send [boolean -on $4]
+							saveme user
+							print -short -return $nick "Your private-send setting is now: [boolean -on $4]"
+						}
+
+						default { print -help -short -return $nick "Unknown option: note set private $3" }
+
+					}
+				}
+
+				vac - vacation {
+					if [isempty 3] { print -short -return $nick "Current setting: [none [userinfo set $handle note:setting:private:vacation] off]" }
+					if [isfalse $3] { set message "" } { set message $3e }
+					userinfo set $handle note:setting:vacation $message
+					saveme user
+					print -short -return $nick "Vacation message is now: $3e"
+				}
+
+				onjoin {
+					if ![access check $setlevel $handle] { print -help -short -return $nick "You don't have access to change settings\; you must be a level $setlevel or above." }
+					if [isempty 3] { print -short -return $nick "Current setting: [boolean -on [data array get -boolean note setting:onjoin]]" }
+					data array set note setting:onjoin [boolean -on $3]
+					saveme data
+					print -short -return $nick "Onjoin notification is now: [boolean -on $3]"
+				}
+
+				hourly {
+					if ![access check $setlevel $handle] { print -help -short -return $nick "You don't have access to change settings\; you must be a level $setlevel or above." }
+					if [isempty 3] { print -short -return $nick "Current setting: [boolean -on [data array get -boolean note setting:hourly]]" }
+					data array set note setting:hourly [boolean -on $3]
+					saveme data
+					print -short -return $nick "Hourly notification is now: [boolean -on $3]"
+				}
+
+				default { print -help -short -return $nick "Unknown option: set $2" }
+
+			}
+		}
+
+		forward - fwd {
+			if [isempty 2] { print -help -short -return $nick "To what user are we forwarding notes?" }
+			if [isempty 3] { print -help -short -return $nick "Which notes are we forwarding?" }
+			set count [@notes count $handle main]
+			set targets [@notes targets $handle $2]
+			if [isempty targets] { print -short -return $nick "Invalid target: $2" }
+			set range [get range $3 1 $count]
+			set message $4e
+			zero saveme
+			foreach note [@notes get $handle main $range] {
+				lassign $note num max who when what modes
+				array set error [list]
+				foreach target $targets {
+					lassign [whois $target $handle] - target_nick - target_handle
+					if [isempty target_handle] { set target_handle $target }
+					if [isempty target_nick] { set target_nick $target_handle }
+					
+					set what "Originally sent [formatdate $when $target_handle]: $what"
+					# Do NOT copy modes when forwarding notes (save "always-private")
+					# Maybe later: add fresh flag options (same as normal)?
+					if [notempty message] { set what "(${what}) $message" }
+					if [boolean [userinfo get $handle note:setting:private:send]] { set what [@notes mode set $what private] }
+					set result [@notes send $target main $handle $when $what]
+					# Ignore SPECIFIC result codes for FWD; just report generally that the notes were sent or not
+					switch -exact -- $result {
+						0 - 2 - 3 - 5 { lappend error(ok) [nph $target_nick $target_handle] ; print -short $target_nick "${target_nick}: you just received a note from [iff [string eq -nocase $target_nick $nick] "... yourself?!?" "[nph $nick $handle]."]" }
+						1 - 4 { lappend error(default) [nph $target_nick $target_handle] }
+					}
+				}
+				if [notempty error(ok)] { one saveme ; print -short $nick "Note #[comma $num]: delivered messages: [ajl $error(ok)]" }
+				if [notempty error(default)] { print -short $nick "Note #[comma $num]: unknown delivery problem: [ajl $error(default)]" }
+				unset error
+			}
+			if $saveme { saveme data }
+			return
+		}
+
+		default {
+			# Send note
+			flags:simple $1e [list -urgent -important -private -receipt] text flags
+			set note [lassign $text users]
+			set targets [@notes targets $handle $users]
+			# Did we get anywhere with all this?
+			if [isempty targets] { print -short -return $nick "Invalid target: $1" }
+
+			# Flags?
+			if [boolean -on [userinfo get $handle note:setting:private:send]] { lappend flags -private }
+			set note [@notes mode set $note $flags]
+
+			# Send to all targets
+			array set error [list]
+			foreach target $targets { 
+				lassign [whois $target $handle $chan] - target_nick - target_handle
+				set result [@notes send $target_handle main $handle [clock seconds] $note]
+				switch -exact -- $result {
+
+					0 { lappend error(ok) [nph $target_nick $target_handle] ; print -short $target_nick "${target_nick}: you just received a note from [iff [string eq -nocase $target_nick $nick] "... yourself?!?" "[nph $nick $handle]."]" }
+
+					1 { lappend error(bad) [nph $target_nick $target_handle] }
+
+					2 { lappend error(fwd) [nph $target_nick $target_handle] }
+
+					3 { lappend error(partyline) [nph $target_nick $target_handle] ; print -short $target_nick "${target_nick}: you just received a note from [iff [string eq -nocase $target_nick $nick] "... yourself?!?" "[nph $nick $handle]."]" }
+
+					4 { lappend error(blocked) [nph $target_nick $target_handle] }
+
+					5 { lappend error(vacation) [nph $target_nick $target_handle] }
+
+					default { lappend error(default) [nph $target_nick $target_handle] }
+
+				}
+			}
+			zero saveme
+			if [notempty error(ok)] { one saveme ; print -short $nick "Delivered messages: [ajl $error(ok)]" }
+			if [notempty error(bad)] { print -short $nick "No such user: [ajl $error(bad)]" }
+			if [notempty error(fwd)] { print -short $nick "Automatically forwarded messages: [ajl $error(fwd)]" }
+			if [notempty error(partyline)] { one saveme ; print -short $nick "Displayed to DCC CHAT: [ajl $error(partyline)]" }
+			if [notempty error(vacation)] { print -short $nick "Delivered but on vacation: [ajl $error(vacation)]" }
+			if [notempty error(blocked)] { print -short $nick "Unable to be delivered: [ajl $error(blocked)]" }
+			if [notempty error(default)] { print -short $nick "Unknown delivery problem: [ajl $error(default)]" }
+			if $saveme { saveme data }
+			return
+		}
+
+	}
+	return 0
+}
+
+proc @notes { cmd args } {
+	# @notes archives $handle
+	# @notes get $handle $archivename <range>
+	# @notes send $handle $archivename <from> <TS> <message>
+	# @notes delete $handle $archivename <list of notes: parse with GET RANGE>
+	# @notes rename $handle $archivename <new archive name> -- Don't allow "MAIN" to be renamed!
+	# @notes move $handle $archivename <new archive target> <note range>
+	# @notes modes get <note>
+	# @notes modes set <note> <modes>
+	# @notes targets <list>
+
+	switch -exact -- [string tolower $cmd] {
+
+		archive - archives - names {
+			empty names
+			set matches [lassign $args handle]
+			if ![validuser $handle] return
+			if [isempty matches] { set matches * }
+			foreach archive [data array names NOTES:$handle] {
+				foreach match $matches {
+					if [string match -nocase $match $archive] { lappend names $archive }
+				}	
+			}
+			return [lsort -inc -uni -dict $names]
+		}
+
+		mode - modes {
+			set modes [join [lassign $args cmd2 note]]
+			switch -exact -- [string tolower $cmd2] {
+
+				get {
+					empty modes
+					if { [string first \020 $note] != -1 } { lappend modes private }
+					if { [string first \021 $note] != -1 } { lappend modes quiet }
+					if { [string first \022 $note] != -1 } { lappend modes receipt }
+					if { [string first \023 $note] != -1 } { lappend modes nohex }
+					if { [string first \024 $note] != -1 } { lappend modes important }
+					if { [string first \025 $note] != -1 } { lappend modes urgent }
+					if { [string first \026 $note] != -1 } { lappend modes unused:026 }
+					if { [string first \027 $note] != -1 } { lappend modes unused:027 }
+					return [lsort -unique -dictionary -increasing $modes]
+				}
+
+				set {
+					foreach mode [lsort -dictionary -unique -increasing $modes] {
+						if [left $mode 1 -] { set mode [mid $mode 2] }
+						switch -exact -- [string tolower $mode] {
+							private { prepend note \020 }
+							quiet { prepend note \021 }
+							receipt { prepend note \022 }
+							nohex { prepend note \023 }
+							important { prepend note \024 }
+							urgent { prepend note \025 }
+							unused:026 { prepend note \026 }
+							unused:027 { prepend note \027 }
+						}
+					}
+					return $note
+				}
+
+				strip { return [string trimleft $note \020\021\022\023\024\025\026\027] }
+
+				default { error "\[@NOTES [string toupper $cmd]\] Unknown option: $cmd2" }
+
+			}
+		}
+
+		count {
+			lassign $args handle archive type
+			if ![validuser $handle] return
+			if [isempty type] { set type all }
+			set notes [data array get NOTES:$handle $archive]
+			if [isempty notes] { return 0 }
+			set lastread [userinfo get $handle NOTE:setting:LASTREAD]
+			if [isempty lastread] { set lastread 0 }
+			zero count
+			foreach note $notes {
+				switch -glob -- [string tolower $type] {
+
+					new { if { $lastread < [lindex $note 1] } { incr count } }
+
+					urg* { if [instr [lindex $note 2] \025] { incr count } }
+
+					imp* { if [instr [lindex $note 2] \024] { incr count } }
+
+					default { incr count }
+
+				}
+
+			}
+			return $count
+		}
+
+		list {
+			empty list
+			lassign $args handle archive type
+			if ![validuser $handle] return
+			if [isempty type] { set type all }
+			set notes [data array get NOTES:$handle $archive]
+			if [isempty notes] { return 0 }
+			set lastread [userinfo get $handle NOTE:setting:LASTREAD]
+			if [isempty lastread] { set lastread 0 }
+			zero count
+			foreach note $notes {
+				incr count
+				switch -glob -- [string tolower $type] {
+
+					new { if { $lastread < [lindex $note 1] } { lappend list $count } }
+
+					urg* { if [instr [lindex $note 2] \025] { lappend list $count } }
+
+					imp* { if [instr [lindex $note 2] \024] { lappend list $count } }
+
+					default { lappend list $count }
+
+				}
+
+			}
+			return $list
+		}
+
+		get {
+			empty get
+			set range [join [lassign $args handle archive]] ; # $RANGE may be multi-word
+			if ![validuser $handle] return
+			if [isempty archive] { set archive main } ; # Let's default to the main archive, shall we?
+			set notes [data array get NOTES:$handle $archive]
+			if [isempty notes] return
+			set ll [llength $notes]
+			if [isempty range] { set range 1-$ll }
+			foreach pos [lsort -increasing -unique -integer [get range $range 1 $ll]] {
+				set index [expr $pos - 1]
+				lassign [lindex $notes $index] who when what
+				lappend get [list $pos $ll $who $when [@notes mode strip $what] [list [@notes mode get $what]]]
+			}
+			return $get
+		}
+
+		add - send {
+			# Error codes: 0 (sent: successful), 1 (no such user), 2 (sent: autofwded), 3 (sent: shown to partyline), 4 (blocked), 5 (sent: vacation)
+			lassign $args handle archive from ts message quiet ; # $QUIET needed for anti-vacation double-bounce
+			if ![validuser $handle] { return 1 }
+			if [isempty message] { set message $ts ; set ts [clock seconds] }
+			set returncode 0
+			set autofwd [getuser $handle fwd]
+			if [notempty autofwd] {
+				lassign [split $autofwd] user bot
+				if [isempty bot] { set bot $user ; set user $handle }
+				set id ${::botnet-nick}:[clock seconds]:[clock clicks -milli]
+				set data [encrypt sb7:note:encrypted [list ${from}@${::botnet-nick} [clock seconds] [$message]]]
+				putbot $bot [list sb7:note:send start $id $user]
+				while { [notempty data] } {
+					putbot $bot [list sb7:note:send data $id $user [left $data 80] ]
+					set data [right $data -80]
+				}
+				putbot $bot [list sb7:note:send eof $id $user]
+				return 2
+			}
+			# Use "ADD" to not broadcast a note to DCC channel
+			if [string eq -nocase send $cmd] {
+				set idx [hand2idx $handle]
+				if [valididx $idx] { putidx $idx "[color 3]\[NOTE\] From ${from}: ${message}[color]" ; set returncode 3 }
+			}
+			data array lappend NOTES:$handle $archive [list $from $ts $message]
+
+			# Vacation messages?
+			set vacation [userinfo get $handle note:setting:vacation]
+			if ![istrue $quiet] {
+				if [notempty vacation] {
+					# Ignore any "vacation message" double-bounces
+					set returncode 5
+					@notes send $from main $handle [clock seconds] "You recently sent a note to $handle but $handle has a vacation message set: $vacation" true
+				}
+			}
+
+			return $returncode
+		}
+
+		del - delete {
+			empty delete
+			set range [join [lassign $args handle archive]] ; # $RANGE may be multi-word
+			if ![validuser $handle] return
+			set notes [data array get NOTES:$handle $archive]
+			if [isempty notes] return
+			set ll [llength $notes]
+			foreach pos [lsort -decreasing -unique -integer [get range $range 1 $ll]] {
+				set index [expr $pos - 1]
+				set notes [lreplace $notes $index $index]
+				lappend delete $pos 
+			}
+			data array set NOTES:$handle $archive $notes
+			return [lsort -increasing -unique -integer $delete]
+		}
+
+		ren - rename {
+			# Error codes: 0 (successful), 1 (no such user), 2 (nothing to move), 3 (attempt to destroy MAIN), 4 (target archive already exists)
+			lassign $args handle old new
+			if ![validuser $handle] { return 1 }
+			if [string eq -nocase main $old] { return 3 }
+			if [string eq -nocase main $new] { return 3 }
+			set archives [@names names $handle]
+			if { [lsearch -exact [string tolower $archives] [string tolower $new]] != -1 } { return 4 }
+			set notes [data array get NOTES:$handle $old]
+			if [isempty notes] { return 2 }
+			data array set NOTES:$handle $new $notes
+			data array set NOTES:$handle $old ""
+			return 0
+		}
+
+		mv - move {
+			set range [join [lassign $args handle old new]]
+			if ![validuser $handle] return
+			set notes [data array get NOTES:$handle $old]
+			if [isempty notes] return
+			set ll [llength $notes]
+			if [isempty range] { set range 1-$ll }
+			set list [get range $range 1 $ll]
+			foreach pos [lsort -increasing -unique -integer $list] {
+				set index [expr $pos - 1]
+				data array lappend NOTES:$handle $new [lindex $notes $index]
+			}
+			@notes delete $handle $old $list
+			return $list
+		}
+
+		target - targets {
+			set temp [split [join [lassign $args handle]] {:,;}]
+			empty targets temp2
+			# Process aliases
+			# Due to groupings, use CONCAT ....
+			foreach item $temp {
+				zero ok
+				foreach a [userinfo list $handle note:setting:alias:*] {
+					set name [lindex [split $a :] end]
+					set alias [userinfo get $handle $a]
+					if [string eq -nocase $name $item] { one ok ; set temp2 [concat $temp2 $alias] ; break }
+				}
+				if !$ok { lappend temp2 $item }
+			}
+			foreach a $temp2 {
+				lassign [whois $a $handle] - - - target
+				if [notempty target] { lappend targets $target } { lappend targets $a }
+			}
+			return $targets
+		}
+
+		default { error "\[@NOTES\] Unknown command: $cmd" }
+
+	}
+}
+
+proc @notes:hourly args {
+	# Start with: maximum age
+
+	# Check: total number of notes (per user)
+
+	# Now handle normal hourly checks
+	if ![data array get -boolean note setting:hourly] return
+
+	foreach user [userlist -b] {
+		set count [@notes count $user main]
+		set new [@notes count $user main new]
+		if $new {
+			set urgent [@notes count $user main urgent]
+			set important [@notes count $user main important]
+			lassign [whois $user] online nick host handle chan auth_handle auth_nick
+			if $online { print $nick "\[NOTE HOURLY\] ${nick}, you have $new new [plural note $new] pending ($urgent urgent -- $important important)" }
+		}
+	}
+	return
+}
+
+proc @notes:onjoin { nick host handle chan } {
+	if [isbotnick $nick] return
+	if ![data array get -boolean note setting:onjoin] return
+	set count [@notes count $handle main]
+	set new [@notes count $handle main new]
+	set urgent [@notes count $handle main urgent]
+	set important [@notes count $handle main important]
+	print $nick "\[NOTE ONJOIN\] ${nick}, you have $count [plural note $count] pending: $new new, $urgent urgent, $important important"
+	return
+}
+
+proc @notes:flags { flags message { preprocess "" } } { # Must use $FLAGS so VALIDFLAG will work
+	# Available: 026 - 027
+	array set modes [list \020 private \021 quiet \022 receipt \023 nohexconvert \024 important \025 urgent \026 unused:026 \027 unused:027]
+
+	if [notempty preprocess] {set flags [concat $preprocess $flags]}
+
+	# Should STRIP come =before= other flags? What if "-STRIP -URGENT" comes through? It'll re-add -URGENT.
+	if [validflag -strip] {
+		foreach mode [array names modes] {
+			regsub -all -- $mode $message "" message
+		}
+	}
+
+	foreach mode [array names modes] {
+		if [validflag -$modes($mode)] {
+			set message ${mode}[regsub -all -- $mode $message ""]
+		}
+	}
+	return $message
+}
+
+proc @notes:nkch { old new } {
+	# Move data: NOTES:! (old -> new)
+	data set NOTES:$new [data get NOTES:$old]
+	data set NOTES:$old
+	return
+}
+
+proc @notes:convert args {
+	set handle $args
+	if { [llength $args] == 5 } { set handle * }
+	if [isempty args] { set handle * }
+	if ![validcmd notes] return
+	foreach user [userlist] {
+		if [string match -nocase $handle $user] {
+			# -2 & -1 = error conditions
+			if { [notes $user] > 0 } {
+				foreach note [notes $user 1-] {
+					@notes add $user main [lindex $note 0] [lindex $note 1] [lindex $note 2] 
+				}
+			}
+			erasenotes $user - ; # "-" = erase all notes
+		}
+	}
+}
+
+proc @notes:bootstrap args {
+	# Convert SB6:@ archive to SB7:main
+	foreach user [userlist -b] { @notes move $user @ main 1- }
+
+	# Move all "standard" notes[2].tcl notes under our control ....
+	@notes:convert *
+	return	
+}
+
+#####
+# Bootstrap:
+
+bind bot  - sb7:note:send @notes_botnet
+bind note - * @notes:blockcheck
+bind note - * @notes:intercept_old
+bind time - * @notes:convert
+bind time - [list 00 *] @notes:hourly
+bind time - [list 00 00 01 *] @notes:check_recycled
+bind join - * @notes:onjoin
+bind nkch - * @notes:nkch
+
+@notes:bootstrap

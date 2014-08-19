@@ -1,0 +1,255 @@
+sb7 command add FILEAUDIT 600 -none FA
+sb7 command add SAVE	  700 -core
+sb7 command add BACKUP    700 -core BU
+sb7 command add RESTORE   700 -core REST
+sb7 command add RELOAD    700 -core REL LOAD
+
+proc @fileaudit { nick host handle chan arg } {
+	sb7 parseflags
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[FILEAUDIT\]"
+		print -help $nick "Syntax: $::botnick FILEAUDIT HELP"
+		print -help $nick "Syntax: $::botnick FILEAUDIT CHECK"
+		print -help $nick "FILEAUDIT makes $::botnick check if the following files exist:"
+		print -help $nick "CONFIG, USERFILE, CHANFILE, and, DATAFILE." ; # , NOTEFILE
+		return
+	}
+
+	empty ok no
+	set root [file dirname [file normalize $::config]]
+	foreach { a b } [list config ./[file tail $::config] userfile ./[file tail $::userfile] chanfile ./[file tail $::chanfile] datafile ./[file tail [data filename]] SB7 ./scripts/sb7/sb7.tcl] {
+		if [file exists ${root}/$b] {
+			lappend ok $a
+		} {
+			lappend no "$a ([file normalize $b])"
+		}
+	}
+	if [string eq "" $no] { 
+		print $nick "\[FILEAUDIT\] All files are present. (:"
+	} {
+		print $nick "\[FILEAUDIT\] The following files are missing: [ajl $no]"
+		if ![string eq "" $ok] { print $nick "\[FILEAUDIT\] The following files are present: [ajl $ok]" }
+	}
+	return
+}
+
+
+proc @save { nick host handle chan arg } {
+	sb7 parseflags -backup
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[SAVE\]:"
+		print -help $nick "Syntax: $::botnick SAVE HELP"
+		print -help $nick "Syntax: $::botnick SAVE"
+		print -help $nick "Syntax: $::botnick SAVE -BACKUP"
+		print -help $nick "The bot will SAVE it's userfile(s)."
+		print -help $nick "-BACKUP: bot will also do a BACKUP as soon as the SAVE is complete, performing both steps back-to-back"
+		return
+	}
+	print $nick "\[SAVE\] Saving user, channel, & data files ...."
+	saveme all now
+
+	if [validflag -backup] {
+		print $nick "\[SAVE\] Running BACKUP ...."
+		[sb7 command get backup proc] $nick $host $handle $chan BACKUP
+	}
+	return
+}
+
+proc @backup { nick host handle chan arg } {
+	sb7 parseflags
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[BACKUP\]:"
+		print -help $nick "Syntax: $::botnick BACKUP HELP"
+		print -help $nick "Syntax: $::botnick BACKUP"
+		print -help $nick "The bot will BACKUP it's user, channel, note, and, data files (make copies of each file as <filename>~bak)."
+		return
+	}
+
+	# Standard backup (user and channel files)
+	backup
+
+	# Data file
+	data backup
+
+	# Note file
+#	if [file exists $::notfile] { file copy -force $::notefile ${::notefile}~bak }
+
+	print $nick "\[BACKUP\] Complete."
+	return
+}
+
+proc @restore { nick host handle chan arg } {
+print -return $nick "Not converted yet."
+	sb7 parseflags
+
+	set files $1e
+	if { [lsearch -exact [string tolower $files] [string tolower ALL]] != -1 } { set files * }
+	switch -exact -- $1l {
+
+		help {
+			print -help $nick "\[RESTORE\]:"
+			print -help $nick "Syntax: $::botnick RESTORE HELP"
+			print -help $nick "Syntax: $::botnick RESTORE CHECK"
+			print -help $nick "Syntax: $::botnick RESTORE LIST"
+			print -help $nick "Syntax: $::botnick RESTORE <user | chan | data | all>"
+			print -help $nick "The bot will find the user / data / chan files made with BACKUP command."
+			print -help $nick "\002\037[color 8,4]WARNING: the bot will DELETE YOUR CURRENT DATA FILES with this command !![color]\037\002"
+			print -help $nick "\002\037SEE ALSO\037\002: SAVE BACKUP RELOAD"
+			return 0
+		}
+
+		list - check {
+			set userfile $::userfile
+			set chanfile $::chanfile
+			set datafile [sbdget bot_data_file]
+
+			set userfilebak $::userfile~bak
+			set chanfilebak $::chanfile~bak
+			set datafilebak [sbdget bot_data_file]~bak
+
+			array set valid [list user 0 chan 0 data 0]
+			if [file exists $userfilebak] {set valid(user) 1}
+			if [file exists $chanfilebak] {set valid(chan) 1}
+			if [file exists $datafilebak] {set valid(data) 1}
+			foreach a [list user chan data] {print $nick "\[RESTORE\] ${::botnick}'s $a file ([set ${a}filebak]): [lindex "un" $valid($a)]available for recovery."}
+			return 0			
+		}
+
+		"*" - chan - user - data {
+	
+			switch -exact -- [stl $1] {
+	
+				chan - user {set files [set ::${l1}file]~bak}
+	
+				data {set files [SB:botdatafile name]~bak}
+	
+			}
+	
+			if [string eq * $files] {set files [list ${::userfile}~bak ${::chanfile}~bak [SB:botdatafile name]~bak]}
+	
+			set errortally 0
+			foreach 2 $files {
+				if ![file exists $2] {print -help $nick "\[RESTORE\] [join $2] does not exist."; continue}
+				set error [catch {file copy -force $2 [left $2 -4]} ohcrap]
+				# Truncate "~bak"
+				if ($error) {
+					incr errortally
+					print $nick "\[RESTORE\] Error in restoring ${2}: $ohcrap"
+					continue
+				}
+				print $nick "\[RESTORE\] Successfully recovered: $2"
+			}
+
+			# Let it do the files it could recover ....
+
+			regsub -all ~bak $files "" files
+
+			foreach 2 $files {
+
+				print $nick "\[RESTORE\] Attempting to RESTORE: $2"
+
+				switch -glob -- [stl $2] {
+
+					*.user* {
+						set error [catch reload ohcrap]
+						if ($error) {print $nick "\[RESTORE\] An error occurred while RESTORING ${2}: $ohcrap"}
+					}
+
+					*.chan* {
+						set error [catch loadchannels ohcrap]
+						if ($error) {print $nick "\[RESTORE\] An error occurred while RESTORING ${2}: $ohcrap"}
+					}
+
+					*.data* {
+						SB:botdatafile read; # Simply re-read the data file.
+						SB:cmdlevel_restore *; # Restore command levels from data file
+					}
+
+					default {msghome "\[RESTORE\] Illegal SWITCH value: STL \$2 ([stl $2])"; return 0}
+
+				}
+			}
+			print $nick "\[RESTORE\] Done with file restorations."
+			return 0
+		}
+
+		default {print -help $nick "\[RESTORE\] *Hiccup*"; return 0}
+
+	}
+	return 0
+}
+
+proc @reload { nick host handle chan arg } {
+print -return $nick "Not converted yet."
+	sb7 parseflags
+
+	if {[stl $1] == "all"} {set 1 "*"}
+	switch -exact -- [stl $1] {
+
+		help {
+			print -help $nick "\[RELOAD\]:"
+			print -help $nick "Syntax: $::botnick RELOAD HELP"
+			print -help $nick "Syntax: $::botnick RELOAD CHECK"
+			print -help $nick "Syntax: $::botnick RELOAD LIST"
+			print -help $nick "Syntax: $::botnick RELOAD <user | chan | data | all>"
+			print -help $nick "The bot will activate the user / data / chan files made with BACKUP command."
+			print -help $nick "\002\037[color 8,4]WARNING: the bot will DELETE YOUR CURRENT DATA FILES with this command !![color]\037\002"
+			print -help $nick "\002\037SEE ALSO\037\002: SAVE BACKUP RESTORE"
+			return 0
+		}
+
+		list - check {
+			array set file [list user $::userfile chan $::chanfile note $::notefile data [data filename]]
+			array set bak  [list user ${::userfile}~bak chan ${::chanfile}~bak note ${::notefile}~bak data [data filename]~bak]
+			array set valid [list user 0 chan 0 data 0 note 0 ]
+			foreach a [array names bak] { set valid($a) [file exists $bak($a)] }
+			foreach a [lsort -inc -dict [array names valid]] {
+				print $nick "${::nick}'s $a file ($bak($a)): [lindex "un" $valid($a)]available for recovery."}
+			}
+			return 0			
+		}
+
+		"*" - chan - user - data {
+print -return $nick "Not converted yet."
+			switch -exact -- [stl $1] {
+				chan - user {set files [set ::${l1}file]~bak}
+				data {set files [SB:botdatafile name]~bak}
+				note { if [info exists ::notefile] { set files ${::notefile}~bak } }
+				notearc { if [info exists ::notefile] { set files ${::notefile}.archive~bak } }
+			}
+
+			if {$1 == "*"} {set files [list ${::userfile}~bak ${::chanfile}~bak [SB:botdatafile name]~bak ${::notefile}~bak ${::notefile}.archive~bak]}
+			regsub -all ~bak $files "" files
+
+			foreach 2 $files {
+				print $nick "\[RELOAD\] Attempting to reload: $2"
+				switch -glob -- [stl $2] {
+
+					*.user* {
+						set error [catch reload ohcrap]
+						if ($error) {print $nick "\[RELOAD\] An error occurred while RESTORING ${2}: $ohcrap"}
+					}
+
+					*.chan* {
+						set error [catch loadchannels ohcrap]
+						if ($error) {print $nick "\[RELOAD\] An error occurred while RESTORING ${2}: $ohcrap"}
+					}
+
+					*.data* {
+						SB:botdatafile read; # Simply re-read the data file.
+						SB:cmdlevel_restore *; # Restore command levels from data file
+					}
+
+					default {msghome "\[RELOAD\] illegal SWITCH value: STL \$2 ([stl $2])"; return 0}
+
+				}
+			}
+			print $nick "\[RELOAD\] Complete."
+			return 0
+		}
+
+		default {print -help $nick "\[RELOAD\] *Hiccup*"; return 0}
+
+	}
+	return 0
+}

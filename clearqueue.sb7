@@ -1,0 +1,17 @@
+sb7 command add CLEARQUEUE 501 -locklevel -core CQ
+
+proc @clearqueue { nick host handle chan arg } {
+     sb7 parseflags
+     switch -exact -- [string tolower $1] {
+
+          "" - all { set c [clearqueue all] ; print -short $nick "[comma $c] [plural line $c] cleared."}
+
+          help { set c [clearqueue help] ; print -header:short $nick "[comma $c] [plural line $c] cleared."}
+
+          serv - server { set c [clearqueue server] ; print -header:short $nick "[comma $c] [plural line $c] cleared."}
+
+          mode - quick { set c [clearqueue mode] ; print -header:short $nick "[comma $c] [plural line $c] cleared."}
+
+     }
+     return $c
+}

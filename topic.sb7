@@ -1,0 +1,107 @@
+sb7 command add TOPIC 75 -chanspec -core
+sb7 register chan #
+
+proc @topic { nick host handle chan arg } {
+	sb7 setvars -lock -unlock -none -reset -info
+
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[TOPIC\]:"
+		print -help $nick "Syntax: $::botnick TOPIC <new topic>"
+		print -help $nick "Syntax: $::botnick TOPIC -NONE"
+		print -help $nick "Syntax: $::botnick TOPIC -LOCK"
+		print -help $nick "Syntax: $::botnick TOPIC -LOCK <new topic>"
+		print -help $nick "Syntax: $::botnick TOPIC -UNLOCK"
+		print -help $nick "Syntax: $::botnick TOPIC -RESET"
+		print -help $nick "Syntax: $::botnick TOPIC -INFO"
+		print -help $nick ""
+		print -help $nick "Tells the bot to control the channel's topic."
+		print -help $nick "-NONE: will empty (blank) the current topic"
+		print -help $nick "-LOCK: will lock the topic (if changed, the bot will change it right back). The channel's +n flag will be manually set by this command (but NOT locked into the bot's memory)"
+		print -help $nick "-UNLOCK: will unlock the topic (allow it to be changed by others, with respect to the channel's +n flag)"
+		print -help $nick "-RESET: will reset the channel's topic with the currently locked topic (if there is one)."
+		print -help $nick "-INFO: will show currently stored topic and lock status"
+		return 0
+	}
+
+	if [validflag -info] { print -return -short $nick "Stored topic for $chan ([iff [data array value -boolean $chan TOPIC:LOCK] LOCKED unlocked]): [data array value $chan TOPIC]" }
+
+	if [validflag -reset] { raw "TOPIC $chan :[data array value $chan TOPIC]" ; return }
+
+	if { [validflag -lock -unlock] == 2 } { print -short -help -return $nick "You must pick one: -LOCK or -UNLOCK\; you can't set both at once!" }
+
+	set topic [topic $chan] ; # Needed?
+	set new [join $1e]
+	if [isempty new] { print -return $nick "\[TOPIC\] Current $chan topic: [topic $chan]" }
+
+	if ![botonchan $chan] { print -help -error -short -return $nick "I'm not on ${chan}! I can't control the topic ... or anything else!" }
+	if ![is halfop -above $::botnick $chan] { print -help -error -short -return $nick "I'm not opped in ${chan}: I can't control the topic!" }
+
+	if [validflag -lock] {# Just lock the current topic
+		data array set $chan TOPIC:LOCK 1
+		if [validflag -none] {
+			raw "TOPIC $chan :"
+			data array set $chan TOPIC
+		} {
+			if [notempty new] {
+				raw "TOPIC $chan :$new"
+				data array set $chan TOPIC $new 
+			} {
+				# If no new topic and !-NONE then: just lock it; use previously stored topic
+				set new [data array value $chan TOPIC]
+				raw "TOPIC $chan :$new"
+			}
+		}		
+		saveme data
+		print -short $nick "Topic has been locked: [iff [isempty new] <none> $new]"
+		return
+	}
+
+	if [validflag -unlock] {# Just release the lock
+		data array set $chan TOPIC:LOCK 0
+		saveme data
+		print -short $nick "Topic has been unlocked."
+		return
+	}
+
+	if [data array value -boolean $chan TOPIC:LOCK] { print -short -help -return $nick "The topic for $chan is currently locked\; you can not change it." }
+	if [validflag -none] {
+		raw "TOPIC $chan :"
+		print -short $nick "Topic set to: <none>"
+	} {
+		raw "TOPIC $chan :$new"
+		print -short $nick "Topic set to: $new"
+	}
+	return
+}
+
+proc sb7:topic:lockcheck chan {
+	# Let the PROC pull the TOPIC manually; this allows the PROC to be used
+	# by both the TOPIC (TOPC) and JOIN binds.
+
+	if [string eq -nocase JOIN $::lastbind] {
+		# Only reset topic if bot itself just joined ....
+		if ![string eq -nocase $nick $::botnick] { return 0 }
+	}
+
+	if ![data array value -boolean $chan TOPIC:LOCK] { return 0 }
+	set lock [data array value $chan TOPIC]
+	set topic [topic $chan]
+	# This allows for a forced-blank TOPIC.
+
+	# When the bot joins the channel, RFC 332 is thrown twice:
+	# (1) the bot specifically asks for the current TOPIC, and,
+	# (2) when the JOIN data flood is sent (normal function). As a result,
+	# the TOPIC LOCK check happens twice in quick succession.
+	if ![string eq $topic $lock] { utimer 1 [list raw "TOPIC $chan :$lock"] }
+	return 0
+}
+
+proc sb7:topic:lockcheck:timer { nick host handle chan topic } {
+	sb7 killtimer [list sb7:topic:lockcheck $chan]
+	utimer 1 [list sb7:topic:lockcheck $chan]
+}
+
+#####
+# Bootstrap:
+
+bind TOPC - * sb7:topic:lockcheck:timer

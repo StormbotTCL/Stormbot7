@@ -1,0 +1,132 @@
+sb7 command add DCCME 50 -core CHAT
+sb7 register user DCCME
+
+proc @dccme {nick host handle chan arg} {
+	sb7 parseflags $arg -diagnose -set; # This sets $FLAGS & others
+
+	set diagnose_level 800
+
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[DCCME\]:"
+		print -help $nick "Syntax: $::botnick DCCME \[-diagnose\] \[1 | 2\]"
+		print -help $nick "Syntax: $::botnick DCCME \[-set\] <IP to use>"
+		print -help $nick ""
+		print -help $nick "This makes the bot initiate a DCC chat with you. DCCME respects the intentions of the global +p flag."
+		print -help $nick "Coder's note: through experience, I've noted that, sometimes, the built-in EGGDROP command that DCCME use fails for those behind NAT firewalls.  In addition, the use of the global variable $::reserved-portrange can gum up the works (if the ports are not accessible due to LAN routing or firewalls)."
+		print -help $nick "I've added an experimental second and third raw versions of the command here. I won't guarantee they'll work. If the default version fails, try version #2 or #3: Minerva DCCME <2 | 3>"
+		print -help $nick "(There's no guarantee that version #2 will work either\; it depends upon the bot owner's proper setting of 2 (of 3) key variables: MY-IP, MY-HOSTNAME, and / or NAT-IP. I can't compensate if the owner improperly sets variables.)"
+		print -help $nick "Default version is \"1\""
+		print -help $nick "-DIAGNOSE: reveal internally set IP's to help track-down DCCME / DCC CHAT failures. Level =${diagnose_level} to use."
+		print -help $nick "-SET: sets an IP for you to use from now on, for DCCME V2. This is needed for those who are trying to CHAT with a bot behind multiple routers. Once you find a setting that works, store it here, and the bot will use it from now on. You may need to experiment with your NAT-IP address, LAN address, or a median router address ... or two."
+		print -help $nick "Note: the CONFIG command can block either the DCCME command as a whole, or just the -SET option."
+		return 0
+	}
+
+	set block [data array value CONFIG DCCME:BLOCK] 
+
+	if [string eq -nocase ON $block] {print -help -header:short -return $nick "Unable to comply: DCCME command is administratively blocked." }
+	if [string eq -nocase CMD $block] {print -help -header:short -return $nick "Unable to comply: DCCME command is administratively blocked." }
+
+	if [validflag -set] {
+		if [string eq -nocase SET $block] { print -private -help -header:short -return $nick "Unable to comply: DCCME -SET command is administratively blocked." }
+		if [isempty 1] { set d [userinfo get $handle DCCME] ; print -private -header:short -return $nick "Current setting: [iff [isempty d] <none> $d]" }
+		if ![testip $1] { print -private -help -header:short -return $nick "Invalid entry (invalid IP)" }
+		userinfo set $handle DCCME $1
+		saveme user
+		print -private $nick "\[DCCME\] IP to use: $1"
+		return 0
+	}
+
+	if [validflag -diagnose] {
+		if ![access check $diagnose_level $handle] { print -return -help $nick "You don't have access to this option." }
+		print $nick "\[ Output piped to /NOTICE for my protection. \]"
+		array set ip [list my-ip "" my-hostname "" nat-ip ""]
+		foreach a [lsort -inc [array names ip]] {
+			if [isempty ::$a] { empty ip($a) } { set ip($a) [set ::$a] }
+			set output "\$::${a} - [iff [isempty ip($a)] {<not set>} $ip($a)]"
+			if [testip $ip($a)] { append output "[space](LongIP: [longip $ip($a)])" }
+			print -private $nick $output
+		}
+		set mydcc [userinfo get $handle DCCME]
+		if [notempty mydcc] { print -private $nick "DCCME -SET: $mydcc" }
+		if [notempty ip(my-ip)] {
+			if [notempty ip(my-hostname)] {
+				print -private $nick "You are not supposed to set BOTH of these variables (my-ip & my-hostname)."
+			}
+		}
+		print -private $nick "The IP I use in DCC CHATs is: [longip [myip]] (LongIP: [myip])"
+		if [info exists ::reserved-portrange] {
+			if [string eq "" ${::reserved-portrange}] {
+				print -private $nick "Blank reserved port range: \"${::reserved-portrange}\""
+			} elseif [string eq 0:0 ${::reserved-portrange}] {
+				print -private $nick "Useless reserved port range: ${::reserved-portrange}"
+			} {
+				print -private $nick "Reserved port range is: ${::reserved-portrange}"
+			}
+		} {
+			print -private $nick "No reserved port range defined."
+		}
+		print -private $nick "Current DCC SANITY CHECK setting is: ${::dcc-sanitycheck} ([offon ${::dcc-sanitycheck}])"
+		print -private $nick "Current PROTECT TELNET setting is: ${::protect-telnet} ([offon ${::protect-telnet}])"
+
+		set dccme [userinfo get $handle DCCME]
+		if [notempty dccme] { print -private $nick "When trying to DCCME with you, use: $dccme" }
+		return 0
+	}
+
+	if { ![matchattr $handle p] || [matchattr $handle ZX] } { print -return -help $nick "You don't have party-line access. Please talk to an administrator." }
+
+	if [isnum -integer $nick] { print -return $nick "You can't issue a DCCME from the party line when I can't even see where you are on IRC!!" }
+
+	set ver [string tolower [lindex $arg 1]]
+	if [isempty ver] { set ver 1 }
+	print $nick "Initiating a DCC CHAT session with you ...."
+	switch -exact -- $ver {
+
+		1 { *ctcp:CHAT $nick $host $handle $::botnick CHAT "" }
+
+		2 {
+			set port [lindex [lindex [join [dcclist telnet]] 4] 1]
+			zero ip 0
+			if ![isnum -integer [myip]] { set ip [myip] }
+			if [notempty ::my-ip] { set ip ${::my-ip} }
+			if [notempty ::nat-ip] { set ip ${::nat-ip} }
+			if { $ip == 0 } {
+				set error [catch {set ip [l0 [split [exec lynx --source ip.changeip.com] \n]]} ohhell]
+				if $error {
+					putlog "> DCCME: LYNX attempt error: $ohhell"
+					# Fall-through ....
+				}
+			}
+			set dccme [userinfo get $handle DCCME]
+			if [testip $dccme] { set ip $dccme }
+			if { $ip == 0 } {
+				# If it's STILL "0" after all this, ....
+				# No way to immediately resolve a IP from $MY-HOSTNAME ....
+				print -help $nick "Unable to initiate DCC CHAT with you from my side. Ask my owner to set my \$NAT-IP variable in my CONFIG file to fix this."
+				return 0
+			}
+			print -reset -msg -burst $nick "\001DCC CHAT chat [longip $ip] $port"
+		}	  
+
+		3 {
+			set dcclist [dcclist telnet]
+			zero ok
+			foreach dcc [stl $dcclist] {
+				set r [regexp -nocase -- {^\d+ \(telnet\) .+? \d+$} $dcc]
+				if $r {
+					one ok
+					lassign [lindex $dcc 4] - port
+					msg $nick "\001DCC CHAT chat [myip] ${port}\001"
+					return 0
+				} 
+			}
+			print $nick "I'm unable to calculate how to DCC CHAT you. Try methods 1 or 2, or, try to -DIAGNOSE the problem."
+			return 0
+		}
+
+		default { print -return -help $nick "No such version." }
+
+	}
+	return 0
+}

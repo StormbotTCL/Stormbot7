@@ -1,0 +1,147 @@
+sb7 command add DST 700 -none DL DAYLIGHT
+
+proc @dst { nick host handle chan arg } {
+	# Check for valid values
+	set needToSet 0
+	set tz [data get CONFIG GLOBAL-DSTSTRING]
+	# Safe because of short-circuiting IF rule:
+	if { ![string eq "" $tz] || ![info exists ::env(TZ)] || ( $::env(TZ) != $tz ) } { one needToSet }
+	if $needToSet {set ::env(TZ) $tz}
+
+	# Proceed ....
+	sb7 parseflags -nextyear
+	set addyear [validflag -nextyear]
+	switch -exact -- $1l {
+
+		help {
+			print -help $nick "\[DST\]:"
+			print -help $nick "Syntax: $::botnick DST \[-nextyear\] TIME"
+			print -help $nick "Syntax: $::botnick DST \[-nextyear\] SCAN"
+			print -help $nick "Syntax: $::botnick DST \[-nextyear\] SET"
+			print -help $nick "Syntax: $::botnick DST INT\[ERPRET\] <DST string>"
+			print -help $nick "The DST command will provide information about when Daylight Saving Time will start / end in the bot's box's timezone."
+			print -help $nick "[effects "$::botnick DST TIME" u] (just tells you the current time & timezone)"
+			print -help $nick "[effects "$::botnick DST SCAN" u] (will scan for Sundays where the time changes (either forwards or backwards), and only shows you the days the change occurs, based on when \"3:00 AM\" happens)"
+			print -help $nick "[effects "$::botnick DST SET" u] (will set the internal variable which calculates DST changeover dates)"
+			print -help $nick ""
+			print -help $nick "Calculations use \"3:00 AM\" since the time change that occurs =BEFORE= that time, thus, the new time will be \"in effect\" by that time in the morning (in most timezones). My logic: Europe changes at 3AM, USA & Canada change at 2:00 AM."
+			print -help $nick "I welcome any input to help \"fine-tune\" the calculation / scan process."
+			print -help $nick "TZ research: Maximus, Tzan"
+			return
+		}
+
+		int - interpret {
+			if [isempty 2] { print -help $nick "\[DST INTERPRET\] You forgot to tell me what string to interpret." ; return 0 }
+			if ![regexp -nocase -- {^[A-Z]{1,4}\d{1,2}[A-Z]{1,4}\d{1,2}(,M\d{1,2}\.\d\.\d{1,2}(/[0-9\:]+)?(,M\d{1,2}\.\d\.\d{1,2}(/[0-9\:]+)?)?)?$} $2] { print -help $nick "\[DST INTERPRET\] Illegal format ($2). I expect: <standard abbreviation><negative GMT offset><daylight abbreviation><negative dst GMT offset>\[,M<month to turn on>.<week number>.<day of week, 0 = Sunday>/<hour>\[,M<month to turn off>.<week number>.<day of week, 0 = Sunday>/hour\]\]" ; return 0 }
+			# Let's only deal with the full format.
+			set s [split $2 ,]
+
+			# Standard / daylight names
+			regexp -nocase -- {^([A-Z]+)(\d+)([A-Z]+)(\d+)$} [lindex $s 0] - name_std zone_std name_dst zone_dst
+			set zone_std [expr $zone_std * -1]
+			set zone_dst [expr $zone_dst * -1]
+			set gmt_std [gmt:format int $zone_std]
+			set gmt_dst [gmt:format int $zone_dst]
+
+			# Sample: PST8PDT7,M3.2.0/2,M11.1.0/0
+			set into [@dst:finddate [lindex $s 1]]
+			print $nick "\[DST INTERPRET\] Go into [string toupper $name_dst] ($gmt_dst): $into $gmt_std"
+			set from [@dst:finddate [lindex $s 2]]
+			print $nick "\[DST INTERPRET\] Back to [string toupper $name_std] ($gmt_std): $from $gmt_dst"
+			return 0
+		}
+
+		time { print $nick "Current time: [clock format [clock seconds] -format "%A, %d %B %Y, %H:%M:%S %Z (%z)"]" ; return }
+
+		set {
+			if ![access check 1000 $handle] {print $nick "This is NOT for the faint-of-heart. This string is difficult to explain, and should only be used if you're in a country who has altered DST changeover dates (such as USA / CAN). As such, this option is internally locked to level =1000 access." ; return }
+			set tz [data get CONFIG GLOBAL-DSTSTRING]
+			if [isempty tz] {
+				if [info exists ::env(TZ)] {
+					set tz $::env(TZ)
+					data set -array CONFIG GLOBAL-DSTSTRING $tz
+				} else {
+					set tz "<unset>"
+				}
+			}
+			if [isempty 2] { print $nick "The current DST environment string is: $tz" ; return }
+			if [string eq -nocase NONE $2] {
+				data set -array CONFIG GLOBAL-DSTSTRING
+				saveme data
+				print $nick "The variable has been blanked."
+				return
+			}
+			data set CONFIG GLOBAL-DSTSTRING $2e
+			set ::env(TZ) $2e
+			saveme data
+			print $nick "The DST environment string is now: $2e"
+			return
+		}
+
+		scan {
+			set day_first [clock scan "1/1 00:00"]
+			set day_last [clock scan "12/31 23:59:59"]
+			if $addyear { incr day_first 31536000 ; incr day_last 31536000 }
+
+			empty tz0 tz1 tz2 tzs tz0_before
+			set format "%H:%M:%S"
+			set format_date %x
+
+			set extra ""
+
+			for { set time $day_first } { $time < $day_last } { incr time 3600 } {
+				set tz [clock format $time -format "%Z$extra"]
+				if [isempty tz0] {set tz0 $tz}
+
+				set time_before [ expr $time - 1 ]
+				set tz_before [clock format $time_before -format "%Z$extra"]
+				if [isempty tz0_before] {set tz0_before $tz}
+
+				if ![string eq $tz0 $tz] { lappend tzs "[clock format $time -format $format_date]: [clock format $time_before -format $format] $tz_before --> [clock format $time -format $format] $tz" }
+				set tz0 $tz
+			}
+			if [isempty tzs] {
+				print $nick "No time change detected. ):"
+			} else {
+				print $nick [join $tzs \n]
+			}
+			return 0
+		}
+
+		default { print -help $nick "\[DST\] Unknown request: $1u" ; return }
+
+	}
+
+	return 0
+
+	# Based on the listing created by: Andromeda DoTcl set limit 0-3; empty timeout ; set time [expr [clock seconds] - [timeval +1w s]]; for {set x [l0 [split $limit -]]} {$x < [l1 [split $limit -]]} {incr x} { set ticks [ expr $time + ( $x * [ timeval +1w s] ) ] ; lappend timeout [clock format $ticks]::[clock format $ticks -format %z:%Z] } ; return [join $timeout \n]
+}
+
+proc @dst:finddate { string { base "" } } {
+	if [string eq "" $base] { set base [clock seconds] }
+	# M11.1.0/2 -> 11 1 0 2
+	if [string match -nocase M* $string] { set string [string range $string 1 end] }
+	lassign [split [regsub -all -- {,|/|\.} $string " "]] m w d tod
+	if [isnum -integer $tod] { set tod "[addzero $tod 2]:00:00" }
+	
+	set year [clock format $base -format %Y]
+	set date [clock scan "${year}-${m}-01"]
+	lassign [clock format $date -format [list %w %U]] base_dow base_woy
+		set base_dow [nozero $base_dow]
+		set base_woy [nozero $base_woy]
+zero debug
+	while 1 {
+incr debug ; if { $debug > 1000 } { error 1000! }
+		lassign [clock format $date -format "%w %U"] dow woy
+		set dow [normalize $dow]
+		set woy [normalize $woy]
+#debug debug date =[clock format $date -format "%Y-%m-%d"] d base_dow dow =day([expr $dow - $base_dow]) w base_woy woy =week([expr $woy - $base_woy]) tod
+		if { $dow == $d } {
+			if { ( $woy - $base_woy ) == $w } {
+				return "[clock format $date -format "%Y-%m-%d $tod"]"
+			}
+		}
+		incr date 86400
+	}
+	?
+}

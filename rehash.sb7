@@ -1,0 +1,66 @@
+sb7 command add REHASH  700 -locklevel -core
+sb7 command add RESTART 700 -locklevel -core
+
+proc @rehash { nick host handle chan arg } {
+     sb7 parseflags -nosb7
+
+     if [string eq HELP $1u] {
+          print -help $nick "\[REHASH\]:"
+          print -help $nick "Syntax: $::botnick REHASH HELP"
+          print -help $nick "Syntax: $::botnick REHASH"
+          print -help $nick "Syntax: $::botnick REHASH -NOSB"
+          print -help $nick "Syntax: $::botnick REHASH <script>"
+          print -help $nick "The REHASH command will make $::botnick reload its configuration file and scripts (any anything else that's assigned within the configuration file)."
+          print -help $nick "The -NOSB flag will make the $::botnick REHASH but =not= reload StormBot.TCL (it is skipped)."
+          print -help $nick "You also can load any script that is called by the configuration file (and thus only REHASH that script). Wildcards are accepted, but, you can only trigger scripts that are specifically invoked in the configuration file (I will check)."
+          return
+     }
+
+     if [validflag -nosb7] { data set @NOREHASH 1 }
+
+     if [notempty 1] {
+          set config [readfile $::config \n]
+          set scripts [regexp -inline -all -nocase -- {source [^\;\n\t\}]+} $config]
+          empty list
+          foreach script $scripts {
+               if { [llength $script] != 2 } continue
+               set script [lindex $script 1]
+               if ![file exists $script] continue
+               if [file isdirectory $script] continue
+               set tail [file tail $script]
+               zero match
+               foreach test $1e {
+                    if [string eq -nocase $test $tail] { one match }
+                    if [string eq -nocase ${test}.tcl $tail] { one match }
+                    if [string match -nocase $test $tail] { one match }
+               }
+               if $match { lappend list $script }
+          }
+          empty ::_REHASH
+          foreach item $list { set ::_REHASH $item ; uplevel #0 { source $::_REHASH } }
+          unset ::_REHASH
+          print -header:short $nick "REHASHing the following scripts:\n[join $list \n]"
+          return
+     }
+     # REHASH automatically performs SAVE & SAVECHANNELS
+	print -short $nick "REHASHing ...."
+     rehash
+	print -short $nick "REHASH complete."
+     return
+}
+
+proc @restart { nick host handle chan arg } {
+     sb7 parseflags
+
+     if [string eq HELP $1u] {
+          print -help $nick "\[RESTART\]:"
+          print -help $nick "Syntax: $::botnick RESTART HELP"
+          print -help $nick "Syntax: $::botnick RESTART"
+          print -help $nick "The RESTART command will make $::botnick disconnect from the server and re-run its configuration file. This includes restoring default variables, settings, & binds."
+          return
+     }
+
+     # RESTART automatically performs SAVE & SAVECHANNELS
+     restart
+     return
+}

@@ -1,0 +1,139 @@
+sb7 command add CHECKPASS 800 -core
+
+set ::sb7_checkpass_time 5
+
+proc @checkpass { nick host handle chan arg } {
+     sb7 parseflags
+     switch -exact -- $1l {
+
+          help {
+               print -help $nick "\[CHECKPASS\]:"
+               print -help $nick "Syntax: $::botnick CHECKPASS HELP"
+               print -help $nick "Syntax: $::botnick CHECKPASS HINT"
+               print -help $nick "Syntax: $::botnick CHECKPASS CHECK <password to test>"
+               print -help $nick "Syntax: $::botnick CHECKPASS USER <specific user> <password to test>"
+               print -help $nick "Syntax: $::botnick CHECKPASS COMPARE <USER>"
+               print -help $nick "Syntax: $::botnick CHECKPASS KILL \[ALL\]"
+               print -help $nick ""
+               print -help $nick "The CHECKPASS command will do one of several things:"
+               print -help $nick "(1) $::botnick will verify the given password for the user in question (CHECK works for yourself, USER checks another user)."
+               print -help $nick "(2) COMPARE: $::botnick will verify the password against the bots in the botnet and report the results back to you."
+               print -help $nick "The KILL option will end all checks in progress. Use \"ALL\" to stop all checks for all users (must be an admin to do so)."
+               print -help $nick ""
+               print -help $nick "This command will [effects not up u b 4] reveal a saved password\; that can not be done."
+               return
+          }
+
+          hint {
+               print $nick "Syntax change from SB5 / SB6 -> SB7:"
+               print $nick "New syntax (for yourself): $::botnick CHECKPASS CHECK <password>"
+               print $nick "New syntax (for others): $::botnick CHECKPASS USER <user> <password>"
+               return
+          }
+
+          check {
+               if [isempty 2] { print -error -header -return $nick "Missing password to check." }
+               if [passwdok $handle $2] { print -private $nick "Password [effects "is valid" 3]." } { print -private $nick "Password is [effects NOT 4 b u] valid!" }
+               return
+          }
+
+          user {
+               if [isempty 2] { print -error -header -return $nick "Missing target user." }
+               lassign [whois $2 $handle] online xnick xhost xhandle xchan xlogin
+               if ![validuser $xhandle] { print -error -header -return $nick "No such user: \"${2}\"" }
+               if [isempty 3] { print -error -header -return $nick "Missing password to check." }
+               if [passwdok $xhandle $3] { print -private $nick "Password [effects "is valid" 3] for ${2} ([nph $xnick $xhandle])." } { print -private $nick "Password is [effects NOT 4 b u] valid for ${2} ([nph $xnick $xhandle])!" }
+               return
+          }
+
+          compare {
+               if [isempty 2] { print -error -header -return $nick "Missing target user." }
+               lassign [whois $2 $handle] online xnick xhost xhandle xchan xlogin
+               if ![validuser $xhandle] { print -error -header -return $nick "No such user: \"${2}\"" }
+               if [string eq "" [bots]] { print -error -header -return $nick "I am isolated from any botnet."}
+               set data [data get @CHECKPASS:ALL:$handle]
+               if [notempty data] { print -error -header -return $nick "You already have CHECKPASS request in progress. Wait until it completes before trying again." }
+               print -header $nick "Passing request to other bots ...."
+               data set @CHECKPASS:ALL:$handle [list $nick $host $handle $chan $xhandle]
+               data set @CHECKPASS:LIST:$handle [bots]
+               data set @CHECKPASS:DATA:$handle
+               utimer $::sb7_checkpass_time [list @checkpass:bot:fail $handle]
+               putallbots [list @checkpass:bot $nick $handle $xhandle [encrypt sb7:checkpass [userinfo get $xhandle PASS]]]
+               return
+          }
+
+          kill {
+               if [string eq ALL $2u] {
+                    if ![access check 700 $handle] { print -error -header -help -return $nick "You don't have access to use this option." }
+                    foreach a [data names @CHECKPASS:*] { data set $a }
+                    print -header $nick "All CHECKPASS data has been purged."
+                    return
+               }
+               foreach a [data names @CHECKPASS:*:$handle] { data set $a }
+               print -header $nick "Your CHECKPASS data has been purged."
+               return
+          }
+
+          default ?
+
+     }
+     ?
+}
+
+proc @checkpass:bot { bot - text } {
+     lassign $text xnick xhandle handle pass2check
+     putbot $bot [list @checkpass:return $xnick $xhandle $handle [string eq [decrypt sb7:checkpass $pass2check] [userinfo get $handle PASS]]]
+     return
+}
+
+proc @checkpass:return { bot - text } {
+     # Presume the data already timed-out; dump the incoming data.
+     lassign $text nick handle xhandle valid
+     set data [data get @CHECKPASS:ALL:$handle]
+     if [isempty data] return
+
+     data lappend @CHECKPASS:DATA:$handle [list $bot $valid]
+     set list [data get @CHECKPASS:LIST:$handle]
+     set list [lremove -exact -nocase $list $bot]
+     data set @CHECKPASS:LIST:$handle $list
+     # If all have returned, pipe to common output parser
+     if [isempty list] { @checkpass:bot:output $handle }
+}
+
+proc @checkpass:bot:fail handle {
+     lassign [data get @CHECKPASS:ALL:$handle] nick host handle chan user
+#     print $nick "\[CHECKPASS\] Timeout for botnet check ...."
+     # Pipe to common output parser
+     @checkpass:bot:output $handle
+     return
+}
+
+proc @checkpass:bot:output handle {
+     # Kill the timer!
+     sb7 killtimer -quiet [list @CHECKPASS:bot:FAIL $handle]
+     set all [data get @CHECKPASS:ALL:$handle]
+     set bots [data get @CHECKPASS:LIST:$handle]    
+     set data [data get @CHECKPASS:DATA:$handle]
+     if [isempty data] return ; # We've already dumped the data? If so, bail.
+     lassign $all - - - - xhandle
+     data set @CHECKPASS:ALL:$handle
+     data set @CHECKPASS:LIST:$handle
+     data set @CHECKPASS:DATA:$handle
+     empty ok bad
+     foreach a $data {
+          lassign $a bot value
+          if $value { lappend ok $bot } { lappend bad $bot }
+     }
+     lassign $all nick host handle chan user
+     print $nick "\[CHECKPASS\] Botnet results for ${xhandle}:"
+     if [notempty ok] { print $nick "\[CHECKPASS\] [effects Valid 3] (matching) passwords: [ajl $ok]" }
+     if [notempty bad] { print $nick "\[CHECKPASS\] [effects Invalid b u 4] (non-matching) passwords: [ajl $bad]" }
+     if [notempty bots] { print $nick "\[CHECKPASS\] [effects Incomplete b u 7] (no response): [ajl $bots]" }
+     return
+}
+
+#####
+# Bootstrap:
+
+bind bot - @checkpass:bot @checkpass:bot
+bind bot - @checkpass:return @checkpass:return

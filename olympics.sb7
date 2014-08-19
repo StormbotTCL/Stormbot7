@@ -1,0 +1,321 @@
+# The various CATCHes are to allow for dual use: SB6 & SB7.
+sb7 command add OLYMPICS 0 -none OLY
+
+proc @olympics { nick host handle chan arg } {
+	sb7 parseflags -quiet -changedonly -nozero -name -rank -total -gold -silver -bronze
+	set quiet [validflag -quiet]
+	set nozero [validflag -nozero]
+	set changedonly [validflag -changedonly]
+	if $nozero { set m [lsearch -exact $flags -nozero] ; set flags [lreplace $flags $m $m] }
+
+	if [isempty flags] { set flags -name }
+	foreach a [list rank total gold silver bronze] { if [validflag -$a] { set flags -$a ; break } }
+
+	switch -exact -- [string tolower $1] {
+
+		h - hlp - help {
+			print $nick "\[OLYMPICS\]:"
+			print $nick "$::botnick OLYMPICS HELP"
+			print $nick "$::botnick OLYMPICS LIST \[wildcard\]"
+			print $nick "$::botnick OLYMPICS GET <country abbreviation>"
+			print $nick "$::botnick OLYMPICS \[-NOZERO -CHANGEDONLY -NAME -ABBR -RANK -TOTAL -GOLD -SILVER -BRONZE\] STATS \[range\]"
+			print $nick "$::botnick OLYMPICS REPEAT \[hourly interval: < \"OFF\" | list of minutes, example: 0, 30 | \"*\">\]"
+			print $nick "The OLYMPICS bead will read the official Sochi-2014 Olympic website and show you the current results. Due to the nature of the information, any inaccuracies are the responsibility of the Russians."
+			print $nick "This bead was requested of me\; I had intended to ignore it and not produce it this year (see below)."
+			print $nick "LIST: show all matching country names (wildcard: OK)"
+			print $nick "GET: show the stats for a given country (you must use the country's abbreviation, see LIST option above)"
+			print $nick "STATS: shows you all countries against each other, sorted by the flag items: rank, total medals, gold medals, silver medals, & bronze medals"
+			print $nick "REPEAT: will display the STATS automatically (by internal timers), X minutes after each hour. You can list multiple minutes, such as \"0, 30, 45\" (overdoing it will flood the channel and annoy your friends). Also, you can set the time to \"*\" which will check every minute, but, only display any updates (and nothing more than those)."
+			print $nick "-NOZERO: if the country has no medals at all (or for the requested category), skip them in any STATS request."
+			print $nick "-CHANGEDONLY: Only display changes from the previous check. I'll let you know if there were no changes of any kind."
+			print $nick "Note: I have built a suicide chain into the automatic timer (involved with REPEAT): it will cease to function after Monday, 2014-02-24, 23:59 (bot's local time). The function will no longer be needed by that point (changes will not occur). All manual functions will be unaffected (will still work)."
+			print $nick "Note: I have created this bead as a \"public interest\" program only. I support the competing athletes, but, I DO NOT SUPPORT the host country of Russia, due to their persecution of LGBTQIA persons (citizens & athletes alike). I formally and officially protest the anti-LGBTQIA rhetoric of the Russian Federation and its leader, Vladimir Putin."
+			return
+		}
+
+		r - rp - rep - rpt - repeat {
+			# Current setting
+			if [string eq "" $2] {
+				set repeat [data get  OLYMPICS:REPEAT:$chan]
+				print $nick "\[OLYMPICS REPEAT\] Current repeat value: [iff [isempty repeat] OFF [ajl $repeat]]"
+				return
+			}
+
+			# Turn off?
+			if [string eq -nocase OFF $2] {
+				data set  OLYMPICS:REPEAT:$chan
+				SB:needsave data
+				print $nick "\[OLYMPICS REPEAT\] Timer function now turned off for $chan"
+				return
+			}
+
+			# Constantly check ("*") for changes?
+			if [string eq -nocase * $2] {
+				data set  OLYMPICS:REPEAT:$chan *
+				SB:needsave data
+				print $nick "\[OLYMPICS REPEAT\] Now displaying whenever a change in medal statistics is detected."
+				return
+			}
+
+			regsub -all -- {,|\;} $2e " " list
+			regsub -all -- {[ ]{2,}} $list " " list
+			if ![regexp -- {^[0-9 ]+$} $list] { printh $nick "\[OLYMPICS REPEAT\] Illegal value: $list" ; return }
+			empty new
+			foreach a $list { lappend new [addzero $a 2] }
+			data set  OLYMPICS:REPEAT:$chan $new
+			SB:needsave data
+			print $nick "\[OLYMPICS REPEAT\] Repeat now set for: every hour on the XX:[ajl $new]"
+			return
+		}
+
+		l - list {
+			olympics:getinfo countries names
+			set pattern *
+			set result ""
+			if ![string eq "" $2] { set pattern [join $2] }
+			foreach a $countries {
+				if { [string match -nocase $pattern $a] || [string match -nocase $pattern $names($a:name)] } { lappend result "$names($a:name) ([olympics:abbr $a])" }
+			}
+			if [string eq "" $result] {
+				print $nick "No matches."
+			} {
+				foreach a $result { print $nick $a }
+			}
+			return
+		}
+
+		g - get {
+			olympics:getinfo countries names
+			foreach country $2e {
+				set m [lsearch -exact $countries [string toupper $country]]
+				if { $m == -1 } { print $nick "No matching country: $country" ; continue }
+				set abbr [lindex $countries $m]
+				set prev [data get  @OLYMPICS:PREV:$abbr]
+				set diff ""
+				if ![string eq "" $prev] {
+					foreach color [list 0,1 4 8 15 5] item [list rank total gold silver bronze] prevmedal $prev medal [list $names($abbr:rank) $names($abbr:total) $names($abbr:gold) $names($abbr:silver) $names($abbr:bronze)] {
+						regexp -- {(\d+)} $medal - r_medal
+						regexp -- {(\d+)} $prevmedal - r_prevmedal
+						if ![string eq $medal $prevmedal] { lappend diff "[color $color][stu [left $item 1]]:[lindex + [ expr ( ( $r_medal - $r_prevmedal ) > 0 ) ? 0 : 1 ]][expr $r_medal - $r_prevmedal][color]" }
+					}
+					if [notempty diff] { set diff " \[Changes: ${diff}\]" }
+				}
+				data set  @OLYMPICS:PREV:$abbr [list $names($abbr:rank) $names($abbr:total) $names($abbr:gold) $names($abbr:silver) $names($abbr:bronze)]
+				print $nick "$names($abbr:name) ([olympics:abbr $names($abbr:abbr)]): \00300,01Rank: [iff [string eq $names($abbr:rank) -] (none) #$names($abbr:rank)]\003 - \00304Total: $names($abbr:total)\003 - \00308G:$names($abbr:gold)\003 - \00315S:$names($abbr:silver)\003 - \00305B:$names($abbr:bronze)\003$diff"
+			}
+			return
+		}
+
+		s - st - stat - stats {
+			olympics:getinfo countries names
+			if [isempty flags] { set flags -name }
+			set flag [string tolower [string range [lindex $flags end] 1 end]]
+			array set sort_pre [list]
+			foreach abbr $countries { lappend sort_pre($names($abbr:$flag)) $abbr }
+
+			# Fix global sorting here
+			if 0 {
+				# Not ready
+				set list [olympics:sort $flag [array get sort_pre] names countries]
+			} {
+				## Don't use this data; this is just for debugging
+				#olympics:sort $flag [array get sort_pre] names countries
+
+				if { [lsearch -exact [list abbr name rank] $flag] != -1 } {
+					set list [lsort -increasing -dictionary [array names sort_pre]]
+				} {
+					set list [lsort -decreasing -dictionary [array names sort_pre]] 
+				}
+			}
+
+			if [string eq "" $2] { set displayme [sequence 1 .. 200] } { set displayme [splitnumberlist $2e] }
+			set count 0
+			foreach a $list {
+				foreach b [lsort -increasing -dictionary $sort_pre($a)] { # In case there are multiple entries per position
+					if $nozero {
+						if !$names($b:total) continue
+						if { [lsearch -exact [list total gold silver bronze] $flag] != -1 } { 
+							if { $names($b:$flag) == 0 } continue 
+						}
+						if [string eq -nocase RANK $flag] { 
+							if { $names($b:rank) == 999 } continue 
+						}
+					}
+					if { [lsearch -exact [list name] $flag] != -1 } { set header "" } { set header "${a}: " }
+					set prev [data get  @OLYMPICS:PREV:$b]
+					empty diff
+
+					# Force the display of first-time entries (against "0")
+					if [string eq "" $prev] { set prev [list 0 0 0 0 0] }
+
+					if ![string eq "" $prev] {
+						foreach color [list 0,1 4 8 15 5] item [list rank total gold silver bronze] prevmedal $prev medal [list $names($b:rank) $names($b:total) $names($b:gold) $names($b:silver) $names($b:bronze)] {
+							if ![string eq $medal $prevmedal] {
+								set r_medal [lindex $medal 0]
+								set r_prevmedal [lindex $prevmedal 0]
+								lappend diff "[color $color][stu [left $item 1]]:[lindex + [ expr ( ( $r_medal - $r_prevmedal ) > 0 ) ? 0 : 1 ]][expr $r_medal - $r_prevmedal][color]"
+							}
+						}
+						if [notempty diff] { set diff " \[Changes: ${diff}\]" }
+					}
+					data set  @OLYMPICS:PREV:$b [list $names($b:rank) $names($b:total) $names($b:gold) $names($b:silver) $names($b:bronze)]
+
+					if $changedonly { if [string eq "" $diff] continue }
+					if !$count { print $nick "\[OLYMPICS\] Current medal board information:" }
+					incr count
+					if { [lsearch -exact $displayme $count] != -1 } { print $nick "${header}$names($b:name) ([olympics:abbr $names($b:abbr)]): Total: \00304$names($b:total)\003 (\00308G:$names($b:gold)\003 \00315S:$names($b:silver)\003 \00305B:$names($b:bronze)\003)$diff" }
+				}
+			}
+
+			if !$count {
+				if $changedonly {
+					if !$quiet { print $nick "\[OLYMPICS\] No changes detected in the medal standings." }
+				} {
+					print $nick "No matching values (or no data has been recorded to the website yet)."
+				}
+			}
+			return
+		}
+
+		default { printh $nick "\[OLYMPICS\] Unknown command: $u1" ; return }
+	}
+	return
+}
+
+proc olympics:getinfo { _c _n } {
+	upvar 1 $_c countries $_n names
+	set url http://www.sochi2014.com/en/medal-standings
+	lassign [www $url] error html code
+	
+	if $error { error "Unable to get HTML: $html" }
+
+	array set names [list]
+	set countries ""
+	regexp -nocase -- {<TBODY(.+?)</tbody>} $html - table
+	if [isempty table] { print $nick "\[OLYMPICS\] Unable to read website. Try again in a few seconds." ; return }
+	set trs [regexp -nocase -inline -all {<TR.+?</tr>} $table]
+	foreach tr $trs { 
+		empty info
+		set tds [regexp -nocase -inline -all {<TD.+?</td>} $tr]
+		foreach td $tds {
+			regsub -all -- {\"} $td "" td
+			empty value
+			regexp -nocase -- {<TD[^>]*>(.+?)</td>} $td - value
+			regexp -nocase -- {<A [^>]+>([^<]+)</a>} $td - country
+			regexp -nocase -- {country ([^>\"]+)} $td - value
+			lappend info $value
+		}
+		lappend info $country
+		lassign $info rank abbr gold silver bronze total name
+		foreach a [list gold silver bronze total] {  if [string eq [set $a] -] { set $a 0 }  }
+#		foreach a [list rank] { if [string eq [set $a] -] { set $a 999 }  }
+		set abbr [stu $abbr]
+		if [string match =* $rank] { set rank "[string range $rank 1 end] (tie)" }
+
+		# Dummy data
+#		if [string eq -nocase USA $abbr] { lassign [list 1 25 10 8 7] rank total gold silver bronze }
+#		if [string eq -nocase JPN $abbr] { lassign [list 2 5 1 2 3] rank total gold silver bronze }
+
+		lappend countries $abbr
+		set names($abbr:abbr) $abbr
+		set names($abbr:name) $name
+		set names($abbr:rank) $rank
+		set names($abbr:total) $total
+		set names($abbr:gold) $gold
+		set names($abbr:silver) $silver
+		set names($abbr:bronze) $bronze
+	}
+	return [list $countries [array get names]]
+}
+
+proc olympics:abbr abbr {
+	switch -exact -- [string toupper $abbr] {
+		USA { return "[color 4,1]U[color 0,1]S[color 12,1]A[color]" }
+		JPN { return "[color 0,1]J[color 4,1]P[color 0,1]N[color]" }
+		CAN { return "[color 4,1]C[color 0,1]A[color 4,1]N[color]" }
+		DEN { return "[color 0,4]DEN[color]" }
+	}
+	return $abbr
+}
+
+proc olympics:sort { flag data_array var_names var_countries } {
+	# Return country abbreviations in sorted order: [LIST 1 ("1" entries) 2 ("2" entries) 3 ("3" entries) ... ]
+	array set array $data_array
+	upvar 1 $var_names names
+	upvar 1 $var_countries countries
+	set sort_order [list name abbr rank total gold silver bronze]
+
+	# If $FLAG:[abbr name rank]/alpha : ELSE[total gold silver bronze]/reverse-alpha
+	switch -exact -- [string tolower $flag] {
+		name   { set reverse 0 ; set index 0 ; set sort_alt [list name] }
+		abbr   { set reverse 0 ; set index 0 ; set sort_alt [list abbr] }
+		rank   { set reverse 1 ; set index 0 ; set sort_alt [list rank gold silver bronze total] }
+		total  { set reverse 1 ; set index 0 ; set sort_alt [list total gold silver bronze rank] }
+		gold   { set reverse 1 ; set index 0 ; set sort_alt [list gold silver bronze rank total] }
+		silver { set reverse 1 ; set index 0 ; set sort_alt [list silver bronze rank total gold] }
+		bronze { set reverse 1 ; set index 0 ; set sort_alt [list bronze gold silver rank total] }
+		default { error "\[OLYMPICS:SORT\] Unknown flag value: [stu $flag]" }
+	}
+
+	set sort_indeces [list]
+	foreach a $sort_alt { lappend sort_indeces [lsearch -exact $sort_order $a] }
+debug flag sort_indeces
+
+	array set temp [list]
+	foreach c $countries { foreach a $sort_order { lappend temp($c) $names($c:$a) } }
+debug temp
+	# Loop through the sorting options; BREAK when a true difference exists
+	foreach sort_index $sort_indeces {
+		# Create a list based on the $SORT_INDEX ... but make it so that you can sort another level if needed
+		# Otherwise: BREAK
+	}
+
+	# if [TOTAL GOLD SILVER BRONZE]/LREVERSE! :)
+	if $reverse { set list [lreverse $list] }
+	return $list
+}
+
+proc olympics:timer { m h d o y } {
+	# Month is 0-11 (not 1-12) ... but isn't needed here anyway
+	set new ""
+	foreach chan [channels] {
+		set repeat [data get  OLYMPICS:REPEAT:$chan]
+		if [isempty repeat] continue
+		if [string eq -nocase OFF $repeat] continue
+		set ok 0
+		if [string eq * $repeat] { olympics:display $chan true ; continue ; # Special circumstance }
+		regsub -all -- {,|\;| [ ]+} $repeat " " repeat
+		if { [lsearch -exact $repeat $m] != -1 } { set ok 1 }
+		if $ok {
+			# Store PREV values, in case multiple channels need to trigger
+			# on the same data
+			set old [array get ::stormbot @olympics:prev:*]
+			olympics:display $chan false
+			set new [array get ::stormbot @olympics:prev:*]
+			# Make sure "old" and "new" data don't cross-pollute
+			data clear @OLYMPICS:PREV:*
+			array set ::stormbot $old
+		}
+	}
+	# In case multiple channels needed ot trigger on old data, finally store
+	# the "new" data
+	if ![string eq "" $new] { array set ::stormbot $new }
+	return 0
+}
+
+proc olympics:display { chan { changedonly false } } { [SB:commandlist proc OLYMPICS] $chan * * $chan "OLYMPICS -nozero -rank [iff $changedonly "-changedonly -quiet" ""] STATS" }
+
+proc olympics:bootstrap args {
+	# Suicide chain for the bootstrap only (allow manual controls to work)
+	if { [clock seconds] > 1393315140 } {
+		catch { unbind time - * olympics:timer }
+		return
+	}
+	bind time - * olympics:timer
+	bind time - [list 59 23 24 01 2014] olympics:bootstrap
+}
+
+#####
+# Bootstrap
+
+olympics:bootstrap

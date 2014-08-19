@@ -1,0 +1,67 @@
+sb7 command add ABBR 600 -none
+proc @abbr { nick host handle chan arg } {
+	sb7 parseflags
+		switch -exact -- [string tolower $1] {
+
+			help {
+				print -help $nick "\[ABBR\]:"
+				print -help $nick "Syntax: $::botnick ABBR HELP"
+				print -help $nick "Syntax: $::botnick ABBR ADD <command> <new abbreviation>"
+				print -help $nick "Syntax: $::botnick ABBR DEL <command> <unwanted abbreviation>"
+				print -help $nick "Syntax: $::botnick ABBR LIST \[command\]"
+				print -help $nick "Syntax: $::botnick ABBR FIND <abbreviation to find>"
+				print -help $nick "Syntax: $::botnick ABBR CLEAR"
+				print -help $nick "The ABBR command establishes abbreviations for the commands. For example, if you add \"SPEAK\" as an abbreviation (or synonym) to \"SAY\" then the following command will speak to the channel: $::botnick SPEAK Hi there!"
+				print -help $nick "The abbreviations will also work with the CONFIG PUBCMD option (and, eventually, macros)."
+				return
+			}
+
+			hint { print -help -short -return $nick "No HINTs available for this command." }
+
+			add {
+				if [isempty 2] { print -return -error -short $nick "You forgot to tell me what command we're altering" }
+				if [isempty 3] { print -return -error -short $nick "You forgot to tell me what we're adding to $2" }
+				sb7 abbr add $2 $3e
+				saveme data
+				print -return -short $nick "New abbreviation list for ${2}: [join [sb7 abbr list $2]]"
+			}
+
+			del {
+				if [isempty 2] { print -return -error -short $nick "You forgot to tell me what command we're altering" }	
+				if [isempty 3] { print -return -error -short $nick "You forgot to tell me what we're removing from $2" }	
+				sb7 abbr del $2 $3e	
+				saveme data	
+				print -return -short $nick "New abbreviation list for ${2}: [join [sb7 abbr list $2]]"
+			}
+
+			list {
+				set matchme *
+				foreach cmd [lremove -not -multiple -nocase -all -glob [sb7 command list] [none $2e *]] {
+					set abbr [join [sb7 abbr get $cmd]]
+					if [notempty abbr] { print $nick "\[[string toupper $cmd]\] [ajl $abbr]" }
+				}
+				print $nick "End of list."
+				return
+			}
+
+			find {
+				if [isempty 2] { print -return -error -short $nick "You forgot to tell me the command for which we're searching" }
+				set match [sb7 abbr find $2]
+				if [isempty match] { print -return -help -short $nick "No match made to: $2" }
+				print -return -short $nick "$match -> $2"
+			}
+
+			clear {
+				if ![string eq -nocase CLEAR $2] { print -return -short $nick "Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." }
+				foreach cmd [sb7 command list] {
+					foreach abbr [sb7 abbr get $cmd] { sb7 abbr del $cmd $abbr }
+				}
+				saveme data
+				print -return -short $nick "Abbreviations cleared. This will NOT protect against default abbreviations (assigned when each module bead is loaded on RESTART / REHASH)."
+			}
+
+			default { print $chan [join [lrange $arg 1 end]] }
+		}
+	}
+	return
+}

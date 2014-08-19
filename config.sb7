@@ -1,0 +1,267 @@
+sb7 command add CONFIG 501 -chanspec CF CFG
+
+sb7 register global [concat [data array value @CONFIG global] [data array value @CONFIG chan]]
+
+proc @config { nick host handle chan arg } {
+	set valid_global [list mute color burst pubcmd group rank shortcut debug binds]
+	set valid_chan   [list mute color]
+	set valid_abbr   [list shortcut {sc} binds bind]
+
+	sb7 setvars -global
+
+	set base CONFIG:$chan
+	set valid $valid_chan
+	if [validflag -global] {
+		if ![access check 501 $handle] { print -return -short -help $nick "Insufficient access for -GLOBAL flag use" }
+		set base CONFIG
+		set valid $valid_global
+	}
+	lappend valid help list info hint
+	set option $1l
+	foreach { a b } $valid_abbr { if { [lsearch -exact [string tolower $b] [string tolower $option]] != -1 } { set option $a } }
+	if { [lsearch -exact [string tolower $valid] $option] == -1 } { print -return -short -help $nick "Illegal CONFIG option: [string toupper $option]" }
+
+	# File each option by type: this will commonize syntax checking
+	array set types    [list]
+#	set types(color)   [list color]
+	set types(boolean) [list mute rank]
+	set types(channel) [list home]
+	set types(text)    [list group]
+	set types(custom)  [list pubcmd shortcut burst color debug]
+	# Custom: Debug(chan), color("",block), shortcut(local,global,owner), burst(allow,all)
+
+	switch -exact -- $option {
+
+		help {
+			print -help $nick "\[CONFIG\]:"
+			print -help $nick "Syntax: $::botnick CONFIG HELP"
+			print -help $nick "Syntax: $::botnick CONFIG HINTS"
+			print -help $nick "Syntax: $::botnick CONFIG <type> \[new value\]"
+			print -help $nick "Syntax: $::botnick CONFIG INFO"
+			print -help $nick "Syntax: $::botnick CONFIG LIST"
+			if [access check 501 $handle] {
+				print -help $nick "Syntax: $::botnick CONFIG -GLOBAL <type> \[new value\]"
+				print -help $nick "Syntax: $::botnick CONFIG -GLOBAL INFO"
+				print -help $nick "Syntax: $::botnick CONFIG -GLOBAL LIST"
+			}
+			print -help $nick ""
+			print -help $nick "The CONFIG command sets various attribute settings for StormBot.TCL to function. By default, these settings affect the selected channel."
+			print -help $nick "Available options: $valid_chan"
+			if [access check 501 $handle] {
+				print -help $nick "As a global administrator, you can set the global settings, as well, via the -GLOBAL flag."
+				print -help $nick "Available options: $valid_global"
+			}
+			return 
+		}
+
+		hint {
+			# New categories require addition to the list within DEFAULT
+			print -short $nick "Hints for CONFIG settings:"
+			switch -exact -- $2l {
+
+				burst {
+					print $nick "\[BURST\]:"
+					print $nick "The \"burst\" mode is an output option that sends information to the server directly, bypassing Eggdrop's normal output queues. The queues exist to prevent the bot from flooding off the server for sending too much text in a short period of time."
+					print $nick "This option is really only useful for a few situations: (1) bots serving as OPER (IRCop) bots, (2) bots that need to output a lot of text without reasonable delays (such as RSS feeds or long bible passages), or (3) bots that are used in illegal text flooding."
+					print $nick "If you're in the last category, your actions will probably get your bot banned (K:lined / G:lined / Z:lined) from the server or network before too long."
+					print $nick
+					print $nick "(1) Set BURST/ALLOW mode on: $::botnick CONFIG -GLOBAL BURST ALLOW ON"
+					print $nick "(2) Decide how you want burst mode used:"
+					print $nick "[space 5](2 A) All users, all the time: $::botnick CONFIG -GLOBAL BURST ALL ON"
+					print $nick "[space 5](2 B) Allow each user to select the option individually: $::botnick SET BURST ON"
+					print $nick "[space 5](2 C) To use burst mode for just one command only (one-time mode), use the --BURST flag with the command (anywhere in the line is valid): $::botnick CONFIG HINT BURST --burst"
+					print $nick "[space 5]Note: The admin CONFIG command needs to be used only once, not every time a user wants to set her / his burst mode value."
+					print $nick
+					print $nick "Any of the above options that are activated by \"ON\" can be turned off by \"OFF\" at any time."
+					print $nick "If you want to use the burst mode effectively, your bot needs to be in a server class (by IP / host, or by connection port, defined by the Y:line) that supports a higher SENDQ value. Some IRCd (Internet Relay Chat daemons) servers allow server admins to set this value specifically. Otherwise, the server's internal queue may kick-in and the burst mode will only last for the first five (5) lines or so."
+					return
+				}
+
+				home {
+					print $nick "\[HOME\]:"
+					print $nick "The \"home\" channel is the channel to which $::botnick will report all important actions. \"Important\" is defined as: LOGIN / OLOGIN, bans, security alerts, and maintenance issues."
+					print $nick "The home channel alerts are very useful for bot-loaning groups and other organizations, however, they are almost useless for the private bot user. Therefore, I've allowed several options to control home channel output."
+					print $nick "To turn on all alerts to the home channel, just select a channel and store it via: $::botnick CONFIG -GLOBAL HOME <valid channel>"
+					print $nick "If this has not been set yet, alerts will go (by default) to the first channel listed in the bot's memory ( the first channel you put the bot on chronologically. In the case of ${::botnick}, it's: [lindex [channels] 0] )"
+					print $nick "To silence all output to the home channel, use the MUTE option: $::botnick CONFIG -GLOBAL MUTE ON"
+					print $nick "This will kill all home channel alerts to the channel. This will NOT block normal output to the channel, such as the SAY command or this output you are reading now."
+					return
+				}
+
+				default { print -short -return $nick "I have helpful hints on the following subjects: home, burst. Use: $::botnick CONFIG $flags HINT <HOME | BURST>" }
+
+			}
+			?
+		}
+
+		list { print -return -short $nick "Valid data types: [ajl $valid]" }
+
+		info {
+			print -short $nick "Available configuration settings & values:"
+			set max [get longest $valid]
+			foreach a [lsort -uni -inc -dict $valid] {
+				set data [data get $base $a]
+				print $nick "[format %${max}s $a]: [iff [notempty data] $data <none>]"
+			}
+			return 0
+		}
+
+		mute { # Option: boolean
+			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -boolean $base $1]" }
+			set value [boolean -integer $2]
+			data set $base $1 $value
+			saveme data
+			print -return $nick "\[CONFIG\] Updated setting: $1u (${value})"
+		}
+
+		home { # Option: channel
+			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -boolean $base $1]" }
+			set value $2
+			if ![validchan $value] { print -return -help $nick "\[CONFIG\] Illegal channel: $value" }
+			data set $base $1 $value
+			saveme data
+			print -return $nick "\[CONFIG\] Updated setting: $1u (${value})"
+		}
+
+		group { # option: text
+			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -boolean $base $1]" }
+			set value $2e
+			data set $base $1 $value
+			saveme data
+			print -return $nick "\[CONFIG\] Updated setting: $1u (${value})"
+		}
+
+		pc - pubcmd {
+			lassign [data get CONFIG PUBCMD] offon pubcmd
+			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: $pubcmd ([boolean -on $offon])" }
+			if [istrue -strict $2] { set offon true } elseif [isfalse -strict $2] { set offon false } else { set pubcmd $2 }
+			data set $base $1 [list $offon $pubcmd]
+			saveme data
+			print -return $nick "\[CONFIG\] Updated setting: $1u (${offon}: $pubcmd)"
+		}
+
+		sc - shortcut {
+			# Quick clean up of shortcut data ....
+			foreach a [list all global owner] { data array set CONFIG SHORTCUT:$a [lsort -unique -increasing -dictionary [data array value CONFIG SHORTCUT:$a]] }
+			array set bindflags [list all - global vlo owner n]
+			switch -exact -- $2 {
+
+				"" - list {
+					print -header $nick "local: [data get $base shortcut:all]"
+					print -header $nick "global: [data get $base shortcut:global]"
+					print -header $nick "owner: [data get $base shortcut:owner]"
+					return 
+				}
+
+				add {
+					if [string eq "" $3] { print -return -help -short $nick "What shortcut(s) am I adding?" }
+					if ![info exists bindflags($3l)] { print -return -help -header $nick "Unknown level: $3u (valid options: all, global, &, owner)" }
+					foreach a $4e {
+						data array lappend $base shortcut:$3 $a
+						if [data get -boolean $base bind:pub] { bind pub $bindflags($3l) $a sb7:dispatch }
+						if [data get -boolean $base bind:not] { bind notc $bindflags($3l) * sb7:dispatch:not }
+						foreach cmd [sb7 command list] {
+							if [data get -boolean $base bind:msg] { sb7:bind rename $cmd msg ; bind msg $bindflags($3l) $a sb7:dispatch:msg }
+							if [data get -boolean $base bind:dcc] { sb7:bind rename $cmd msg ; bind dcc $bindflags($3l) $a sb7:dispatch:dcc }
+						}
+					}
+					saveme data
+					print -return $nick "Added binds: [ajl $4e]"
+				}
+
+				del {
+					if [string eq "" $3] { print -return -help -short $nick "What shortcut(s) am I removing?" }
+					array set bindflags [list all - global vlo owner n]
+					set total ""
+					foreach type [array names bindflags] {
+						set binds [data get -lower $base shortcut:$type]
+						foreach a $3e {
+							set m [lsearch -exact [string tolower $binds] [string tolower $a]]
+							if { $m != -1 } {
+								lappend total $a
+								set binds [lreplace $binds $m $m]
+								if [data get -boolean $base bind:pub] { catch { unbind pub $bindflags($type) $a sb7:dispatch } }
+								if [data get -boolean $base bind:not] { catch { unbind notc $bindflags($type) * sb7:dispatch:not } }
+								foreach cmd [sb7 command list] {
+									if [data get -boolean $base bind:msg] { catch { unbind msg $bindflags($type) $a sb7:dispatch:msg ; sb7:bind restore $cmd } }
+									if [data get -boolean $base bind:dcc] { catch { unbind dcc $bindflags($type) $a sb7:dispatch:dcc ; sb7:bind restore $cmd } }
+								}
+							}
+						}
+						data array set $base shortcut:$type $binds
+					}
+					saveme data
+					print -return -short $nick "Removed binds: $total"
+				}
+
+				clear {
+					if ![string eq -nocase CLEAR $2] { print -return -help -short $nick "Are you [effects sure up u b]?! Use \"CLEAR CLEAR $3\" to convince me." }
+					array set bindflags [list all - global vlo owner n]
+					if ![info exists bindflags($3l)] { print -return -help -header $nick "Unknown level: $2u (valid options: all, global, &, owner)" }
+					set binds [data get -lower $base shortcut:$3]
+					foreach bind $binds {
+						if [data get -boolean $base bind:pub] { unbind pub $bindflags($2l) $bind sb7:dispatch }
+						if [data get -boolean $base bind:not] { unbind notc $bindflags($2l) * sb7:dispatch:not }
+						foreach cmd [sb7 command list] {
+							if [data get -boolean $base bind:msg] { unbind msg $bindflags($3l) $bind sb7:dispatch:msg ; sb7:bind restore $cmd }
+							if [data get -boolean $base bind:dcc] { unbind dcc $bindflags($3l) $bind sb7:dispatch:dcc ; sb7:bind restore $cmd }
+						}
+					}
+					data array set $base shortcut:$3 ""
+					saveme data
+					print -return -short $nick "Removed all $3u binds: $3e"
+				}
+
+				default { print -return -help -header $nick "Unknown option: $1u $2u" }
+
+			}
+
+		}
+
+		bind - binds {
+			set list [list default all global owner]
+			set binds [get third [binds sb7:dispatch]]
+			foreach a $list { array set type [list $a ""] }
+			foreach bind $binds {
+				set ok 0
+				foreach a $list {
+					set m [lsearch -exact [data array get -lower CONFIG SHORTCUT:$a] $bind]
+					if { $m != -1 } { lappend type($a) $bind ; set ok 1 }
+				}
+				if !$ok { lappend type(default) $bind }
+			}
+			print -header $nick "Current binds:"
+			print $nick "Owner: [none [ajl $type(owner)] <none>]"
+			print $nick "Global: [none [ajl $type(global)] <none>]"
+			print $nick "All: [none [ajl $type(all)] <none>]"
+			print $nick "Default: [none [ajl $type(default)] <none>]"
+			return
+			
+		}
+
+		burst {
+			#
+		}
+
+		color {
+			#
+		}
+
+		debug {
+			#
+		}
+
+		rank {
+			#
+		}
+
+		default {
+			print -help $nick "\[CONFIG\] Syntax change:"
+			print -help $nick "To retrieve values: $::botnick CONFIG[iff [notempty flags] " $flags" ] GET $1"
+			print -help $nick "To set new values: $::botnick CONFIG[iff [notempty flags] " $flags" ] SET $1 $2e"
+			return
+		}
+
+	}
+	?
+}

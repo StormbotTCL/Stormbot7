@@ -1,0 +1,261 @@
+# Tested ONLY with SlashDot
+
+sb7 command add RSS 1 -none
+sb7 register user RSS
+sb7 register user RSS:*
+
+proc @rss { nick host handle chan arg } {
+	sb7 parseflags
+	switch -exact -- $1l {
+
+		help {
+			print -help $nick "\[RSS\]:"
+			print -help $nick "Syntax: $::botnick RSS HELP"
+			print -help $nick "Syntax: $::botnick RSS CHECK <URL | TOKEN> \[range\] (only displays headers)"
+			print -help $nick "Syntax: $::botnick RSS READ <URL | TOKEN> \[range\] (displays headers & text)"
+			print -help $nick "Syntax: $::botnick RSS NEW <URL | TOKEN> (displays headers & text for unread entries, based on your last READ)"
+			print -help $nick "Syntax: $::botnick RSS LAST <URL | TOKEN> (shows when you last READ a given feed)"
+			print -help $nick ""
+			print -help $nick "The RSS command will read an RSS stream and present it to you. You can save your favorite streams by a token name for easier reference."
+			if [string eq ALL $2u] {
+				print -help $nick "Syntax: $::botnick RSS LIST"
+				print -help $nick "Syntax: $::botnick RSS SAVE <TOKEN> <URL>"
+				print -help $nick "Syntax: $::botnick RSS DEL <TOKEN>"
+				print -help $nick "Syntax: $::botnick RSS LIST"
+				print -help $nick "Syntax: $::botnick RSS CLEAR"
+				print -help $nick "Note: all token names must be in the following character ranges (case-insensitive): 0-9 A-Z - _ ."
+			} {
+				print -help $nick "Use \"$::botnick RSS HELP ALL\" to see options to save / use tokens"
+			}
+			return
+		}
+
+		new - ch - chk - check - read {
+			if [string eq "" $2] { print -return -short $nick "Missing URL or token." }
+			if [string match -nocase *://* $2] {
+				set target $2
+			} {
+				set token [userinfo get $handle RSS:$2]
+				if [string eq "" $token] { print -return -short $nick "Undefined token: $2" }
+				set target $token
+			}
+
+			set range $3e
+			if [string eq "" $range] { set range 1-999 }
+
+			lassign [rss:process $target] head body
+			lassign $head time name desc
+			print -nouserdata $nick "\[RSS\] \[ [effects $target u 00,01] \] [effects $name b 3]: \"[effects $desc 7]\" (Last Updated: [format:date $time *], [datediff [clock seconds] $time *] ago)"
+			set since 0
+			if [string eq -nocase NEW $1] {
+				set ui [userinfo get $handle rss:@LASTREAD:$target]
+				if ![string eq "" $ui] { set since $ui }
+				if { $since > $time } { print -return $nick "No new RSS items found (last read by you: [format:date $since $handle], [datediff [clock seconds] $since *] ago)" }
+			}
+			set c 0
+			set ll [llength $body]
+			set numlist [get numlist $range 1 $ll]
+			set printed 0
+			foreach item $body {
+				incr c
+				lassign $item time who cat title link text
+				if $since {
+					if { $time <= $since } continue
+				} {
+					if { [lsearch -exact $numlist $c] == -1 } continue
+				}
+				if [string match -nocase CH* $1] {
+					set text ""
+				} {
+					set text [rss:cleantext $text]
+				}
+				set printed 1
+				print -nouserdata $nick "[addzero $c 2]) [effects [rss:cleantext $title] u 6] (by $who -- [format:date $time @short]) \[ [effects $link 8 b u] \] $text"
+			}
+			if !$printed { print $nick "No new RSS items found." }
+			if ![string match -nocase CH* $1] { userinfo set $handle rss:@LASTREAD:$target [clock seconds] ; saveme user }
+			return
+		}
+
+		last - lastread {
+			if [string match -nocase *://* $2] {
+				set target $2
+			} {
+				set token [userinfo get $handle RSS:$2]
+				if [string eq "" $token] { print -return -short $nick "Undefined token: $2" }
+				set target $token
+			}
+			set time [userinfo get $handle rss:@LASTREAD:$target]
+			if [isempty time] { set time 0 }
+			if $time {
+				print $nick "Last read [effects $target u 0,1] on: [formatdate $time $handle]"
+			} {
+				print $nick "You haven't READ that feed yet (or have only used CHECK and not READ before): [effects $target u 0,1]"
+			}
+			return
+		}
+
+		add {
+			if ![regexp -nocase -- {^[0-9A-Z_\-\.]+$} $2] { print -return -error $nick "Missing token name." }
+			if [string eq "" $3] { print -return -error $nick "Missing URL to save." }
+			if ![string eq "" [userinfo get $handle RSS:$2]] { print -return -error $nick "Token already is defined as: [userinfo get $handle RSS:$2]" }
+			userinfo set $handle RSS:$2 $3
+			saveme data
+			print $nick "RSS token ${2u}: $3"
+			return
+		}
+
+		edit {
+			if ![regexp -nocase -- {^[0-9A-Z_\-\.]+$} $2] { print -return -error $nick "Missing token name." }
+			if [string eq "" $3] { print -return -error $nick "Missing URL to save." }
+			if [string eq "" [userinfo get $handle RSS:$2]] { print -return -error $nick "No such RSS token defined: $2" }
+			userinfo set $handle RSS:$2 $3
+			saveme data
+			print $nick "RSS token ${2}: $3"
+			return
+		}
+
+		del {
+			if ![regexp -nocase -- {^[0-9A-Z_\-\.]+$} $2] { print -return -error $nick "Missing token name." }
+			if [string eq "" [userinfo get $handle RSS:$2]] { print -return -error $nick "No such token." }
+			userinfo set $handle RSS:$2 ""
+			saveme user
+			print $nick "RSS token $2 deleted."
+			return
+		}
+
+		list {
+			set list [lsearch -glob -inline -all [list:tolower [getuser $handle XTRA]] rss:*]
+			if [string eq "" $list] { print -return $nick "No RSS feeds saved." }
+			foreach a [lsort -increasing -dictionary -index 0 $list] {
+				print $nick "[string range [lindex $a 0] 4 end]: [lindex $a 1]"
+			}
+			print $nick "End of list."
+			return
+		}
+
+		clear {
+			if ![string eq CLEAR $2u] { print -short -return $nick "Are you \002\037SURE\037\002?! Use \"$::botnick $0 $1 $1\" to convince me." }
+			set list [lsearch -glob -inline -all [list:tolower [getuser $handle XTRA]] rss:*]
+			if [string eq "" $list] { print -return $nick "No RSS feeds saved." }
+			foreach a $list { userinfo set $handle RSS:[lindex $a 0] "" }
+			saveme data
+			print $nick "All RSS tokens cleared."
+			return
+		}
+
+		default { print -short -return $nick "Illegal option: $1" }
+
+	}
+	?
+}
+
+proc rss:process url {
+	lassign [www $url] error rss code
+	if $error { return $rss }
+	set header [rss:tag:find $rss <channel> <item>]
+	set header_title [rss:tag:find $header title]
+	set header_text [rss:tag:find $header description]
+	set header_date [clock scan [rss:tag:find $header pubdate]]
+
+	set header [rss:tag:del $header link]
+
+	set head [list $header_date $header_title $header_text]
+
+	set body [list]
+	foreach item [regexp -inline -all -nocase -- {<ITEM>.+?</item>} $rss] {
+		set item_title [rss:tag:find $item title]
+		set item_link [rss:tag:find $item link]
+		set item_date [clock scan [rss:tag:find $item pubdate]]
+		set item_who [rss:tag:find $item dc:creator]
+		set item_cat [rss:tag:find $item dc:subject]
+		set item_text [rss:tag:find $item description]
+		set item_text [rss:tag:strip $item_text <A> </a> <IMG> </img> <P> </p> <DIV> </div> "<BR />" <BR> <IFRAME> </iframe> <EM> </em>]
+		lappend body [list $item_date $item_who $item_cat $item_title $item_link $item_text]
+	}
+	return [list $head $body]
+}
+
+proc rss:tag:del { text open { close "" } { start_at 0 } } {
+	if ![string match <*> $open] { set open <${open}> }
+	if [string eq "" $close] { set close </[string range $open 1 end] }
+	set in_o [string first [string tolower $open] [string tolower $text] $start_at]
+	set in_c [string first [string tolower $close] [string tolower $text] $in_o]
+	incr in_o -1
+	incr in_c [string length $close]
+	return [string range $text 0 $in_o][string range $text $in_c end]
+}
+
+proc rss:tag:find { text open { close "" } { start_at 0 } } {
+	if ![string match <*> $open] { set open <${open}>}
+	if [string eq "" $close] { set close </[string range $open 1 end] }
+	set in_o [string first [string tolower $open] [string tolower $text] $start_at]
+	set in_c [string first [string tolower $close] [string tolower $text] $in_o]
+	incr in_o [string length $open]
+	incr in_c -1
+	set find [string range $text $in_o $in_c]
+	regsub -all -- {\"} $find '' find
+	if [regexp -nocase -- {%[0-9A-F]{2}} $find] { set find [get decode url $find] }
+	if [regexp -nocase -- {&[0-9A-Z\-]+\;} $find] { set find [get decode html $find] }
+	return $find
+}
+
+proc rss:tag:strip { text args } {
+	foreach tag $args {
+		if ![string match <*> $tag] { set tag <${tag}> }
+		regsub -all -nocase -- [string range $tag 0 end-1]\[^>\]*> $text "" text
+	}
+	return $text
+}
+
+proc rss:cleantext text {
+	array set codes [list #8768 2240 x232A 232A #8770 2242 #8769 2241 Aring C5 #8771 2243 apos 27 #8772 2244 #8773 2245 ge 2265 #8774 2246 #8775 2247 reg AE x3C 3C #8776 2248 #8777 2249 x3E 3E #8778 224A #8780 224C #8779 224B asymp 2248 #8781 224D #8782 224E #8783 224F x391 391 x60 60 #8784 2250 ecirc EA x392 392 #8785 2251 x393 393 #8786 2252 x394 394 #8787 2253 x395 395 #8788 2254 x396 396 #8790 2256 #8789 2255 ordf AA atilde E3 x397 397 #8800 2260 gt 3E #8791 2257 x398 398 #8801 2261 #8792 2258   ]
+	array set codes [list #8802 2262 x399 399 #8793 2259 #8803 2263 #8794 225A #8804 2264 #8795 225B notin 2209 #8805 2265 #8796 225C #8806 2266 #8797 225D #8807 2267 ordm BA #8798 225E #8808 2268 x2C6 2C6 #8799 225F #8810 226A #8809 2269 #8811 226B x39A 39A #8812 226C x39B 39B #8813 226D x39C 39C #8814 226E x39D 39D #8815 226F aring E5 x39E 39E #8816 2270 x39F 39F #8817 2271 image 2111 #8818 2272 x22A0 22A0 #8820 2274 #8819 2273 #8821 2275 #8822 2276 x22A2 22A2 #8823 2277 x22A3 22A3 #8824 2278      ] 
+	array set codes [list x22A4 22A4 rho 3C1 #8825 2279 Oslash D8 x22A5 22A5 x22A6 22A6 #8826 227A x22A7 22A7 #8827 227B x22A8 22A8 #8828 227C x22B0 22B0 x22A9 22A9 #8830 227E #8829 227D x22B1 22B1 #8831 227F x22B2 22B2 #8832 2280 trade 99 x22B3 22B3 #8833 2281 Otilde D5 le 2264 x2DC 2DC x99 99 x22B4 22B4 #8834 2282 x22B5 22B5 #8835 2283 x22B6 22B6 #8836 2284 x22B7 22B7 #8837 2285 x22B8 22B8 x22AA 22AA #8838 2286 x22B9 22B9 x22AB 22AB x22C0 22C0 #8840 2288 #8839 2287 x22AC 22AC x22C1 22C1 #8841 2289 ]
+	array set codes [list Ocirc D4 spades 2660 x22AD 22AD x22C2 22C2 #8842 228A x22AE 22AE x22C3 22C3 #8843 228B x22AF 22AF #8844 228C x22C4 22C4 #8845 228D x22C5 22C5 x22C6 22C6 #8846 228E x22C7 22C7 #8847 228F x22C8 22C8 x22BA 22BA #8848 2290 x22C9 22C9 #8850 2292 #8849 2291 x22D0 22D0 x22BB 22BB lt 3C #8851 2293 x22D1 22D1 x22BC 22BC #8852 2294 x22D2 22D2 x22BD 22BD x22BE 22BE x22D3 22D3 ne 2260 #8853 2295 x22D4 22D4 x22BF 22BF #8854 2296 x22D5 22D5 #8855 2297 x22D6 22D6 #8856 2298 thinsp 2009    ]
+	array set codes [list x22D7 22D7 #8857 2299 iuml EF ni 220B x22D8 22D8 x22CA 22CA #8858 229A x22E0 22E0 x22D9 22D9 x22CB 22CB #8860 229C #8859 229B x22E1 22E1 x22CC 22CC #8861 229D mu 3BC x22E2 22E2 x22CD 22CD #8862 229E rlm 200F x22E3 22E3 #8863 229F x22CE 22CE x22E4 22E4 #8864 22A0 x22CF 22CF x22E5 22E5 x22E6 22E6 #8866 22A2 bull 2022 x22E7 22E7 #8867 22A3 x22E8 22E8 x22DA 22DA #8868 22A4 x22F0 22F0 x22E9 22E9 x22DB 22DB #8870 22A6 micro B5 egrave E8 uarr 2191 #8869 22A5 x22F1 22F1 x22DC 22DC  ]
+	array set codes [list #8871 22A7 nu 3BD x22DD 22DD #8872 22A8 x22F2 22F2 x3A0 3A0 x22DE 22DE #8873 22A9 x22F3 22F3 x2A11 2A11 x3A1 3A1 x22DF 22DF #8874 22AA x22F4 22F4 #8875 22AB x22F5 22F5 x3A3 3A3 sube 2286 #8876 22AC x22F6 22F6 ocirc F4 x3A4 3A4 #8877 22AD x22F7 22F7 x3A5 3A5 pi 3C0 or 2228 x22EA 22EA #8878 22AE x22F8 22F8 x3A6 3A6 x22EB 22EB #8880 22B0 #8879 22AF x22F9 22F9 #7522 1D62 x3A7 3A7 x22EC 22EC #8881 22B1 #7523 1D63 Beta 392 x3A8 3A8 x22ED 22ED #8882 22B2 #7524 1D64 x3A9 3A9        ]
+	array set codes [list x22EE 22EE #8883 22B3 x2A0C 2A0C #7525 1D65 x3B1 3B1 x22EF 22EF #8884 22B4 #7526 1D66 x3B2 3B2 #8885 22B5 #7527 1D67 x3B3 3B3 #8886 22B6 #7528 1D68 x3B4 3B4 #8887 22B7 #7530 1D6A #7529 1D69 x3B5 3B5 #8888 22B8 x22FA 22FA x3B6 3B6 #8890 22BA #8889 22B9 x22FB 22FB #8900 22C4 x3B7 3B7 x22FC 22FC #8891 22BB x3B8 3B8 Prime 2033 #8901 22C5 #9001 2329 #8902 22C6 x22FD 22FD #8892 22BC x3B9 3B9 x3C0 3C0 #9002 232A #8903 22C7 x22FE 22FE #8893 22BD x3C1 3C1 #8904 22C8 #8894 22BE       ]
+	array set codes [list x22FF 22FF x3C2 3C2 #8905 22C9 #8895 22BF x3C3 3C3 #8906 22CA #8896 22C0 eta 3B7 x3C4 3C4 #8907 22CB #8897 22C1 x3C5 3C5 #8908 22CC #8898 22C2 x3C6 3C6 real 211C rfloor 230B #8909 22CD #8910 22CE #8899 22C3 x3C7 3C7 #8911 22CF x3BA 3BA x3C8 3C8 #8912 22D0 x3BB 3BB x3C9 3C9 #8913 22D1 x3BC 3BC x3D1 3D1 #8914 22D2 xA0 A0 eth F0 x3BD 3BD x3D2 3D2 #8915 22D3 xA1 A1 laquo AB x3BE 3BE #8916 22D4 xA2 A2 x3BF 3BF #8917 22D5 xA3 A3 #8918 22D6 xA4 A4 x3D6 3D6 #8920 22D8 #8919 22D7    ]
+	array set codes [list xA5 A5 lfloor 230A #8921 22D9 xA6 A6 #8922 22DA xA7 A7 #8923 22DB xA8 A8 #8924 22DC xB0 B0 xA9 A9 #8925 22DD xB1 B1 #8926 22DE xB2 B2 weierp 2118 #8927 22DF xB3 B3 #8928 22E0 xB4 B4 #8930 22E2 #8929 22E1 xB5 B5 #8931 22E3 xB6 B6 #8932 22E4 xB7 B7 sim 223C #8933 22E5 xB8 B8 xAA AA #8934 22E6 xC0 C0 xB9 B9 xAB AB #8935 22E7 xC1 C1 xAC AC shy AD #8936 22E8 xC2 C2 iexcl A1 xAD AD prime 2032 #8937 22E9 xC3 C3 xAE AE #8938 22EA xC4 C4 xAF AF #8940 22EC #8939 22EB xC5 C5           ]
+	array set codes [list #8941 22ED xC6 C6 #8942 22EE xC7 C7 #8943 22EF xC8 C8 xBA BA #8944 22F0 xD0 D0 xC9 C9 xBB BB #8945 22F1 xD1 D1 xBC BC #8946 22F2 xD2 D2 Agrave C0 xBD BD #8947 22F3 xD3 D3 xBE BE sigmaf 3C2 #8948 22F4 xD4 D4 xBF BF #8950 22F6 #8949 22F5 xD5 D5 lArr 21D0 #8951 22F7 xD6 D6 tau 3C4 #8952 22F8 xD7 D7 #8953 22F9 xD8 D8 xCA CA #8954 22FA xD9 D9 xCB CB xE0 E0 #8955 22FB xCC CC xE1 E1 #8956 22FC xCD CD xE2 E2 #8957 22FD xCE CE xE3 E3 #8958 22FE xCF CF xE4 E4 #8959 22FF xE5 E5 xE6 E6 ]
+	array set codes [list xE7 E7 xDA DA xE8 E8 xDB DB xE9 E9 xF0 F0 xDC DC xF1 F1 xDD DD xF2 F2 xDE DE sup1 B9 cedil B8 xF3 F3 xi 3BE xDF DF AElig C6 sup2 B2 xF4 F4 #8968 2308 sup3 B3 xF5 F5 #8969 2309 #8970 230A xF6 F6 #8971 230B xF7 F7 xEA EA xF8 F8 xEB EB xF9 F9 uacute FA xEC EC xED ED xEE EE xEF EF thorn FE infin 221E xFA FA xFB FB oacute F3 xFC FC xFD FD xFE FE bdquo 201E xFF FF Zeta 396 nbsp A0 iacute ED Dagger 2021 omicron 3BF supe 2287 epsilon 3B5 diams 2666 sub 2282 euml EB Alpha 391        ]
+	array set codes [list sum 2211 sup 2283 Eacute C9 ldquo 201C szlig DF Delta 394 iquest BF macr AF alpha 3B1 x2660 2660 x2663 2663 crarr 21B5 x2665 2665 x2666 2666 ETH D0 #34 22 euro 20AC #38 26 #39 27 #10764 2A0C #10769 2A11 delta 3B4 Iuml CF #60 3C #62 3E hArr 21D4 x25CA 25CA #153 99 #160 A0 #161 A1 #162 A2 Chi 3A7 #163 A3 #164 A4 uml A8 #165 A5 brvbar A6 #166 A6 #167 A7 #96 60 #168 A8 oslash F8 #169 A9 #170 AA #171 AB #172 AC #173 AD #174 AE cong 2245 #175 AF #176 B0 otilde F5 #177 B1          ]
+	array set codes [list #178 00B2 #180 B4 #179 00B3 #181 B5 #182 B6 #183 B7 #184 B8 #185 00B9 zwnj 200C #186 BA #187 BB #188 BC #200 C8 #190 BE #189 BD ouml F6 #201 C9 #191 BF #202 CA #192 C0 #203 CB #193 C1 #204 CC #194 C2 Phi 3A6 #205 CD #195 C3 #206 CE #196 C4 #207 CF #197 C5 #208 D0 #198 C6 #210 D2 #209 D1 #199 C7 Theta 398 #211 D3 #212 D4 #213 D5 #214 D6 Acirc C2 acute B4 #215 00D7 #216 D8 there4 2234 #217 D9 #218 DA #220 DC #219 DB #221 DD #222 DE #223 DF copy A9 #224 E0 #225 E1 #226 E2      ]
+	array set codes [list mdash 2014 #227 E3 #228 E4 #229 E5 #230 E6 #231 E7 Lambda 39B #232 E8 rsquo 2019 #233 E9 #234 EA #235 EB #236 EC auml E4 #237 ED #238 EE #239 EF #240 F0 #241 F1 #242 F2 #243 F3 #244 F4 #245 F5 theta 3B8 #246 F6 Ntilde D1 #247 F7 #248 F8 acirc E2 #249 F9 #250 FA #251 FB int 222B #252 FC #253 FD #254 FE #255 FF fnof 192 radic 221A rArr 21D2 alefsym 2135 agrave E0 permil 2030 otimes 2297 clubs 2663 middot B7 Ugrave D9 Euml CB Psi 3A8 dArr 21D3 Upsilon 3A5 Ograve D2 #338 152    ]
+	array set codes [list #339 153 Igrave CC yuml 60 oline 203E x00B2 00B2 x00B3 00B3 #352 160 #353 161 x00B9 00B9 lceil 2308 dagger 2020 frasl 2044 #376 178 x00D7 00D7 Ucirc DB hearts 2665 #402 192 upsih 3D2 para B6 Rho 3A1 tilde 2DC THORN DE eacute E9 part 2202 ucirc FB nsub 2284 Kappa 39A lowast 2217 Yacute DD #8201 2009 #8194 2002 #8204 200C cent A2 uArr 21D1 #8195 2003 #8205 200D #8206 200E #8207 200F divide F7 #8211 2013 raquo BB #8212 2014 #8216 2018 Ouml D6 #8217 2019 #8218 201A #8220 201C   ]
+	array set codes [list #8221 201D #8222 201E #8224 2020 yen A5 #8225 2021 kappa 3BA #8226 2022 #8230 2026 Eta 397 #8240 2030 Aacute C1 #8242 2032 #8243 2033 #8244 2034 #8249 2039 #8250 203A #8254 203E Auml C4 #8260 2044 times D7 Icirc CE Tau 3A4 uuml FC oplus 2295 frac12 BD frac14 BC lang 2329 #8304 2070 #8305 2071 #8308 2074 #8310 2076 #8309 2075 #8311 2077 #8312 2078 #8313 2079 #8314 207A #8315 207B #8316 207C loz 25CA #9674 25CA #8317 207D #8318 207E #8320 2080 #8319 207F #8321 2081 #8322 2082 ]
+	array set codes [list icirc EE #8323 2083 frac34 BE Gamma 393 #8324 2084 #8325 2085 iota 3B9 emsp 2003 #8326 2086 nabla 2207 #8327 2087 #8328 2088 #8330 208A #8329 2089 lambda 3BB #8331 208B #8332 208C lrm 200E #8333 208D x1D62 1D62 #8334 208E x1D63 1D63 x1D64 1D64 #8336 2090 curren A4 x1D65 1D65 #8337 2091 x1D66 1D66 #8338 2092 x1D67 1D67 #8339 2093 x1D68 1D68 x1D69 1D69 ntilde F1 x1D6A 1D6A Scaron 160 #8354 2156 Omicron 39F oelig 153 larr 2190 sbquo 201A gamma 3B3 Yuml 178 #8364 20AC           ]
+	array set codes [list Epsilon 395 rdquo 201D Ccedil C7 ugrave F9 ensp 2002 empty 2205 ograve F2 x2002 2002 x2003 2003 Atilde C3 and 2227 x2009 2009 igrave EC ang 2220 amp 26 x2013 2013 x2014 2014 #710 2C6 x2018 2018 #8450 2102 x2019 2019 x2020 2020 x200C 200C x2021 2021 x2022 2022 x200D 200D x200E 200E x200F 200F Sigma 3A3 x2026 2026 #9824 2660 x201A 201A #9827 2663 x2030 2030 hellip 2026 x201C 201C x2032 2032 #9829 2665 #9830 2666 x201D 201D x2033 2033 x201E 201E Omega 3A9 x2034 2034 #8465 2111 ]
+	array set codes [list #8469 2115 x2039 2039 #732 2DC #8472 2118 #8473 2119 #8474 211A x2044 2044 #8476 211C #8477 211D ndash 2013 x203A 203A #8482 2122 x203E 203E #8484 2124 rsaquo 203A sigma 3C3 #8501 2135 lsaquo 2039 x2070 2070 not AC omega 3C9 quot 22 x2071 2071 Mu 39C cap 2229 x2074 2074 x2075 2075 x2076 2076 x2077 2077 x2078 2078 x2080 2080 x2079 2079 Egrave C8 x2081 2081 Nu 39D zwj 200D x2082 2082 x2083 2083 x2084 2084 x2085 2085 x2086 2086 x2087 2087 Pi 3A0 x2088 2088 x207A 207A x2090 2090]
+	array set codes [list x2089 2089 x207B 207B #8531 2153 x2091 2091 x207C 207C x2102 2102 #8532 2154 x2092 2092 x207D 207D #8533 2155 x2093 2093 x207E 207E x207F 207F #8535 2157 #8536 2158 #8537 2159 #8538 215A x208A 208A #8540 215C #8539 215B x208B 208B #8541 215D x208C 208C x2111 2111 #8542 215E x208D 208D x208E 208E x152 152 x2115 2115 x153 153 yacute FD x2118 2118 x2119 2119 harr 2194 prod 220F x2122 2122 x160 160 x161 161 x2124 2124 Uuml DC x211A 211A x211C 211C perp 22A5 x211D 211D prop 221D ]
+	array set codes [list x2135 2135 sect A7 x178 178 chi 3C7 x2153 2153 x2154 2154 x192 192 x2155 2155 x2156 2156 x2157 2157 x2158 2158 OElig 152 x2159 2159 aacute E1 #8592 2190 #8593 2191 Iota 399 #8594 2192 #8595 2193 #8596 2194 x215A 215A x215B 215B equiv 2261 sdot 22C5 x215C 215C x215D 215D beta 3B2 x215E 215E Xi 39E phi 3C6 isin 2208 Uacute DA circ 2C6 x2190 2190 #8629 21B5 x2200 2200 x2201 2201 x2191 2191 x2192 2192 x2202 2202 x2193 2193 x2203 2203 x2204 2204 x2194 2194 Oacute D3 x2205 2205   ]
+	array set codes [list x2206 2206 x2207 2207 x2208 2208 x2210 2210 x2209 2209 x2211 2211 x20AC 20AC piv 3D6 x2212 2212 x2213 2213 deg B0 rang 232A x2214 2214 x2215 2215 x2216 2216 Iacute CD x2217 2217 x2218 2218 x220A 220A x2219 2219 x220B 220B x2220 2220 x2221 2221 x220C 220C x2222 2222 x220D 220D #913 391 x220E 220E x2223 2223 #914 392 x2224 2224 #915 393 x220F 220F x2225 2225 #916 394 x2226 2226 #917 395 #8656 21D0 #918 396 #8657 21D1 x2227 2227 #919 397 #920 398 #8658 21D2 x221A 221A          ]
+	array set codes [list x2228 2228 x2230 2230 #921 399 thetasym 3D1 #8659 21D3 #8660 21D4 x2229 2229 x221B 221B x2231 2231 #922 39A x221C 221C x2232 2232 #923 39B x221D 221D x2233 2233 #924 39C x221E 221E x221F 221F #925 39D x2234 2234 x2235 2235 #926 39E x2236 2236 #927 39F x2237 2237 #928 3A0 x2238 2238 plusmn B1 #929 3A1 x222A 222A rceil 2309 x2240 2240 x2239 2239 #931 3A3 forall 2200 x222B 222B x2241 2241 x222C 222C #932 3A4 x2242 2242 x222D 222D #933 3A5 x2243 2243 x222E 222E #934 3A6         ]
+	array set codes [list x2244 2244 x222F 222F #935 3A7 lsquo 2018 #936 3A8 x2245 2245 x2246 2246 #937 3A9 x2247 2247 x223A 223A x2248 2248 x2250 2250 x223B 223B x2249 2249 x2251 2251 x223C 223C x2252 2252 x223D 223D x2253 2253 x223E 223E x2254 2254 x223F 223F #945 3B1 x2255 2255 #946 3B2 x2256 2256 #947 3B3 x2257 2257 #948 3B4 x2258 2258 x224A 224A #949 3B5 #950 3B6 x2259 2259 x224B 224B #951 3B7 x2260 2260 x224C 224C #952 3B8 x2261 2261 x224D 224D x2262 2262 #953 3B9 x224E 224E x2263 2263         ]
+	array set codes [list #954 3BA x224F 224F #955 3BB #8704 2200 x2264 2264 #8705 2201 #956 3BC rarr 2192 x2265 2265 x2266 2266 #957 3BD #8706 2202 x2267 2267 #958 3BE #8707 2203 x225A 225A x2268 2268 #8708 2204 #959 3BF #960 3C0 x225B 225B x2270 2270 x2269 2269 #8710 2206 #961 3C1 #8709 2205 x225C 225C x2271 2271 #962 3C2 #8711 2207 x225D 225D x2272 2272 #963 3C3 #8712 2208 x225E 225E x2273 2273 pound A3 #964 3C4 #8713 2209 scaron 161 x225F 225F x2274 2274 #8714 220A #965 3C5 x2275 2275 #966 3C6   ]
+	array set codes [list #8715 220B x2276 2276 #8716 220C #967 3C7 x2277 2277 #8717 220D #968 3C8 x2278 2278 x226A 226A #8718 220E #969 3C9 x2280 2280 x2279 2279 x226B 226B #8720 2210 zeta 3B6 #8719 220F x2281 2281 x226C 226C #8721 2211 x226D 226D #8722 2212 x2282 2282 #8723 2213 x226E 226E x2283 2283 #8724 2214 x226F 226F x2284 2284 x2285 2285 #8725 2215 #8726 2216 #977 3D1 x2286 2286 #978 3D2 #8727 2217 x2287 2287 x227A 227A #8728 2218 x2288 2288 x2290 2290 x227B 227B #8729 2219 x2289 2289        ]
+	array set codes [list #8730 221A x2291 2291 x227C 227C #982 3D6 #8731 221B x2292 2292 x227D 227D #8732 221C x2293 2293 x227E 227E #8733 221D cup 222A x2294 2294 x227F 227F #8734 221E #8735 221F aelig E6 x21B5 21B5 x2295 2295 x2296 2296 #8736 2220 #8737 2221 psi 3C8 x2297 2297 #8738 2222 x2298 2298 x228A 228A x2308 2308 x2299 2299 #8740 2224 #8739 2223 x228B 228B x2309 2309 #8741 2225 x228C 228C #8742 2226 x228D 228D x228E 228E darr 2193 #8743 2227 x228F 228F upsilon 3C5 #8744 2228 #8745 2229     ]
+	array set codes [list minus 2212 #8746 222A x22 22 #8747 222B x229A 229A #8748 222C Ecirc CA x230A 230A x229B 229B #8750 222E #8749 222D x21D0 21D0 x230B 230B x229C 229C #8751 222F x21D1 21D1 x26 26 x27 27 x229D 229D #8752 2230 x21D2 21D2 x229E 229E #8753 2231 x21D3 21D3 x229F 229F #8754 2232 x21D4 21D4 #8755 2233 exist 2203 #8756 2234 #8757 2235 #8758 2236 #8760 2238 #8759 2237 x2329 2329 #8761 2239 #8762 223A #8763 223B ccedil E7 #8764 223C #8765 223D #8766 223E #8767 223F emdash 2014 endash 2D]
+
+	set regexps [regexp -all -inline -- {\&[\#]?[0-9A-Za-z]+;} $text]
+	foreach a $regexps {
+		set id [mid $a 2 -1]
+		if [info exists codes($id)] {
+			set subst [subst \\u$codes($id)]
+		} {
+			# This kind covers all decimal & hex code formats anyway ....
+			if [string eq -nocase #x [string range $id 0 1]] {
+				set subst [subst \\u[string range $id 2 end]]
+			} elseif [string eq -nocase # [string index $id 0]] {
+				set subst [subst \\u[hex [string range $id 1 end]]]
+			} {
+				error "Unknown HTML code: \"${id}\" ($a)"
+			}
+		}
+		if [string eq & $subst] { set subst \\$subst }
+		regsub -all $a $text $subst text
+	}
+	set text [encoding convertto utf-8 $text]
+	return $text
+}

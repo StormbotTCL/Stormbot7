@@ -1,0 +1,296 @@
+sb7 command add LOGIN    0 -locklevel -core -auth -ok:logout ; # Why remove OK:LOGOUT for this?
+sb7 command add LOGOUT   0 -locklevel -core
+sb7 command add PASSHINT 1 -locklevel -core -ok:logout ; # Levels -1 & 0 don't require authing
+sb7 register user PASSWORD:HINT
+sb7 register user PASSWORD:HINT:OUTH
+
+proc @login { nick host handle - arg } {
+	# LOGIN not permitted from PUB[M] ($CHAN is useless HERE; will be useful elsewhere)
+	# Syntax: /msg BOT LOGIN <PW> -ologin <OPASS> -xlogin -xologin -invite #chan -op #chan -voice #chan ....
+	set options [lassign $arg 0 pw target]
+
+	if [string eq -nocase HINT $pw] {
+		print -help $nick "Updated syntaces:"
+		print -help $nick "   /msg $::botnick LOGIN mypass $handle"
+		print -help $nick "\[*\] /msg $::botnick LOGIN mypass $handle -xlogin"
+		print -help $nick "\[*\] /msg $::botnick LOGIN mypass $handle -ologin oauthpass"
+		print -help $nick "\[*\] /msg $::botnick LOGIN mypass $handle -xologin oauthpass"
+		print -help $nick "\[*\] /msg $::botnick LOGIN mypass $handle -op [lindex [findonchans handle $handle] 3] -voice #Cows"
+		print -help $nick "\[*\] /msg $::botnick LOGIN mypass $handle -invite [lindex [findonchans handle $handle] 3]"
+		print -help $nick "\[*\] /msg $::botnick LOGIN mypass $handle -xlogin -xologin oauthpass -op [lindex [findonchans handle $handle] 3] -invite #Cows"
+		print -help $nick "* = These syntaces are [effects not b u 4,1] backward-compatible with SB3 / SB4 / SB5 / SB6."
+		print -help $nick "Note: the use of -INVITE does [effects not b u up 4,1] invite you into the channel then automatically VOICE* you: due to the possible delays in the user joining (or other possible restrictions like chanmode +O), there is no \"one solution fits all\" way to address this."
+		print -help $nick "Note: to set a PASSWORD HINT, use the \"PASSHINT\" command."
+		return 0
+	}
+
+	if [string eq -nocase HELP $pw] {
+		print -help $nick "\[LOGIN\]:"
+		print -help $nick "Syntax: /msg $::botnick LOGIN HELP"
+		print -help $nick "Syntax: /msg $::botnick LOGIN HINT"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle>"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-xlogin\]"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> -ologin <o-password> \[-ologin <opass>\]"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-invite #channel\]"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-voice #channel -halfop channel -op #channel -prot #channel -own #channel\]"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-xlogin -xologin\]"
+		print -help $nick 
+		print -help $nick "The LOGIN command identifies who YOU are and grants you access to my internal bits. By using the LOGIN command, you don't have to use your password with every single command you execute (Eggdrop standard protocol). This is the one feature that made StormBot.TCL an indispensible partner with Eggdrop."
+		print -help $nick "The OLOGIN is a separate \"owner login\" required for anyone with =1000 access. Due to the fact that some =1000 commands allow some form of shell-level manipulation, OLOGIN was created to allow for a second level of password security for those commands."
+		print -help $nick "Note: you are required to specify your \"handle\" (into which you're logging in). This is necessary because of users who have common hosts (like telia.net in general, or, those who connect form internet cafes). By specifying your handle, errors are minimized."
+		print -help $nick "The above-listed flag options are a new syntax for SB7 (while keeping backward-compatibility to SB5 & SB6 for \"LOGIN\" only)."
+		print -help $nick "As such, they allow a combination of all the previous LOGIN commands into one place (SB3/4/5: LOGIN, XLOGIN\; SB6: OLOGIN, XOLOGIN, DLOGIN, XDLOGIN)"
+		print -help $nick "The use of flag-based options allows virtually any combination of flags and options to go together\; feel free to experiment."
+		print -help $nick "The -VOICE* option flags will VOICE* you on the channel of choice\; you can indicate a different option for different channels: op on #channel1, voice on #channel, and halfop on #channel3 (or the like). Of course, you must have access to the command (VOICE*) on the given target channel, or your request will denied (the LOGIN will still register\; the VOICE* only will be denied)."
+		print -help $nick "\[VOICE* = all of the channel operator stati: voice (+v), halfop (+h), op (+o), prot (+a), own (+q)\]"
+		print -help $nick "The LOGIN & OLOGINs will be properly distributed to the botnet with the -XLOGIN and -XOLOGIN flags, respectively."
+		print -help $nick "Note: you [effects must up u 4] do a basic LOGIN (password & handle) in order to use any of the above options\; you can [effects not up u 4] use -XLOGIN, -OLOGIN, or, any other flags without the basic password & handle present."
+		return
+	}
+
+	# Let's make sure the user has access to LOGIN to the target handle ....
+	if [isempty target] { print -private -short -return $nick "Login failed (missing target user)" }
+	if ![validuser $target] { print -private -short -return $nick "Login failed (illegal user)" }
+	if [string eq "" [maskmatches $nick $host $target]] { print -private -short -return $nick "Login failed (invalid host)" }
+	if ![passwdok $target $pw] { print -private -short -return $nick "Login failed (bad password)" }
+
+	set congratulations "Hi, [nph $nick $target]: "
+	set congratulations2 "LOGIN"
+	sb7 auth login $target $nick $host
+
+	# LOGIN is valid: let's play with flags! (Oy ....)
+	flags -params $options [list -invite 1 -ologin 1 -xlogin 0 -xologin 0 -voice 1 -halfop 1 -op 1 -prot 1 -own 1] text flags
+
+	# March through them, one-by-one ....
+	zero outh
+	# Must use NOTEMPTY because FLAGS -PARAMS will set it to "" by default
+	if [notempty flags(-xlogin)] {
+		set congratulations2 "XLOGIN"
+		empty o
+		set pw [encpass $pw]
+		foreach a [list nick host target pw] {
+			binary scan [set $a] H* h
+			lappend o $h
+		}
+		set o -[encrypt stormbot:xlogin $o]
+		putallbots [list XLOGIN $o]
+	}
+
+	# Must use NOTEMPTY because FLAGS -PARAMS will set it to "" by default
+	set congratulations3 ""
+	if [notempty flags(-ologin)] {
+		if ![access check 1000 $target] { print -private -short -return "You don't have level =1000 access\; OLOGIN is not needed" }
+		set opw [encpass $flags(-ologin)]
+		if ![string eq $opw [userinfo get $target opass]] { print -private -short -return "OLOGIN failed (bad password)" }
+		set congratulations3 OLOGIN
+		sb7 auth ologin $target $nick $host
+
+		if [notnull flags(-xologin)] {
+			set congratulations3 XOLOGIN
+			empty o
+			foreach a [list nick host target opw] {
+				binary scan [set $a] H* h
+				lappend o $h
+			}
+			set o -[encrypt stormbot:ologin $o]
+			putallbots [list OLOGIN $o]
+		}
+	}
+	if [notempty congratulations2] { append congratulations $congratulations2 }
+	if [notempty congratulations3] { append congratulations +$congratulations3 }
+	append congratulations " successful" ; # Space!
+
+	print -private -raw -short $nick $congratulations
+	print -home "\[${congratulations2}[iff [notempty congratulations3] " + ${congratulations3}"]\] $nick ($host)[iff ![string eq -nocase $handle $target] " \[mask-matching: [effects $handle u b]\]"] as $target" ; # Spaces!
+
+	set me [access compare $target]
+	foreach op [list invite voice halfop op level prot own] {
+#debug flag me chan op =ISCMD([falsetrue [sb7 command iscmd $op]]) ;#=LEVEL([sb7 command get $op level])
+		if [notnull flags(-$op)] {
+			if ![sb7 command iscmd $op] continue
+			set level [sb7 command get $op level]
+			foreach chan $flags(-$op) {
+				if { $me >= $level } { sb7:dispatch $nick $host $target $chan "$op $chan me" }
+			}
+		}
+	}
+	return
+}
+
+proc @botnet:xlogin { bot cmd arg } {
+	set method_encoding 0
+	if [left $arg 1 +] {
+		set arg [decrypt \123\u053\x041 [reverse [mid $arg 2]]] 
+		set nick [lindex $arg 0]
+		set handle [lindex $arg 1]
+		if ![validuser $handle] { return 0 }
+		set host [lindex $arg 3]
+		if [passwdok $handle ""] { #return 0 }
+		set pwok 0
+		if {[decrypt stormbot [lindex $arg 2]] == [getuser $handle PASS]} {
+			set method_encoding 3
+			# Accept new encryption format.
+		} elseif [passwdok $handle [l0 [decrypt stormbot [l2 $arg]]]] {
+			set method_encoding 2
+			# Accept old encryption format.
+		} elseif [passwdok $handle [l2 $arg]] {
+			set method_encoding 1
+		}
+	} elseif [left $arg 1 -] {
+		set decoded [decrypt stormbot:xlogin [mid $arg 2]]
+		set nick   [binary format H* [lindex $decoded 0]]
+		set host   [binary format H* [lindex $decoded 1]]
+		set handle [binary format H* [lindex $decoded 2]]
+		set pass   [binary format H* [lindex $decoded 3]]
+		if ![validuser $handle] {return 0}
+		if [string eq $pass [userinfo get $handle pass]] {set method_encoding 4}
+	} else {
+		# These methods are caught up with the "+" format above ... why?
+		lassign $arg nick h p u
+		set d [decrypt stormbot $p]
+		set host "<${bot}>"
+		switch -exact -- [llength $d] {
+			1 {
+				# Method 3
+				set tp $d
+				lassign $arg nick handle . host
+				if [passwdok $handle $tp] { set method_encoding 3 }
+			}
+			2 {
+				# Method 2
+				lassign $d tp handle
+				if [passwdok $handle $tp] {
+					set method_encoding 2.1
+					if {[onchan $nick [home]] && [onchan $bot [home]]} {
+					    set host [getchanhost $nick [home]]
+					    set method_encoding 2.1
+					}
+				}
+			}
+		}
+	}
+	if ![validuser $handle] {putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): unknown user"; return 0}
+	if !($method_encoding) {putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): bad password"; return 0}
+	sb7 auth login $handle $nick $host
+	putlog "\[XLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: $method_encoding\]"
+}
+
+proc @botnet:ologin { bot cmd arg } {
+	set method_encoding 0
+	if [left $arg 1 +] {
+		set arg [decrypt \123\u053\x041 [reverse [mid $arg 2]]] 
+		set nick [lindex $arg 0]
+		set handle [lindex $arg 1]
+		if ![validuser $handle] { return 0 }
+		set host [lindex $arg 3]
+		if [passwdok $handle ""] { #return 0 }
+		set pwok 0
+		if {[decrypt stormbot [lindex $arg 2]] == [getuser $handle PASS]} {
+			set method_encoding 3
+			# Accept new encryption format.
+		} elseif [passwdok $handle [l0 [decrypt stormbot [l2 $arg]]]] {
+			set method_encoding 2
+			# Accept old encryption format.
+		} elseif [passwdok $handle [l2 $arg]] {
+			set method_encoding 1
+		}
+	} elseif [left $arg 1 -] {
+		set decoded [decrypt stormbot:ologin [mid $arg 2]]
+		set nick   [binary format H* [lindex $decoded 0]]
+		set host   [binary format H* [lindex $decoded 1]]
+		set handle [binary format H* [lindex $decoded 2]]
+		set pass   [binary format H* [lindex $decoded 3]]
+		if ![validuser $handle] {return 0}
+		if [string eq $pass [userinfo get $handle opass]] {set method_encoding 4}
+	} else {
+		# These methods are caught up with the "+" format above ... why?
+		lassign $arg nick h p u
+		set d [decrypt stormbot $p]
+		set host "<${bot}>"
+		switch -exact -- [llength $d] {
+			1 {
+				# Method 3
+				set tp $d
+				lassign $arg nick handle . host
+				if [passwdok $handle $tp] { set method_encoding 3 }
+			}
+			2 {
+				# Method 2
+				lassign $d tp handle
+				if [passwdok $handle $tp] {
+					set method_encoding 2.1
+					if {[onchan $nick [home]] && [onchan $bot [home]]} {
+					    set host [getchanhost $nick [home]]
+					    set method_encoding 2.1
+					}
+				}
+			}
+		}
+	}
+	if ![validuser $handle] {putlog "\[XOLOGIN\] failed XOLOGIN by: ${nick}!${host} (${handle}): unknown user"; return 0}
+	if !$method_encoding {putlog "\[XOLOGIN\] failed XOLOGIN by: ${nick}!${host} (${handle}): bad password"; return 0}
+	sb7 auth ologin $handle $nick $host
+	putlog "\[XOLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: $method_encoding\]"
+}
+
+proc @logout { nick host handle chan arg } {
+	sb7 parseflags
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[LOGOUT\]:"
+		print -help $nick "Syntax: /msg $::botnick LOGOUT HELP"
+		print -help $nick "Syntax: /msg $::botnick LOGOUT"
+		print -help $nick "The LOGOUT command disables your access to my commands unti you LOGIN again. If you are going to be away from your keyboard for a while, I recommend you use this command."
+		return
+	}
+	sb7 auth logout $handle
+	print -short $nick "You are now logged out."
+	return
+}
+
+proc @passhint { nick host handle chan arg } {
+	sb7 parseflags -oauth
+	set base HINT
+	if [validflag -oauth] {
+		if ![access check 1000 $handle] { print -help -error -return $nick "You don't have access to the -OAUTH flag here." }
+		set base HINT:OUTH
+	}
+
+	# Only allow HELP & GET to be used when the user is logged-out ....
+	switch -exact -- $1l {
+
+		"" - help {
+			print -help $nick "\[PASSHINT\]:"
+			print -help $nick "Syntax: $::botnick PASSHINT HELP"
+			print -help $nick "Syntax: $::botnick PASSHINT \[-oauth\] GET <your handle>"
+			print -help $nick "Syntax: $::botnick PASSHINT \[-oauth\] SET <password hint>"
+			print -help $nick ""
+			print -help $nick "The PASSHINT command allows you to set a \"password hint\" so common to websites nowadays. Your hint can be ANY text you choose."
+			print -help $nick "The -OAUTH flag lets you set your hint for your owner login (=1000 users only)."
+			print -help $nick "Don't be too obvious (\"my birthday\"), because the info could be somewhere else in the bot (\"$::botnick info $handle bday\")"
+			return
+		}
+
+		get {
+			set hint [userinfo get $handle $base]
+			print -return -private $nick "Your [lindex [list "" "OAUTH "] [validflag -oauth]]password hint: [iff { [isempty hint] } <blank> $hint]"
+		}
+
+		set {
+			if ![is authed $handle $nick $host] { print -error -help -header -return $nick "You must be logged-in to use this command." }
+			set hint $2je
+			userinfo set $handle $base $hint
+			saveme user
+			print -return -private $nick "Your password hint: [iff { [isempty hint] } <blank> $hint]"
+		}
+
+		default { print -help -short -return $nick "Unknown option: $1" }
+
+	}
+	?
+}
+
+#####
+# Bootstrap:
+
+bind BOT - XLOGIN @botnet:xlogin
+bind BOT - OLOGIN @botnet:ologin

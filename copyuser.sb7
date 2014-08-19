@@ -1,0 +1,146 @@
+sb7 command add COPYUSER 700 -none CU
+
+proc @copyuser { nick host handle chan arg } {
+	# HELP stuff
+	sb7 parseflags -force
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[COPYUSER\]:"
+		print -help $nick "Syntax: $::botnick COPYUSER HELP"
+		print -help $nick "Syntax: $::botnick COPYUSER <list of users> : <list of target bots>"
+		print -help $nick "Syntax: $::botnick COPYUSER -force <list of users> : <list of target bots>"
+		print -help $nick "COPYUSER does just that: copies user data from me to another bot."
+		print -help $nick "If the user exists on the target bot, the data will be rejected (the -FORCE flag will override this behavior)."
+		print -help $nick "You have to have access on the target bot to be able to transfer user data (and be ABOVE that user to do it)."
+		return
+	}
+
+	if { [llength $1e] == 2 } {
+		lassign $1e who targets
+	} {
+		if { [string first : $1e] == -1 } { print -help -short -return $nick "You must specify a colon between the list of bots to copy over, and, the list of target bots." }
+		lassign [split $1e :] who targets
+	}
+
+	empty ok utl lower human conn disc
+	foreach check $who {
+		lassign [whois $check] - whois_nick - whois_handle
+		if ![validuser $check] { lappend utl $check ; continue }
+		if ![access compare $handle $whois_handle] { lappend lower $check ; continue }
+		lappend ok $whois_handle
+	}
+	foreach target $targets { 
+		if [islinked $target] {
+			lappend conn $target
+		} {
+			if ![matchattr $target b] { lappend human $bot ; continue }
+			lappend disc $target
+		} 
+	}
+
+	foreach to $conn {
+		foreach who $ok {
+			set id [clock clicks -milli]:[clock seconds]:[rand 10][rand 10][rand 10][rand 10][rand 10]
+			data set @COPYUSER:$id [list $to $who $nick $host $handle $chan]
+			putbot $to [list sb7:copyuser:receive init $id [list $who $nick $host $handle $chan $flags]]
+			if [matchattr $who b] {
+				putbot $to [list sb7:copyuser:receive data $id [list $who addbot]]
+				putbot $to [list sb7:copyuser:receive data $id [list $who botaddr [getuser $who botaddr]]]
+				putbot $to [list sb7:copyuser:receive data $id [list $who botfl [getuser $who botfl]]]
+			} {
+				putbot $to [list sb7:copyuser:receive data $id [list $who adduser]]
+			}
+			putbot $to [list sb7:copyuser:receive data $id [list $who pass [getuser $who pass]]]
+			putbot $to [list sb7:copyuser:receive data $id [list $who chattr:global [chattr $who]]]
+			foreach ch [channels] { putbot $to [list sb7:copyuser:receive data $id [list $who chattr:local [chattr $who $ch] $ch]] }
+			foreach h [getuser $who hosts] { putbot $to [list sb7:copyuser:receive data $id [list $who host $h]] }
+			putbot $to [list sb7:copyuser:receive data $id [list $who comment [getuser $who comment]]]
+			putbot $to [list sb7:copyuser:receive data $id [list $who fwd [getuser $who fwd]]]
+			putbot $to [list sb7:copyuser:receive data $id [list $who info:global [getuser $who info]]]
+			foreach ch [channels] { putbot $to [list sb7:copyuser:receive data $id [list $who info:local [getchaninfo $who $ch] $ch]] }
+			foreach a [getuser $who xtra] { lassign $a name value ; putbot $to [list sb7:copyuser:receive data $id [list $who xtra $name $value]] }
+			putbot $to [list sb7:copyuser:receive eof $id $who]
+		}
+	}
+
+	if [isempty conn] { empty ok }
+	if [notempty utl] { print -short $nick "Unknown users: [ajl $utl]" }
+	if [notempty lower] { print -short $nick "Superior users (unable to transfer): [ajl $lower]" }
+	if [notempty human] { print -short $nick "Targets are human users: [ajl $human]" }
+	if [notempty disc] { print -short $nick "Targets are not in the botnet: [ajl $disc]" }
+	if [notempty ok] { print -short $nick "Sending data for [ajl $ok] to: [ajl $conn]" }
+	return
+}
+
+proc @copyuser:receive { bot cmd arg } {
+	lassign $arg cmd id data
+	switch -exact -- [string tolower $cmd] {
+
+		init {
+			lassign $data who nick host handle chan flags
+			if ![access check 700 $handle] { print -return -home "\[COPYUSER\] Unauthorized access for COPYUSER: [nph $nick $handle]" }
+			if [validuser $who] {
+				if ![validflag -force] { print -return -home "\[COPYUSER\] Already-existing user: $who (transfer rejected)" }
+				deluser $who
+				print -home "\[COPYUSER\] Overwriting user: $who"
+			} {
+				print -home "\[COPYUSER\] [nph $nick $handle] is sending me information for: $who"
+			}
+			data set @COPYUSER:$id [list $bot $who $nick $host $handle $chan]
+			return
+		}
+
+		data {
+			if [data isempty @COPYUSER:$id] return ; # Silent reject
+			lassign $data who type data extra
+			switch -exact -- [string tolower $type] {
+
+				adduser { adduser $who }
+
+				addbot { addbot $who }
+
+				botaddr { setuser $who botaddr $data }
+
+				botfl { setuser $who botfl $data }
+
+				host { setuser $who hosts $data }
+
+				pass { setuser $who pass $data }
+
+				chattr:global { chattr $who $data }
+
+				chattr:local { chattr $who $data $extra }
+
+				comment { setuser $who comment $data }
+
+				fwd { setuser $who fwd $data }
+
+				info:global { setuser $who info $data }
+
+				info:local { setchaninfo $who $extra $data }
+
+				xtra { setuser $who xtra $extra $data }
+
+				default { error "\[@COPYUSER:RECEIVE\] Unknown data type: $type (ID: $id)" }
+
+			}
+			return
+		}
+
+		eof {
+			if [data isempty @COPYUSER:$id] return ; # Silent reject
+			data set @COPYUSER:$id ""
+			save
+			print -home "\[COPYUSER\] Transfer complete: $data"
+			return
+		}
+
+		default { error "\[@COPYUSER:RECEIVE\] Unknown option: $cmd" }
+
+	}
+	?
+}
+
+#####
+# Bootstrap
+
+bind bot - sb7:copyuser:receive @copyuser:receive
