@@ -37,9 +37,9 @@ Thanks to those who were contributors or bug reporters for SB3, SB4, SB5. Everyt
 Reverse-credit acknowledgement: #NordicBots on QuakeNet, especially admin TheAvatar, because they acknowledged me for the assistance I (Mai Mizuno) gave them with their earlier work. Eventually, their coders created the Natasha bot (http://www.nordicbots.com/?id=143). That was very nice of them.
 
 An acknowledgement from Eggdrop core for a major recursive bug we found by the way of the "UPDATE" command in SB6 -- from Eggdrop 1.6.21 release notes (http://cvs.eggheads.org/viewvc/eggdrop1.6/doc/Changes1.6?view=markup):
-> #100 - do_restart is now reset before actually performing a rehash or restart to
-> #101 ensure it doesn't do it again infinitely.
-> #102 Found by: Domino / Patch by: thommey
+> \#100 - do_restart is now reset before actually performing a rehash or restart to
+> \#101 ensure it doesn't do it again infinitely.
+> \#102 Found by: Domino / Patch by: thommey
 
 Rødgrød med fløde!
 
