@@ -23,7 +23,7 @@ Since that time, StormBot has moved to its own IRC network (irc://chat.bothouse.
 
 (C) 2009 - 2014: [V6.0] David P. Hansen & Mai Mizuno
 
-(C) 2013 - present: [V7.0] David P. Hansen & Mai Mizuno
+(C) 2012 - present: [V7.0] David P. Hansen & Mai Mizuno
 
 ### Additional Information
 
