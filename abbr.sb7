@@ -65,3 +65,4 @@ proc @abbr { nick host handle chan arg } {
 	}
 	return
 }
+

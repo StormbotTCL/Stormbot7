@@ -5060,3 +5060,4 @@ utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
 sb7:setup ; # Last thing to be executed!
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data get @VERSION] (by Mai \"Domino\" Mizuno) loaded"
+
