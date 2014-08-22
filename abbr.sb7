@@ -36,7 +36,7 @@ proc @abbr { nick host handle chan arg } {
 
 			list {
 				set matchme *
-				foreach cmd [lremove -not -multiple -nocase -all -glob [sb7 command list] [none $2e *]] {
+				foreach cmd [ldestroy -not -multiple -nocase -all -glob [sb7 command list] [none $2e *]] {
 					set abbr [join [sb7 abbr get $cmd]]
 					if [notempty abbr] { print $nick "\[[string toupper $cmd]\] [ajl $abbr]" }
 				}

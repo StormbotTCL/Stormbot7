@@ -31,6 +31,17 @@ proc @botsend { nick host handle chan arg } {
 
 		status { print -help -header -return $nick "Option is not available at this time." }
 
+		kill - killall {
+			foreach a [data find @BOTSEND:*] {
+				set bot [data get $a]
+				set id [lindex [split $a :] 1]
+				if [islinked $bot] { putbot [list @BOTSEND:receive $id KILL }
+			}
+			foreach a [data find @BOTSEND] { data set $a }
+			print -short $nick "All transfers killed."
+			return
+		}
+
 		shift {
 			if ![access check 1000 $handle] { print -error -header -return $nick "You don't have access to use this option." }
 #debug =0
@@ -277,6 +288,14 @@ proc @botsend:receive { bot - arg } {
 	lassign $arg cmd id 0 1 2 3 4 5 6
 	switch -exact -- [string tolower $cmd] {
 
+		kill - killall {
+			lassign [data get @BOTSEND:$id] _n _h _n _c _f _ts1 _ts2
+			data set @BOTSEND:$id
+			foreach a [data find @BOTSEND:${id}:*] { data set $a }
+			print -home "\[BOTSEND\] Received KILL message from $bot for: $f (started at: [format:date $ts1 $_n])"
+			return
+		}
+
 		header {
 			# Does user have priviliges to send this file here?
 			set ok 1
@@ -408,19 +427,26 @@ proc @botsend:receive { bot - arg } {
 proc @botsend:gimme { bot cmd file } { print -home -return "\[BOTSEND\] $bot is ready to receive: $file" }
 
 proc @botsend:complete { bot cmd id } {
+#putlog "\[@BOTSEND:COMPLETE\] BOT($bot):CMD($cmd):ID($id)"
 	set data [data get @BOTSEND:$id]
+#putlog "\[@BOTSEND:COMPLETE\] DATA($data)"
 	set data [ldestroy -nocase $data $bot]
+#putlog "\[@BOTSEND:COMPLETE\] DATA($data)"
 	data set @BOTSEND:$id $data
 	if [notempty data] return
 	set size [data get @BOTSEND:${id}:SIZE]
+#putlog "\[@BOTSEND:COMPLETE\] SIZE($size)"
 	data set @BOTSEND:${id}:SIZE ""
 	lassign [split $id :] nick time milli random
+#putlog "\[@BOTSEND:COMPLETE\] NICK($nick):TIME($time):MILLI($milli):RANDOM($random)"
 	set now [clock seconds]
 	set now_milli [expr abs([clock clicks -milli])]
 	set elapsed [expr $now - $time]
 	set elapsed_milli [expr abs( $now_milli - $milli )]
+#putlog "\[@BOTSEND:COMPLETE\] SIZE($size):NOW($now):NOW_MILLI($now_milli):ELAPSED($elapsed):ELAPSED_MILLI($elapsed_milli)"
 	if { $elapsed_milli > 1000 } { set elapsed_milli [expr $elapsed_milli / 1000.0] ; set word seconds } { set word milliseconds }
-	print -home "\[BOTSEND\] Transfers complete: [comma $size] bytes ([bytes $size 1]) in [comma $elapsed_milli] $word"
+#putlog "\[@BOTSEND:COMPLETE\] ELAPSED_MILLI($elapsed_milli):WORD($word)"
+	print -home "\[BOTSEND\] Transfers complete: \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma $elapsed_milli] $word\037\002"
 	return
 }
 
@@ -444,5 +470,4 @@ bind bot - botsend:receive @botsend:receive
 bind bot - botsend:complete @botsend:complete
 
 @botsend:bootstrap
-
 

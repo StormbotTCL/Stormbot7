@@ -226,7 +226,7 @@ proc @note { nick host handle chan arg } {
 					if [isempty 3] { print -short -help -return "From what alias name are we deleting?" }
 					if ![regexp -nocase -- [lindex $validalias 0] $3] { print -short -help -return "Illegal alias name. Valid characters: [lindex $validalias 1]" }
 					if [isempty 4] { print -short -help -return "What alias targets are we removing from ${3}?" }
-					set alias [lremove -all -multiple -nocase [userinfo get $handle note:setting:alias:$3] $4e]
+					set alias [ldestroy -all -multiple -nocase [userinfo get $handle note:setting:alias:$3] $4e]
 					userinfo set $handle note:setting:alias:$3 $alias
 					saveme user
 					print -short -return $nick "\[[string toupper $3]\] [ajl $alias]"
@@ -234,7 +234,7 @@ proc @note { nick host handle chan arg } {
 
 				list {
 					if [isempty 3] { set matchme * } { set matchme $3e }
-					set aliases [lremove -not -all -glob -nocase -multiple [regsub -all -- note:setting:alias: [userinfo list $handle note:setting:alias:*] ""] $matchme]
+					set aliases [ldestroy -not -all -glob -nocase -multiple [regsub -all -- note:setting:alias: [userinfo list $handle note:setting:alias:*] ""] $matchme]
 					if [isempty aliases] { print -short -return $nick "No matching aliases defined." }
 					foreach alias [lsort -increasing -unique -dictionary $aliases] {
 						set name [lindex [split $alias :] end]

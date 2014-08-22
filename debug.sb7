@@ -141,10 +141,10 @@ proc @debug { nick host handle chan arg } {
 
 		cmd - cmds - command - commands {
 			set commandlist [string tolower [sb7 command list]]
-			set cmds [lremove -not -all -glob -multiple $commandlist [string tolower $2e]]
+			set cmds [ldestroy -not -all -glob -multiple $commandlist [string tolower $2e]]
 			if [isempty cmds] { print -help -return -short $nick "About what command(s) are you asking?" }
 			foreach cmd [lsort -increasing -unique -dictionary $cmds] {
-				print $nick "\[[effects $cmd b u]\] abbr([none [sb7 command get $cmd abbr] <none>]), level([sb7 command get $cmd level]), default([sb7 command get $cmd original]), proc([sb7 command get $cmd proc]), flags([none [sb7 command get $cmd flags] -none]), extra([none [sb7 command get $cmd extra] <none>])"
+				print $nick "\[[effects $cmd b up]\] source([sb7 command get $cmd source]), abbr([none [sb7 command get $cmd abbr] <none>]), level([sb7 command get $cmd level]), default([sb7 command get $cmd original]), proc([sb7 command get $cmd proc]), flags([none [sb7 command get $cmd flags] -none]), extra([none [sb7 command get $cmd extra] <none>])"
 			}
 			print $nick "Debug complete."
 			return
@@ -153,5 +153,4 @@ proc @debug { nick host handle chan arg } {
 		default ?
 	}
 }
-
 

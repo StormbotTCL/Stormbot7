@@ -156,7 +156,7 @@ debug new
                           default { error "\[ACCESS SCRUB\] Unknown WHOIS reply: ONLINE($online):WN($wn):WM($wm):WH($wh):WC($wc) (report this to the coder)" }
                     }
                     if ![validuser $wh] { lappend bad $user ; continue }
-                    set list [lremove -not -nocase -glob -multiple [get first [userinfo list $user]] [list USERLEVEL:* ACCESS:#*]]
+                    set list [ldestroy -not -nocase -glob -multiple [get first [userinfo list $user]] [list USERLEVEL:* ACCESS:#*]]
                     foreach element $list { userinfo set $user $element }
                     if [string eq -nocase $user $wh] { lappend ok $user } { lappend ok "$user ([nph $wn $wh])" }
                }
@@ -475,6 +475,39 @@ proc rank args {
           if { $level >= $rank } { return $ranks($loop) }
      }
      ?
+}
+
+# WHOIS
+proc @whois { nick host handle chan arg } {
+	sb7 parseflags
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[WHOIS\]:"
+		print -help $nick "Syntax: $::botnick WHOIS HELP"
+		print -help $nick "Syntax: $::botnick WHOIS <user>"
+		print -help $nick "Syntax: $::botnick WHOIS \$<user>"
+		print -help $nick ""
+		print -help $nick "WHOIS displays information about a given user. I will return the following information:"
+		print -help $nick "User status (online / offline)"
+		print -help $nick "Access level(s)"
+		print -help $nick "Other information (via the SET command)"
+		print -help $nick "If you need to indicate a user's handle, and there's someone using a nick that matches your target handle (causing a false-positive against that user), use a \"\$\" in front of the handle."
+		print -help $nick "Example: $::botnick WHOIS \$$handle"
+		return
+	}
+	lassign:array whois [whois [join $1] $handle] online nick host handle channel authhandle authnick
+	if { $whois(online) == -1 } { print -short -return $nick "No such user: $1" }
+	set private -dummy
+	if [none [userinfo get $whois(handle) private] false] { 
+		set private -private
+		if ![isnum -integer $nick] { print $private $nick "Output piped to /NOTICE to protect privacy as requested ...." }
+	}
+	print $private $nick "\[WHOIS\] [caseall [join $1]] ($whois(handle)):"
+	if $whois(online) { print $private $nick "[space 5]Online as: [nph $whois(nick) $whois(handle)]" } { print $nick "[space 5]Currently offline" }
+	print $private $nick "[space 5]Global flags ([chattr $whois(handle)])/[access get $whois(handle)] - $chan flags ([lindex [split [chattr $whois(handle) $chan] |] 1])/[access get $whois(handle) $chan]"
+	set valid [uniquematch [concat hosts [data get @SET:VALID]] [none $2e *]]
+	foreach info $valid { print $private $nick "[space 5]${info}: [none [userinfo get $whois(handle) $info] <none>]" }
+	print $private $nick "End of WHOIS [join $1]"
+	return
 }
 
 # WHO
@@ -801,11 +834,11 @@ proc @tokens { nick host handle chan arg } {
           return
      }
 
-     set list [lremove -not -mult -glob [get first [data get userlevels]] [list chan* global* bot*]]
+     set list [ldestroy -not -mult -glob [get first [data get userlevels]] [list chan* global* bot*]]
      if [isempty 1] { print -short -return $nick "Currently available tokens: [ajl $list]" }
 
      # Find by token name ....
-     set matches [lremove -not -glob -nocase -mult $list [regsub -all -- {\$} $1e "" ]]
+     set matches [ldestroy -not -glob -nocase -mult $list [regsub -all -- {\$} $1e "" ]]
      if [notempty matches] {
           foreach token $matches {
                set data [get token $token $chan]

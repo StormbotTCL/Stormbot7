@@ -16,6 +16,7 @@ proc @botmon { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick BOTMON OFFLINE <add | del | list | clear>"
 			print -help $nick "Syntax: $::botnick BOTMON FREE <add | del | list | clear>"
 			print -help $nick "Syntax: $::botnick BOTMON NOTIFY <hourly | links | hubs> <off | on>"
+			print -help $nick "Syntax: $::botnick BOTMON DEFERTO <list of bots>"
 			print -help $nick "Syntax: $::botnick BOTMON STATUS"
 			print -help $nick ""
 			print -help $nick "The BOTMON command tracks bots connecting or leaving the local botnet, or, returns the botnet's current status. All information is reported to my \"home\" channel ([home])"
@@ -34,8 +35,17 @@ proc @botmon { nick host handle chan arg } {
 			print $nick "Offline (or other networks): [none [ajl [data array get BOTMON OFFLINE]] <none>]"
 			print $nick "Free (disconnected): [none [ajl [data array get BOTMON FREE]] <none>]"
 			print $nick "Ignoring: [none [ajl [data array get BOTMON IGNORE]] <none>]"
-			print $nick "Botnet: missing bots: [none [ajl [lremove -nocase -all -multiple [concat [data array get BOTMON BOTS] [data array get BOTMON IGNORE]] [bots]]] <none>]"
-			print $nick "Botnet: extra bots: [none [lremove -all -multiple -nocase [bots] [concat [data array get BOTMON IGNORE] [data array get BOTMON OFFLINE] [data array get BOTMON BOTS]]] <none>]"
+			print $nick "Botnet: missing bots: [none [ajl [ldestroy -nocase -all -multiple [concat [data array get BOTMON BOTS] [data array get BOTMON IGNORE]] [bots]]] <none>]"
+			print $nick "Botnet: extra bots: [none [ldestroy -all -multiple -nocase [bots] [concat [data array get BOTMON IGNORE] [data array get BOTMON OFFLINE] [data array get BOTMON BOTS]]] <none>]"
+			print $nick "Defer to: [none [data array get BOTMON deferto] <none>]"
+			return
+		}
+
+		df - dt - def - defer - deferto - defer-to {
+			if [isempty 2] { print -short -return $nick "Defer-to bots: [none [data array get BOTMON deferto] <none>]" }
+			data array set BOTMON deferto $2e
+			saveme data
+			print -short $nick "Now deferring BOTMON hourly checks & notices to: $2e"
 			return
 		}
 		
@@ -272,7 +282,6 @@ proc @botmon { nick host handle chan arg } {
 		group {
 			# Syntax: GROUP <name> <ADD|DEL|LIST|CLEAR> [list of bots]
 			if { [isempty 2] || [string eq -nocase HELP $2] } {
-				print -help $nick "Syntax: $::botnick GROUP <group name> NAME <single-word name>"
 				print -help $nick "Syntax: $::botnick GROUP <group name> KEY <single Letter / symbol>"
 				print -help $nick "Syntax: $::botnick GROUP <group name> DESC <any text>"
 				print -help $nick "Syntax: $::botnick GROUP <group name> ADD <bot list>"
@@ -362,7 +371,23 @@ proc @botmon { nick host handle chan arg } {
 					print -return -short $nick "Group \"${group}\" has been cleared."
 				}
 			
-				default { print -short -return $nick "Unknown option for GROUP: $2" }
+				key {
+					if [isempty group] { print -help -error -short -return $nick "You forgot to tell me the group's name." }
+					if [isempty 4] { print -return -short $nick "Current key for the \"${group}\" group is: [data array lindex botmon group:$group 0]" }
+					data array lset botmon group:$group 0 [join $4]
+					saveme data
+					print -return -short $nick "Key for the \"${group}\" group is now: [join $4]"
+				}
+
+				desc - description - name {
+					if [isempty group] { print -help -error -short -return $nick "You forgot to tell me the group's name." }
+					if [isempty 4] { print -return -short $nick "Current description for the \"${group}\" group is: [data array lindex botmon group:$group 1]" }
+					data array lset botmon group:$group 1 [join $4e]
+					saveme data
+					print -return -short $nick "Description for the \"${group}\" group is now: [join $4e]"
+				}
+
+				default { print -short -return $nick "Unknown option for GROUP: [join $3]" }
 
 			}
 			
@@ -376,24 +401,26 @@ proc @botmon { nick host handle chan arg } {
 }
 
 proc @botmon:link { bot hub } { 
-	if ![data array get -boolean BOTMON NOTIFY:LINKS] return
 	if [string eq -nocase $bot ${::botnet-nick}] { swap bot hub }
 	set data [data array get @BOTMON HUB:$bot] ; # [list "" 0 0]
 	lpad data 5
 	lset data 0 $hub
 	lset data 1 [clock seconds]
 	data array set @BOTMON HUB:$bot $data
+	if ![data array get -boolean BOTMON NOTIFY:LINKS] return
+	if [@botmon:deferred] return
 	print -home "\[BOTMON\] Link: $hub <- $bot"
 	return
 }
 
 proc @botmon:disc bot {
-	if ![data array get -boolean BOTMON NOTIFY:LINKS] return
 	set data [data array get @BOTMON HUB:$bot]
 	set hub [none [lindex $data 0] (unknown)]
 	lpad data 5
 	lset data 2 [clock seconds]
 	data array set @BOTMON HUB:$bot $data
+	if ![data array get -boolean BOTMON NOTIFY:LINKS] return
+	if [@botmon:deferred] return
 	print -home "\[BOTMON\] Disconnect: $hub -> $bot"
 	return
 }
@@ -448,13 +475,13 @@ proc @botmon:check args {
 
 	# Who's missing? (Don't make the classic "Six Chinese brothers" mistake!)
 	# Botnet first
-	lassign [lremove -all -multiple -both -not [concat $me_botnet $bots $free] [concat $me_botnet [bots] $free] ] ok botnet_missing
+	lassign [ldestroy -all -multiple -both -not [concat $me_botnet $bots $free] [concat $me_botnet [bots] $free] ] ok botnet_missing
 
 	# Channel
-	set channel_missing [lremove -all -multiple [concat $me_chanlist $bots $offline] [concat [chanlist [home]] $offline]]
+	set channel_missing [ldestroy -all -multiple [concat $me_chanlist $bots $offline] [concat [chanlist [home]] $offline]]
 
 	# Who's extra?
-	set extra [lremove -all -multiple [concat [bots] $offline] [concat $bots $ignore]]
+	set extra [ldestroy -all -multiple [concat [bots] $offline] [concat $bots $ignore]]
 
 	# Reconcile the two sets of missing data
 	set missing [lsort -increasing -unique [concat $botnet_missing $channel_missing]]
@@ -462,14 +489,28 @@ proc @botmon:check args {
 	return [list $ok $missing $extra]
 }
 
+proc @botmon:deferred args {
+	set bots [data array get BOTMON deferto]
+	if [isempty bots] { return 0 }
+	set home [home]
+	foreach bot $bots {
+		# Check as nick, then, as handle
+		if [onchan $bot $home] { return 1 }
+		if [handonchan $bot $home] { return 1 }
+	}
+	return 0
+}
+
 proc @botmon:hourly args {
 	if ![data array get -boolean BOTMON NOTIFY:HOURLY] return
+	if [@botmon:deferred] return
 	set output [@botmon:interpret]
 	print -home "\[BOTMON HOURLY\] $output"
 	return
 }
 
 proc @botmon:interpret args {
+	# NO! -- Manual triggering will get lost this way! -- if [@botmon:deferred] return
 	if [isempty args] { lassign [@botmon:check] ok missing extra } { lassign $args ok missing extra }
 	empty output
 	if [isempty missing] {
@@ -485,8 +526,8 @@ proc @botmon:interpret args {
 
 		# Version 3
 		array set botnet [list list [concat [bots] ${::botnet-nick}] valid [concat ${::botnet-nick} [data array get BOTMON BOTS] [data array get BOTMON OFFLINE]] present "" missing "" ignore [data array get BOTMON IGNORE] extra ""]
-		lassign [lremove -all -nocase -multiple -both -not $botnet(valid) $botnet(list)] present missing
-		set extra [lremove -all -nocase -multiple $botnet(list) [concat $present $botnet(ignore)]]
+		lassign [ldestroy -all -nocase -multiple -both -not $botnet(valid) $botnet(list)] present missing
+		set extra [ldestroy -all -nocase -multiple $botnet(list) [concat $present $botnet(ignore)]]
 		set botnet(present) $present
 		set botnet(missing) $missing
 		set botnet(extra) $extra
@@ -496,8 +537,8 @@ proc @botmon:interpret args {
 		set botnet(count:extra) [llength $extra]
 
 		array set chanlist [list list [chanlist [home]] valid [concat $::botnick [data array get BOTMON BOTS] [data array get BOTMON FREE]] present "" missing "" ignore [data array get BOTMON IGNORE] extra ""]
-		lassign [lremove -all -nocase -multiple -both -not $chanlist(valid) $chanlist(list)] present missing
-		set extra [lremove -all -nocase -multiple $chanlist(list) [concat $present $chanlist(ignore)]]
+		lassign [ldestroy -all -nocase -multiple -both -not $chanlist(valid) $chanlist(list)] present missing
+		set extra [ldestroy -all -nocase -multiple $chanlist(list) [concat $present $chanlist(ignore)]]
 		set chanlist(present) $present
 		set chanlist(missing) $missing
 		set chanlist(extra) $extra
@@ -515,20 +556,21 @@ proc @botmon:interpret args {
 			empty reason 
 			if ![islinked $bot] { append reason B ; set reasons(B) "[effects B 4 b]otnet" }
 			if ![onchan $missing [home]] { append reason # ; set reasons(#) "[effects # 4 b][string range [home] 1 end]" }
-			foreach group [data array find BOTNET GROUP:*] {
+			foreach group [data array find BOTMON GROUP:*] {
+				empty key desc bots name
 				lassign [data array get BOTMON $group] key desc bots
 				set name [mid $group 7]
-				if { [lsearch -exact [string tolower $bots] [string tolower $bots]] != -1 } {
+				if { [lsearch -exact [string tolower $bots] [string tolower $bot]] != -1 } {
 					if [notempty key] { append reason $key }
 					if [notempty desc] { set reasons($key) $desc }
 					break
 				}
 			}
-			lappend output_missing "$bot ([effects [implode [lsort:list [explode $reason] [list B #]]] 4 b])"
+			lappend output_missing "$bot ([effects [implode [lsort:priority [explode $reason] [list B #]]] 4 b])"
 		}
 		set output_missing "Missing: [ajl $output_missing]"
 		set legend ""
-		foreach a [lsort:list [array names reasons] [list B #]] { lappend legend "[effects $a 6 b] ($reasons($a))" }
+		foreach a [lsort:priority [array names reasons] [list B #]] { lappend legend "[effects $a 6 b] ($reasons($a))" }
 		set legend "Legend: [join $legend ", "]"
 		empty output
 		lappend output $percentage
@@ -550,5 +592,4 @@ bind join - * @botmon:join
 bind sign - * @botmon:sign
 bind part - * @botmon:part
 bind kick - * @botmon:kick
-
 

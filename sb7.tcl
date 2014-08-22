@@ -316,3 +316,4 @@ if ![info exists sb7(%post:utimers)  ] { set sb7(%post:utimers)   [utimers]     
 # --- End: transfer control back to EGGDROP ---
 set sb7(@boot:type) 1 ; # WARM
 return $sb7(@version)
+

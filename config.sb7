@@ -147,9 +147,9 @@ proc @config { nick host handle chan arg } {
 			switch -exact -- $2 {
 
 				"" - list {
-					print -header $nick "local: [data get $base shortcut:all]"
-					print -header $nick "global: [data get $base shortcut:global]"
-					print -header $nick "owner: [data get $base shortcut:owner]"
+					print -header $nick "local: [none [data get $base shortcut:all] <none>]"
+					print -header $nick "global: [none [data get $base shortcut:global] <none>]"
+					print -header $nick "owner: [none [data get $base shortcut:owner] <none>]"
 					return 
 				}
 
@@ -265,3 +265,4 @@ proc @config { nick host handle chan arg } {
 	}
 	?
 }
+

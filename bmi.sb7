@@ -1,0 +1,67 @@
+sb7 command add BMI 0 -none
+proc @bmi { nick host handle chan arg } {
+	sb7 parseflags -metric -stone -test -show
+	set bmi_imperial2metric 702.94643990929 ; # Digits after this =DO= change every lb or so (only by 02)
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[BMI\]:"
+		print -help $nick "Syntax: $::botnick BMI HELP"
+		print -help $nick "Syntax: $::botnick BMI \[-METRIC | -STONE | -SHOW\] <weight> <height>"
+		print -help $nick ""
+		print -help $nick "Calculates your BMI (body mass index) based on the most established formula."
+		print -help $nick "Accepts POUNDS and INCHES for the measurements."
+		print -help $nick "-METRIC: accept KILOGRAMS and METRES for the measurements."
+		print -help $nick "-STONE: accept STONE and METRES for the measurements."
+		print -help $nick "-SHOW: display math, step-by-step"
+		print -help $nick "Scale:"
+		print -help $nick "[space 5]BMI  < 18.8: underweight"
+		print -help $nick "[space 5]18.8 - 24.9: normal weight"
+		print -help $nick "[space 5]25.0 - 29.9: overweight"
+		print -help $nick "[space 5]30.0 - 34.9: obese - stage 1"
+		print -help $nick "[space 5]35.0 - 39.9: obese - stage 2"
+		print -help $nick "[space 5]40.0 +     : morbidly obese"
+		print -help $nick "Formula: ( weight ) ÷ ( height^2 ) \[ X $bmi_imperial2metric if using lbs / inches\]"
+		print -help $nick "Use of this BMI index does NOT replace the advice of a qualified medical practicioner / professional."
+		return
+	}
+	if [validflag -test] {
+		set stone2kg 6.349206349206349
+		set test1 180 ; # 237
+		set test2 66 ; # 77
+		set result1 [expr ($test1 / pow($test2,2)) * $bmi_imperial2metric]
+		set result2 [expr [expr $test1 / 2.205] / pow([expr $test2 / 39.37],2)]
+		set result3 [expr [expr ($test1 / 14.0) * $stone2kg] / pow([expr $test2 / 39.37],2)]
+		print $nick "Imperial: $test1 lbs & $test2 inches: $result1"
+		print $nick "Metric: [expr $test1 / 2.205] Kg & [expr $test2 / 39.37] m: $result2"
+		print $nick "Stone (metric): [expr $test1 / 14.0] stone & [expr $test2 / 39.37] m: $result3"
+		print $nick "Factors:"
+		print $nick "Imperial to Metric: [expr $result1 / $result2]"
+		print $nick "Imperial to Stone: [expr $result1 / $result3]"
+		print $nick "Metric to Stone: [expr $result2 / $result3]"
+		print $nick "Metric to Imperial: [expr $result2 / $result1]"
+		print $nick "Stone to Imperial: [expr $result3 / $result1]"
+		print $nick "Stone to Metric: [expr $result3 / $result2]"
+		return
+	}
+	if ![isnum -real $1] { print -short -return $nick "I can only accept numbers: \"${1}\" is invalid" }
+	if ![isnum -real $2] { print -short -return $nick "I can only accept numbers: \"${2}\" is invalid" }
+	set height $2
+	if [validflag -stone] { 
+		set weight [expr $1 * 6.349206349206349] ; # Stone -> Kg
+		set height $2 ; # Metres
+		set multiple 1
+	} elseif [validflag -metric] {
+		set weight $1
+		set height $2
+		set multiple 1
+	} {
+		set weight $1
+		set height $2
+		set multiple $bmi_imperial2metric
+	}
+	if [validflag -show] { print -short $nick "Formula = $weight / ($height)^2[iff { $multiple != 1 } " * $bmi_imperial2metric"]" }
+	if [validflag -show] { print -short $nick "Formula = $weight / [expr pow($height,2)][iff { $multiple != 1 } " * $bmi_imperial2metric"]" }
+	if [validflag -show] { print -short $nick "Formula = [expr $weight / pow($height,2)][iff { $multiple != 1 } " * $bmi_imperial2metric"]" }
+	if [validflag -show] { if { $multiple != 1 } { print -short $nick "Formula = [expr ( $weight / pow($height,2) ) * $multiple]" } }
+	print -short $nick "Your BMI is: [format %0.3f [expr ($weight / pow(${height},2)) * $multiple]]"
+	return
+}
