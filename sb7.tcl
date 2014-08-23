@@ -46,7 +46,7 @@
 
 # To load SB7 into your bot, do the following:
 #
-# (1) put the tarball into your bot's scripts dir (<bot dir>/scripts)
+# (1) put the tarball into your bot's HOME dir (<bot dir>) (this is a change!)
 # (2) tar -zxvf <tarball>
 # (3) place any bot specific-beads into a subfolder of sb7 by the bot's
 #     nick (all lower case)
@@ -315,5 +315,5 @@ if ![info exists sb7(%post:utimers)  ] { set sb7(%post:utimers)   [utimers]     
 
 # --- End: transfer control back to EGGDROP ---
 set sb7(@boot:type) 1 ; # WARM
-return $sb7(@version)
+#return $sb7(@version) ; # The FULL version will never load due to this ....
 

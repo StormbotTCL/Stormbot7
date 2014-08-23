@@ -4,7 +4,7 @@ sb7 command add MODUSER  400 -none MU
 sb7 command add REMUSER  400 -none RU
 sb7 command add USERLIST   1 -none UL
 sb7 command add ADMIN    501 -none ADM
-sb7 command add WHO      100 -none
+sb7 command add WHO	 100 -none
 sb7 command add WHOIS      1 -none WI
 sb7 command add WHOAMI    -1 -none WAI
 sb7 command add PROTECT  501 -none
@@ -18,463 +18,464 @@ proc @admin    { nick host handle chan arg } { print -help -short -return $nick 
 proc @userlist { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS \[-GLOBAL\] \[-SHORT\] LIST \[range\]" }
 
 proc @access { nick host handle chan arg } {
-     # This will be the all-encompassing ACCESS controller
+	# This will be the all-encompassing ACCESS controller
 
-     sb7 setvars -global -bot -short -none; # Other flags will be checked by each sub-routine
-     if [isempty 1] { print -help -return -short $nick "Missing option" }
+	sb7 setvars -global -bot -short -none; # Other flags will be checked by each sub-routine
+	if [isempty 1] { print -help -return -short $nick "Missing option" }
 
-     set global [validflag -global]
-     if $global { if ![access check 501 $handle] { print -error -return -short $nick "You don't have access to the -GLOBAL flag." } }
+	set global [validflag -global]
+	if $global { if ![access check 501 $handle] { print -error -return -short $nick "You don't have access to the -GLOBAL flag." } }
 
-     switch -exact -- $1l {
+	switch -exact -- $1l {
 
-          help {
-               print -help $nick "\[ACCESS\]:"
-               print -help $nick "Syntax: $::botnick ACCESS HELP"
-               print -help $nick "Syntax: $::botnick ACCESS ADD <level> <list of nicks>"
-               print -help $nick "Syntax: $::botnick ACCESS ADD -GLOBAL <admin level> <list of nicks>"
-               print -help $nick "Syntax: $::botnick ACCESS ADD -BOT <botnick> <address> <bot port> \[user port\]"
-               print -help $nick "Syntax: $::botnick ACCESS MOD <level> <list of nicks>"
-               print -help $nick "Syntax: $::botnick ACCESS MOD -GLOBAL <admin level> <list of nicks>"
-               print -help $nick "Syntax: $::botnick ACCESS DEL <list of nicks>"
-               print -help $nick "Syntax: $::botnick ACCESS DEL -GLOBAL <list of nicks>"
-               print -help $nick "Syntax: $::botnick ACCESS SCRUB <list of nicks>"
-               print -help $nick "Syntax: $::botnick ACCESS LIST \[-GLOBAL\] \[range of levels\]"
-               print -help $nick "Syntax: $::botnick ACCESS <user>"
-               print -help $nick ""
-               print -help $nick "The ACCESS command is a combination of several previously separate commands: ADDUSER, ADDBOT, MODUSER, REMUSER, ACCESS, USERLIST, & ADMIN. For simplicity, due to similaries in code, I'm combining them together into one bead."
-               print -help $nick "For you to be able to use my commands, you need to be given \"access\" to my command list. The ACCESS command grants you access, based on the \"level of responsibility\" a channel owner (or global admin) wants you to have."
-               print -help $nick "As in SB4, SB5, & SB6, I will honor the two formats to express access levels: word names (chanop, globmaster), or, numeric levels (100, 800)."
-               print -help $nick "You may use which format is easier for you. The numeric levels exist in order to create a hierarchy of users within each level (a 250 chanop \"out-ranks\" a 200 chanop, similar to a \"senior op\" position)."
-               print -help $nick "You can add / modify users BELOW your level\; you can not add / move someone to your same (or above) level."
-               print -help $nick "To add someone as a global admin, you must ALSO be a global admin (level 800), and, like the local (channel) levels, you can only add someone up to your level \"minus one\" (you can't add someone to your exact level, or above)."
-               print -help $nick "You can =NOT= add users at levels 1000 / 1001 through this command\; those levels are assigned based on the \$OWNER variable in my configuration file. If you only list one person, that person will have 1000 access\; if you list more than one person, the [effects "first one in order" bold underline] will be level 1001 and the others will all be level 1000."
-               print -help $nick
-               print -help $nick "The DEL command has two functions: used locally (for a channel), it only removes the user's access on that channel. If -GLOBAL is used, the entire user record is deleted\; it does not just remove global access only. To only remove global access, MOD to level 0."
-               print -help $nick "The SCRUB option will remove all access levels on all channels, but, leave the global access level untouched (the opposite of a MOD -GLOBAL 0 which removes global access but leaves channel-level accesses untouched)."
-               print -help $nick "For legacy reasons, I'm BINDing the original commands to provide help and hints toward the new syntax."
-               return
-          }
+		help {
+			print -help $nick "\[ACCESS\]:"
+			print -help $nick "Syntax: $::botnick ACCESS HELP"
+			print -help $nick "Syntax: $::botnick ACCESS ADD <level> <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS ADD -GLOBAL <admin level> <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS ADD -BOT <botnick> <address> <bot port> \[user port\]"
+			print -help $nick "Syntax: $::botnick ACCESS MOD <level> <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS MOD -GLOBAL <admin level> <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS DEL <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS DEL -GLOBAL <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS SCRUB <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS LIST \[-GLOBAL\] \[range of levels\]"
+			print -help $nick "Syntax: $::botnick ACCESS <user>"
+			print -help $nick ""
+			print -help $nick "The ACCESS command is a combination of several previously separate commands: ADDUSER, ADDBOT, MODUSER, REMUSER, ACCESS, USERLIST, & ADMIN. For simplicity, due to similaries in code, I'm combining them together into one bead."
+			print -help $nick "For you to be able to use my commands, you need to be given \"access\" to my command list. The ACCESS command grants you access, based on the \"level of responsibility\" a channel owner (or global admin) wants you to have."
+			print -help $nick "As in SB4, SB5, & SB6, I will honor the two formats to express access levels: word names (chanop, globmaster), or, numeric levels (100, 800)."
+			print -help $nick "You may use which format is easier for you. The numeric levels exist in order to create a hierarchy of users within each level (a 250 chanop \"out-ranks\" a 200 chanop, similar to a \"senior op\" position)."
+			print -help $nick "You can add / modify users BELOW your level\; you can not add / move someone to your same (or above) level."
+			print -help $nick "To add someone as a global admin, you must ALSO be a global admin (level 800), and, like the local (channel) levels, you can only add someone up to your level \"minus one\" (you can't add someone to your exact level, or above)."
+			print -help $nick "You can =NOT= add users at levels 1000 / 1001 through this command\; those levels are assigned based on the \$OWNER variable in my configuration file. If you only list one person, that person will have 1000 access\; if you list more than one person, the [effects "first one in order" bold underline] will be level 1001 and the others will all be level 1000."
+			print -help $nick
+			print -help $nick "The DEL command has two functions: used locally (for a channel), it only removes the user's access on that channel. If -GLOBAL is used, the entire user record is deleted\; it does not just remove global access only. To only remove global access, MOD to level 0."
+			print -help $nick "The SCRUB option will remove all access levels on all channels, but, leave the global access level untouched (the opposite of a MOD -GLOBAL 0 which removes global access but leaves channel-level accesses untouched)."
+			print -help $nick "For legacy reasons, I'm BINDing the original commands to provide help and hints toward the new syntax."
+			return
+		}
 
-          hint - hints {
-               print -help $nick "\[ACCESS\]:"
-               print -help $nick "The following commands are either (1) altered, or, (2) absorbed into ACCESS:"
-               print -help $nick "ADDUSER -> $::botnick ACCESS ADD <level> <list of users>"
-               print -help $nick "MODUSER -> $::botnick ACCESS MOD <level> <list of users>"
-               print -help $nick "REMUSER -> $::botnick ACCESS DEL <list of users>"
-               print -help $nick "REMUSER -GLOBAL -> $::botnick ACCESS -global DEL <list of users>"
-               print -help $nick "USERLIST -> $::botnick ACCESS LIST \[level / range\]"
-               print -help $nick ""
-               print -help $nick "When specifying a user (or list of users), ACCESS will accept:"
-               print -help $nick "[space 5](1) nick of a user on the channel"
-               print -help $nick "[space 5](2) handle of any user (will do nick look-up)"
-               print -help $nick "[space 5](3) hard handle (\"\$${handle}\" which will bypass nick look-up)"
-               print -help $nick "[space 5](4) any declared ALIAS (which users can set via the SET ALIAS command)"
-               print -help $nick "[space 5](5) hard tokens (like \"\$BOTOWNER\" or \"\$GLOBALOPS\" or \"\$CHANMASTERS\")"
-               print -help $nick ""
-               print -help $nick "When specifying a level, the ACCESS command will accept:"
-               print -help $nick "[space 5](1) specific levels (like \"100\" or \"=500\")"
-               print -help $nick "[space 5](2) a range of levels (like \"200-500\" or \"<=200\")"
-               return
-          }
+		hint - hints {
+			print -help $nick "\[ACCESS\]:"
+			print -help $nick "The following commands are either (1) altered, or, (2) absorbed into ACCESS:"
+			print -help $nick "ADDUSER -> $::botnick ACCESS ADD <level> <list of users>"
+			print -help $nick "MODUSER -> $::botnick ACCESS MOD <level> <list of users>"
+			print -help $nick "REMUSER -> $::botnick ACCESS DEL <list of users>"
+			print -help $nick "REMUSER -GLOBAL -> $::botnick ACCESS -global DEL <list of users>"
+			print -help $nick "USERLIST -> $::botnick ACCESS LIST \[level / range\]"
+			print -help $nick ""
+			print -help $nick "When specifying a user (or list of users), ACCESS will accept:"
+			print -help $nick "[space 5](1) nick of a user on the channel"
+			print -help $nick "[space 5](2) handle of any user (will do nick look-up)"
+			print -help $nick "[space 5](3) hard handle (\"\$${handle}\" which will bypass nick look-up)"
+			print -help $nick "[space 5](4) any declared ALIAS (which users can set via the SET ALIAS command)"
+			print -help $nick "[space 5](5) hard tokens (like \"\$BOTOWNER\" or \"\$GLOBALOPS\" or \"\$CHANMASTERS\")"
+			print -help $nick ""
+			print -help $nick "When specifying a level, the ACCESS command will accept:"
+			print -help $nick "[space 5](1) specific levels (like \"100\" or \"=500\")"
+			print -help $nick "[space 5](2) a range of levels (like \"200-500\" or \"<=200\")"
+			return
+		}
 
-          add {
-               # SB3/SB4/SB5/SB6:ADDUSER
-          }
+		add {
+			# SB3/SB4/SB5/SB6:ADDUSER
+		}
 
-          ed - edit - mod {
-               # SB3/SB4/SB5/SB6:MODUSER
-               set me [access get $handle $chan]
+		ed - edit - mod {
+			# SB3/SB4/SB5/SB6:MODUSER
+			set me [access get $handle $chan]
 
-               # If -GLOBAL, access 800+? If not, access 400+?
+			# If -GLOBAL, access 800+? If not, access 400+?
 
-               if [validflag -global] { set me [access get $handle] }
-               set new [process level $2]
-               if [isempty new] { print -help -short -return $nick "No such user level: $2" }
+			if [validflag -global] { set me [access get $handle] }
+			set new [process level $2]
+			if [isempty new] { print -help -short -return $nick "No such user level: $2" }
 debug new
-               foreach user $2e {
-                    # User valid?
-                    # User already have access: (ignore this, presume "0", do the MODUSER anyway)
-                    # user is above target?
-                    # target level >= my own level?
-                    # target to 501+?
-                    # -- Do MODUSER
-               }
-          }
+			foreach user $2e {
+				# User valid?
+				# User already have access: (ignore this, presume "0", do the MODUSER anyway)
+				# user is above target?
+				# target level >= my own level?
+				# target to 501+?
+				# -- Do MODUSER
+			}
+		}
 
-          del {
-               # SB3/SB4/SB5/SB6:REMUSER
-               empty ok bad access none
-               set me [access get $handle]
-               if [validflag -global] {
-                    if { $me < 800 } { print -help -short -return $nick "You don't have access to do that globally (=800 access needed)" }
-                    foreach user $2e {
-                         lassign:array whois [whois $user $user $chan] online nick host handle chan authed
-                         if ![validuser $whois(handle)] { lappend bad $user ; continue }
-                         if [isempty authed] { set who $whois(handle) } { set who $whois(authed) }
-                         set level [access get $who]
-                         if { $level < 1 } { lappend none [nph $user $who] ; continue }
-                         if ![access compare $handle $who] { lappend access [nph $user $who] ; continue }
-                         deluser $who
-                         lappend ok [nph $user $who]
-                    }
-                    if [notempty ok] { saveme user ; print -short $nick "Successful REMUSER: [ajl $ok]" }
-                    if [notempty bad] { print -short $nick "Unsuccessful REMUSER (no such user): [ajl $bad]" }
-                    if [notempty none] { print -short $nick "Unsuccessful REMUSER (never had access): [ajl $none]" }
-                    if [notempty access] { print -short $nick "Unsuccessful REMUSER (insufficient access): [ajl $access]" }
-                    return
-               }
+		del {
+			# SB3/SB4/SB5/SB6:REMUSER
+			empty ok bad access none
+			set me [access get $handle]
+			if [validflag -global] {
+				if { $me < 800 } { print -help -short -return $nick "You don't have access to do that globally (=800 access needed)" }
+				foreach user $2e {
+					lassign:array whois [whois $user $user $chan] online nick host handle chan authed
+					if ![validuser $whois(handle)] { lappend bad $user ; continue }
+					if [isempty authed] { set who $whois(handle) } { set who $whois(authed) }
+					set level [access get $who]
+					if { $level < 1 } { lappend none [nph $user $who] ; continue }
+					if ![access compare $handle $who] { lappend access [nph $user $who] ; continue }
+					deluser $who
+					lappend ok [nph $user $who]
+				}
+				if [notempty ok] { saveme user ; print -short $nick "Successful REMUSER: [ajl $ok]" }
+				if [notempty bad] { print -short $nick "Unsuccessful REMUSER (no such user): [ajl $bad]" }
+				if [notempty none] { print -short $nick "Unsuccessful REMUSER (never had access): [ajl $none]" }
+				if [notempty access] { print -short $nick "Unsuccessful REMUSER (insufficient access): [ajl $access]" }
+				return
+			}
 
-               if { $me < 400 } { print -help -short -return $nick "You don't have access to do that on $chan (=400 access needed)" }
-               foreach user $2e {
-                    lassign:array whois [whois $user $user $chan] online nick host handle chan authed
-                    if [isempty authed] { set who $whois(handle) } { set who $whois(authed) }
-                    if ![validuser $who] { lappend bad $user ; continue }
-                    set level [access get $who $chan]
-                    if { $level < 1 } { lappend none [nph $user $who] ; continue }
-                    if { $level >= $me } { lappend access [nph $user $who] ; continue }
-                    access set $who 0 $chan
-                    lappend ok [nph $user $who]
-               }
-               if [notempty ok] { saveme user ; print -short $nick "Successful REMUSER: [ajl $ok]" }
-               if [notempty bad] { print -short $nick "Unsuccessful REMUSER (no such user): [ajl $bad]" }
-               if [notempty none] { print -short $nick "Unsuccessful REMUSER (never had access): [ajl $none]" }
-               if [notempty access] { print -short $nick "Unsuccessful REMUSER (insufficient access): [ajl $access]" }
-               return
-          }
+			if { $me < 400 } { print -help -short -return $nick "You don't have access to do that on $chan (=400 access needed)" }
+			foreach user $2e {
+				lassign:array whois [whois $user $user $chan] online nick host handle chan authed
+				if [isempty authed] { set who $whois(handle) } { set who $whois(authed) }
+				if ![validuser $who] { lappend bad $user ; continue }
+				set level [access get $who $chan]
+				if { $level < 1 } { lappend none [nph $user $who] ; continue }
+				if { $level >= $me } { lappend access [nph $user $who] ; continue }
+				access set $who 0 $chan
+				lappend ok [nph $user $who]
+			}
+			if [notempty ok] { saveme user ; print -short $nick "Successful REMUSER: [ajl $ok]" }
+			if [notempty bad] { print -short $nick "Unsuccessful REMUSER (no such user): [ajl $bad]" }
+			if [notempty none] { print -short $nick "Unsuccessful REMUSER (never had access): [ajl $none]" }
+			if [notempty access] { print -short $nick "Unsuccessful REMUSER (insufficient access): [ajl $access]" }
+			return
+		}
 
-          scrub {
-               # Remove all chan accesses ; leave global undisturbed
-               if [isempty 2] { print -help -return -short $nick "What users am I scrubbing?" }
-               empty ok bad access ; # When comparing, use global levels
-               set me [access get $handle]
-               foreach user $2e {
-                    lassign [whois $user $user $chan] online wn wm wh wc
-                    switch -exact -- $online {
-                         -1 { lappend bad $user ; continue }
-                          0 - 1 { set user $wh }
-                          default { error "\[ACCESS SCRUB\] Unknown WHOIS reply: ONLINE($online):WN($wn):WM($wm):WH($wh):WC($wc) (report this to the coder)" }
-                    }
-                    if ![validuser $wh] { lappend bad $user ; continue }
-                    set list [ldestroy -not -nocase -glob -multiple [get first [userinfo list $user]] [list USERLEVEL:* ACCESS:#*]]
-                    foreach element $list { userinfo set $user $element }
-                    if [string eq -nocase $user $wh] { lappend ok $user } { lappend ok "$user ([nph $wn $wh])" }
-               }
-               if [notempty ok] { saveme user ; print -short $nick "Successful SCRUBs: [ajl $ok]" }
-               if [notempty bad] { print -short $nick "Failed SCRUBs: [ajl $bad]" }
-               return
-          }
+		scrub {
+			# Remove all chan accesses ; leave global undisturbed
+			if [isempty 2] { print -help -return -short $nick "What users am I scrubbing?" }
+			empty ok bad access ; # When comparing, use global levels
+			set me [access get $handle]
+			foreach user $2e {
+				lassign [whois $user $user $chan] online wn wm wh wc
+				switch -exact -- $online {
+					-1 { lappend bad $user ; continue }
+					 0 - 1 { set user $wh }
+					 default { error "\[ACCESS SCRUB\] Unknown WHOIS reply: ONLINE($online):WN($wn):WM($wm):WH($wh):WC($wc) (report this to the coder)" }
+				}
+				if ![validuser $wh] { lappend bad $user ; continue }
+				set list [ldestroy -not -nocase -glob -multiple [get first [userinfo list $user]] [list USERLEVEL:* ACCESS:#*]]
+				foreach element $list { userinfo set $user $element }
+				if [string eq -nocase $user $wh] { lappend ok $user } { lappend ok "$user ([nph $wn $wh])" }
+			}
+			if [notempty ok] { saveme user ; print -short $nick "Successful SCRUBs: [ajl $ok]" }
+			if [notempty bad] { print -short $nick "Failed SCRUBs: [ajl $bad]" }
+			return
+		}
 
-          list {
-               # SB3/SB4/SB5/SB6:USERLIST
+		list {
+			# SB3/SB4/SB5/SB6:USERLIST
 
-               # Handle special case first: -NONE
-               if [validflag -none] {
-                    empty o
-                    foreach user [userlist -b] {
-                         zero m
-                         foreach channel [channels] {
-                              if [access get $user $channel] { one m }
-                         }
-                         if [access get $user] { one m }
-                         if !$m { lappend o $user }
-                    }
-                    if [isempty o] { print -short -return $nick "There are no dead (useless) users in the USERLIST. (:" }
-                    print -short $nick "The following users have no useful records: [ajl $o]"
-                    return
-               }
+			# Handle special case first: -NONE
+			if [validflag -none] {
+				empty o
+				foreach user [userlist -b] {
+					zero m
+					foreach channel [channels] {
+						if [access get $user $channel] { one m }
+					}
+					if [access get $user] { one m }
+					if !$m { lappend o $user }
+				}
+				if [isempty o] { print -short -return $nick "There are no dead (useless) users in the USERLIST. (:" }
+				print -short $nick "The following users have no useful records: [ajl $o]"
+				return
+			}
 
-               if [isempty 2] { if [validflag -global] { set range 501-1001 } { set range 0-500 } }
-               if [validflag -global] { set valid 501-1001 } { set valid 1-500 }
-               lassign [split $valid -] r0 r1
-               set checkrange [join [getrange $range $r0 $r1] -]
-               set users [userlist:level $checkrange [iff !$global $chan]]
-               print $nick "\[USERLIST[iff $global " -GLOBAL"]\]"
-               if [validflag -short] {
-                    array set temp [list]
-                    foreach a $users { lappend temp([access get $a [iff !$global $chan]]) $a }
-                    foreach a [lsort -dec -uni [array names temp]] { print $nick "${a}: [ajl $temp($a)]" }
-               } {
-                    foreach a [lsort -inc -dict -uni $users] { print $nick "${a}: [access get $a [iff !$global $chan]]" }
-               }
-               return
-          }
+			if [isempty 2] { if [validflag -global] { set range 501-1001 } { set range 0-500 } }
+			if [validflag -global] { set valid 501-1001 } { set valid 1-500 }
+			lassign [split $valid -] r0 r1
+			set checkrange [join [getrange $range $r0 $r1] -]
+			set users [userlist:level $checkrange [iff !$global $chan]]
+			print $nick "\[USERLIST[iff $global " -GLOBAL"]\]"
+			if [validflag -short] {
+				array set temp [list]
+				foreach a $users { lappend temp([access get $a [iff !$global $chan]]) $a }
+				foreach a [lsort -dec -uni [array names temp]] { print $nick "${a}: [ajl $temp($a)]" }
+			} {
+				foreach a [lsort -inc -dict -uni $users] { print $nick "${a}: [access get $a [iff !$global $chan]]" }
+			}
+			return
+		}
 
-          default {
-               # SB3/SB4/SB5/SB6:ACCESS
-               lassign [whois $1 $1 $chan] online wn wm wh wc
-               if [validuser $wh] { print -return -short $nick "[nph $wn $wh]: global [access get $wh] / ${chan} [access get $wh $chan]" ; # "[...] is currently: ${wn}!$wm on $wc" } { print -return -short $nick "${wn}: unknown user" } 
-          }
+		default {
+			# SB3/SB4/SB5/SB6:ACCESS
+			lassign [whois $1 $1 $chan] online wn wm wh wc
+			if [validuser $wh] { print -return -short $nick "[nph $wn $wh]: global [access get $wh] / ${chan} [access get $wh $chan]" ; # "[...] is currently: ${wn}!$wm on $wc" } { print -return -short $nick "${wn}: unknown user" } 
+		}
 
-     }
-     return
-     
-     # Userlevels:
-     unknown,-1,<0,|,unknown user
-     noaccess,0,=0,|,no access
-     chanfriend,1,1-49,|+f,Channel Friend
-     chanvoice,50,50-74,+p|+fv,Channel Voice
-     chanhalfop,75,75-99,+p|+fvl,Channel HalfOp
-     chanop,100,100-299,+p|+fvlo,Channel Op
-     chansuperop,300,300-399,+p|+fvlo,Channel SuperOp
-     chanmaster,400,400-499,+p|+fvlom,Channel Master
-     chanowner,500,=500,+p|+fvlomn,Channel Owner
-     globalfriend,501,501-549,+fp,%GROUP% Helper
-     globalvoice,550,550-574,+vfp,%GROUP% Global Voice
-     globalhalfop,575,575-599,+lvfp,%GROUP% Global HalfOp
-     globalop,600,600-699,+olvfp,%GROUP% Global Op
-     globaltech,700,700-799,+tolvfp,%GROUP% Botnet Technician
-     globalmaster,800,800-899,+mtolvfp,%GROUP% Co-Admin
-     globalowner,900,900-999,+nmtolvfp,%GROUP% Admin
-     botowner,1000,=1000,+jxnmtolvfp,%GROUP% Permanent Bot Owner
-     primaryowner,1001,>1000,+heujxnmtolvfp,%GROUP% Primary Permanent Bot Owner
+	}
+	return
+	
+	# Userlevels:
+	unknown,-1,<0,|,unknown user
+	noaccess,0,=0,|,no access
+	chanfriend,1,1-49,|+f,Channel Friend
+	chanvoice,50,50-74,+p|+fv,Channel Voice
+	chanhalfop,75,75-99,+p|+fvl,Channel HalfOp
+	chanop,100,100-299,+p|+fvlo,Channel Op
+	chansuperop,300,300-399,+p|+fvlo,Channel SuperOp
+	chanmaster,400,400-499,+p|+fvlom,Channel Master
+	chanowner,500,=500,+p|+fvlomn,Channel Owner
+	globalfriend,501,501-549,+fp,%GROUP% Helper
+	globalvoice,550,550-574,+vfp,%GROUP% Global Voice
+	globalhalfop,575,575-599,+lvfp,%GROUP% Global HalfOp
+	globalop,600,600-699,+olvfp,%GROUP% Global Op
+	globaltech,700,700-799,+tolvfp,%GROUP% Botnet Technician
+	globalmaster,800,800-899,+mtolvfp,%GROUP% Co-Admin
+	globalowner,900,900-999,+nmtolvfp,%GROUP% Admin
+	botowner,1000,=1000,+jxnmtolvfp,%GROUP% Permanent Bot Owner
+	primaryowner,1001,>1000,+heujxnmtolvfp,%GROUP% Primary Permanent Bot Owner
 }
 
 proc @rank { nick host handle chan arg } {
-     sb7 parseflags -navy -coastguard -army -airforce -marines
-     # Last choice (in given order) is used
-     if [isempty flags] { set service -navy } { set service [lindex $flags end] }
+	sb7 parseflags -navy -coastguard -army -airforce -marines
+	# Last choice (in given order) is used
+	if [isempty flags] { set service -navy } { set service [lindex $flags end] }
 
-     switch -exact -- $1l {
+	switch -exact -- $1l {
 
-          help {
-               print -help $nick "\[RANK\]:"
-               print -help $nick "Syntax: $::botnick RANK HELP"
-               print -help $nick "Syntax: $::botnick RANK"
-               print -help $nick "Syntax: $::botnick RANK \[-Army -Navy -AirForce -CoastGuard -Marines\]"
-               print -help $nick "Syntax: $::botnick RANK \[-Army -Navy -AirForce -CoastGuard -Marines\] LIST"
-               print -help $nick "The RANK command comparatives your access in a given channel (which is overridden by your global level, if applicable) against the United States Armed Forces ranks. By default, USN (United States Navy) ranks are used."
-               print -help $nick "Use the LIST command to display the list of ranks for the given service\; use the flag options to change which service rank list is used."
-               print -help $nick "For those with local (channel-level) access only, enlisted ranks will be used\; for global users, warrant officer or commissioned officer ranks will be used."
-               return
-          }
+		help {
+			print -help $nick "\[RANK\]:"
+			print -help $nick "Syntax: $::botnick RANK HELP"
+			print -help $nick "Syntax: $::botnick RANK"
+			print -help $nick "Syntax: $::botnick RANK \[-Army -Navy -AirForce -CoastGuard -Marines\]"
+			print -help $nick "Syntax: $::botnick RANK \[-Army -Navy -AirForce -CoastGuard -Marines\] LIST"
+			print -help $nick "The RANK command comparatives your access in a given channel (which is overridden by your global level, if applicable) against the United States Armed Forces ranks. By default, USN (United States Navy) ranks are used."
+			print -help $nick "Use the LIST command to display the list of ranks for the given service\; use the flag options to change which service rank list is used."
+			print -help $nick "For those with local (channel-level) access only, enlisted ranks will be used\; for global users, warrant officer or commissioned officer ranks will be used."
+			return
+		}
 
-          list {
-               array set ranks [rank $service list]
-               set max 0
-               foreach rank [array names ranks] {
-                    set max [expr ([string length $rank] > $max) ? [string length $rank] : $max]
-               }
-               switch -exact -- [string tolower $service] {
-                    -navy { set name Navy }
-                    -coastguard { set name "Coast Guard" }
-                    -army { set name Army }
-                    -airforce { set name "Air Force" }
-                    -marines { set name Marines }
-               }
-               print $nick "Ranks list (based on the United States ${name}):"
-               foreach rank [lsort -decreasing -real [array names ranks]] {
-                    print $nick "[format %${max}s $rank]: $ranks($rank)"
-               }
-               return
-          }
+		list {
+			array set ranks [rank $service list]
+			set max 0
+			foreach rank [array names ranks] {
+				set max [expr ([string length $rank] > $max) ? [string length $rank] : $max]
+			}
+			switch -exact -- [string tolower $service] {
+				-navy { set name Navy }
+				-coastguard { set name "Coast Guard" }
+				-army { set name Army }
+				-airforce { set name "Air Force" }
+				-marines { set name Marines }
+			}
+			print $nick "Ranks list (based on the United States ${name}):"
+			foreach rank [lsort -decreasing -real [array names ranks]] {
+				print $nick "[format %${max}s $rank]: $ranks($rank)"
+			}
+			return
+		}
 
-          default {
-               set g [access get $handle]
-               if { $g > 500 } { print -return $nick "Global rank: $g ([rank $service $g])" }
-               set c [access get $handle $chan]
-               print -return $nick "$chan rank: $c ([rank $service $c])"
-               return
-          }
+		default {
+			set g [access get $handle]
+			if { $g > 500 } { print -return $nick "Global rank: $g ([rank $service $g])" }
+			set c [access get $handle $chan]
+			print -return $nick "$chan rank: $c ([rank $service $c])"
+			return
+		}
 
-     }
-     ?
+	}
+	?
 }
 
 proc rank args {
-     flags:simple $args [list -global -navy -coastguard -army -airforce -marines] text flags
-     if [isempty flags] { set flags -navy } ; # Default
-     lassign $text who chan
+	flags:simple $args [list -global -navy -coastguard -cg -army -airforce -af -marines] text flags
+	if [isempty flags] { set flags -navy } ; # Default
+	lassign $text who chan
 
-     if [validflag -navy] { set abbr na }
-     if [validflag -coastguard] { set abbr cg }
-     if [validflag -army] { set abbr ar }
-     if [validflag -airforce] { set abbr af }
-     if [validflag -marines] { set abbr ma }
-     array set ranks [list]
+	if [validflag -navy] { set abbr na }
+	if [validflag -coastguard -cg] { set abbr cg }
+	if [validflag -army] { set abbr ar }
+	if [validflag -airforce -af] { set abbr af }
+	if [validflag -marines] { set abbr ma }
+	array set ranks [list]
 
-     # "E-10" (E-9 Special) ranks are not used: they would imply a global user
+	# "E-10" (E-9 Special) ranks are not used: they would imply a global user
 
-     ##### NAVY #####
+	##### NAVY #####
 
-     # Global levels
-     set ranks(na:1001) "Fleet Admiral" ; # O-11
-     set ranks(na:1000) Admiral ; # O-10
-     set ranks(na:975) "Vice Admiral" ; # O-9
-     set ranks(na:950) "Rear Admiral" ; # O-8
-     set ranks(na:925) Commodore ; # O-7*
-     set ranks(na:900) Captain ; # O-6
-     set ranks(na:800) Commander ; # O-5
-     set ranks(na:700) "Lieutenant Commander" ; # O-4
-     set ranks(na:600) Lieutenant ; # O-3
-     set ranks(na:575) "Lieutenant, Junior Grade" ; # O-2
-     set ranks(na:550) Ensign ; # O-1
-     set ranks(na:540) "Chief Warrant Officer-5" ; # CWO-5
-     set ranks(na:530) "Chief Warrant Officer-4" ; # CWO-4
-     set ranks(na:520) "Chief Warrant Officer-3" ; # CWO-3
-     set ranks(na:510) "Chief Warrant Officer-2" ; # CWO-2
-     set ranks(na:505) "Warrant Officer-1" ; # WO-1
-     set ranks(na:504) "Midshipman 1st Class" ; # MIDN-1/C
-     set ranks(na:503) "Midshipman 2nd Class" ; # MIDN-2/C
-     set ranks(na:502) "Midshipman 3rd Class" ; # MIDN-3/C
-     set ranks(na:501) "Midshipman 4th Class" ; # MIDN-4/C
+	# Global levels
+	set ranks(na:1001) "Fleet Admiral" ; # O-11
+	set ranks(na:1000) Admiral ; # O-10
+	set ranks(na:975) "Vice Admiral" ; # O-9
+	set ranks(na:950) "Rear Admiral" ; # O-8
+	set ranks(na:925) Commodore ; # O-7*
+	set ranks(na:900) Captain ; # O-6
+	set ranks(na:800) Commander ; # O-5
+	set ranks(na:700) "Lieutenant Commander" ; # O-4
+	set ranks(na:600) Lieutenant ; # O-3
+	set ranks(na:575) "Lieutenant, Junior Grade" ; # O-2
+	set ranks(na:550) Ensign ; # O-1
+	set ranks(na:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(na:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(na:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(na:510) "Chief Warrant Officer-2" ; # CWO-2
+	set ranks(na:505) "Warrant Officer-1" ; # WO-1
+	set ranks(na:504) "Midshipman 1st Class" ; # MIDN-1/C
+	set ranks(na:503) "Midshipman 2nd Class" ; # MIDN-2/C
+	set ranks(na:502) "Midshipman 3rd Class" ; # MIDN-3/C
+	set ranks(na:501) "Midshipman 4th Class" ; # MIDN-4/C
 
-     # Local levels
-     set ranks(na:500) "Master Chief Petty Officer" ; # E-9
-     set ranks(na:450) "Senior Chief Petty Officer" ; # E-8
-     set ranks(na:400) "Chief Petty Officer" ; # E-7
-     set ranks(na:300) "Petty Officer 1st Class" ; # E-6
-     set ranks(na:200) "Petty Officer 2nd Class" ; # E-5
-     set ranks(na:100) "Petty Officer 3rd Class" ; # E-4
-     set ranks(na:75) Seaman ; # E-3
-     set ranks(na:50) "Seaman Apprentice" ; # E-2
-     set ranks(na:1) "Seaman Recruit" ; # E-1
-     set ranks(na:0) Civilian
-     set ranks(na:-1) Civilian
+	# Local levels
+	set ranks(na:500) "Master Chief Petty Officer" ; # E-9
+	set ranks(na:450) "Senior Chief Petty Officer" ; # E-8
+	set ranks(na:400) "Chief Petty Officer" ; # E-7
+	set ranks(na:300) "Petty Officer 1st Class" ; # E-6
+	set ranks(na:200) "Petty Officer 2nd Class" ; # E-5
+	set ranks(na:100) "Petty Officer 3rd Class" ; # E-4
+	set ranks(na:75) Seaman ; # E-3
+	set ranks(na:50) "Seaman Apprentice" ; # E-2
+	set ranks(na:1) "Seaman Recruit" ; # E-1
+	set ranks(na:0) Civilian
+	set ranks(na:-1) Civilian
 
-     ##### COAST GUARD #####
-     # No O-11 in Coast Guard -- set ranks(cg:1001) "Fleet Admiral" ; # O-11
-     set ranks(cg:1000) Admiral ; # O-10
-     set ranks(cg:975) "Vice Admiral" ; # O-9
-     set ranks(cg:950) "Rear Admiral" ; # O-8
-     set ranks(cg:925) Commodore ; # O-7*
-     set ranks(cg:900) Captain ; # O-6
-     set ranks(cg:800) Commander ; # O-5
-     set ranks(cg:700) "Lieutenant Commander" ; # O-4
-     set ranks(cg:600) Lieutenant ; # O-3
-     set ranks(cg:575) "Lieutenant, Junior Grade" ; # O-2
-     set ranks(cg:550) Ensign ; # O-1
-     # No CWO-5 in Coast Guard -- set ranks(cg:540) "Chief Warrant Officer-5" ; # CWO-5
-     set ranks(cg:530) "Chief Warrant Officer-4" ; # CWO-4
-     set ranks(cg:520) "Chief Warrant Officer-3" ; # CWO-3
-     set ranks(cg:505) "Chief Warrant Officer-2" ; # CWO-2
-     # No WO-1 in Coast Guard -- set ranks(cg:505) "Warrant Officer-1" ; # WO-1
-     set ranks(cg:504) "Midshipman 1st Class" ; # MIDN-1/C
-     set ranks(cg:503) "Midshipman 2nd Class" ; # MIDN-2/C
-     set ranks(cg:502) "Midshipman 3rd Class" ; # MIDN-3/C
-     set ranks(cg:501) "Midshipman 4th Class" ; # MIDN-4/C
+	##### COAST GUARD #####
+	# No O-11 in Coast Guard -- set ranks(cg:1001) "Fleet Admiral" ; # O-11
+	set ranks(cg:1000) Admiral ; # O-10
+	set ranks(cg:975) "Vice Admiral" ; # O-9
+	set ranks(cg:950) "Rear Admiral" ; # O-8
+	set ranks(cg:925) Commodore ; # O-7*
+	set ranks(cg:900) Captain ; # O-6
+	set ranks(cg:800) Commander ; # O-5
+	set ranks(cg:700) "Lieutenant Commander" ; # O-4
+	set ranks(cg:600) Lieutenant ; # O-3
+	set ranks(cg:575) "Lieutenant, Junior Grade" ; # O-2
+	set ranks(cg:550) Ensign ; # O-1
+	# No CWO-5 in Coast Guard -- set ranks(cg:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(cg:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(cg:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(cg:505) "Chief Warrant Officer-2" ; # CWO-2
+	# No WO-1 in Coast Guard -- set ranks(cg:505) "Warrant Officer-1" ; # WO-1
+	set ranks(cg:504) "Midshipman 1st Class" ; # MIDN-1/C
+	set ranks(cg:503) "Midshipman 2nd Class" ; # MIDN-2/C
+	set ranks(cg:502) "Midshipman 3rd Class" ; # MIDN-3/C
+	set ranks(cg:501) "Midshipman 4th Class" ; # MIDN-4/C
 
-     # Local levels
-     set ranks(cg:500) "Master Chief Petty Officer" ; # E-9
-     set ranks(cg:450) "Senior Chief Petty Officer" ; # E-8
-     set ranks(cg:400) "Chief Petty Officer" ; # E-7
-     set ranks(cg:300) "Petty Officer 1st Class" ; # E-6
-     set ranks(cg:200) "Petty Officer 2nd Class" ; # E-5
-     set ranks(cg:100) "Petty Officer 3rd Class" ; # E-4
-     set ranks(cg:75) Seaman ; # E-3
-     set ranks(cg:50) "Seaman Apprentice" ; # E-2
-     set ranks(cg:1) "Seaman Recruit" ; # E-1
-     set ranks(cg:0) Civilian
-     set ranks(cg:-1) Civilian
+	# Local levels
+	set ranks(cg:500) "Master Chief Petty Officer" ; # E-9
+	set ranks(cg:450) "Senior Chief Petty Officer" ; # E-8
+	set ranks(cg:400) "Chief Petty Officer" ; # E-7
+	set ranks(cg:300) "Petty Officer 1st Class" ; # E-6
+	set ranks(cg:200) "Petty Officer 2nd Class" ; # E-5
+	set ranks(cg:100) "Petty Officer 3rd Class" ; # E-4
+	set ranks(cg:75) Seaman ; # E-3
+	set ranks(cg:50) "Seaman Apprentice" ; # E-2
+	set ranks(cg:1) "Seaman Recruit" ; # E-1
+	set ranks(cg:0) Civilian
+	set ranks(cg:-1) Civilian
 
-     ##### ARMY ##### 
+	##### ARMY ##### 
 
-     set ranks(ar:1001) "General of the Army" ; # O-11
-     set ranks(ar:1000) General ; # O-10
-     set ranks(ar:975) "Lieutenant General" ; # O-9
-     set ranks(ar:950) "Major General" ; # O-8
-     set ranks(ar:925) "Brigadier General" ; # O-7
-     set ranks(ar:900) Colonel ; # O-6
-     set ranks(ar:800) "Lieutenant Colonel" ; # O-5
-     set ranks(ar:700) Major ; # O-4
-     set ranks(ar:600) Captain ; # O-3
-     set ranks(ar:575) "First Lieutenant" ; # O-2
-     set ranks(ar:550) "Second Lieutenant" ; # O-1
-     set ranks(ar:540) "Chief Warrant Officer-5" ; # CWO-5
-     set ranks(ar:530) "Chief Warrant Officer-4" ; # CWO-4
-     set ranks(ar:520) "Chief Warrant Officer-3" ; # CWO-3
-     set ranks(ar:510) "Chief Warrant Officer-2" ; # CWO-2
-     set ranks(ar:501) "Warrant Officer-1" ; # WO-1
+	set ranks(ar:1001) "General of the Army" ; # O-11
+	set ranks(ar:1000) General ; # O-10
+	set ranks(ar:975) "Lieutenant General" ; # O-9
+	set ranks(ar:950) "Major General" ; # O-8
+	set ranks(ar:925) "Brigadier General" ; # O-7
+	set ranks(ar:900) Colonel ; # O-6
+	set ranks(ar:800) "Lieutenant Colonel" ; # O-5
+	set ranks(ar:700) Major ; # O-4
+	set ranks(ar:600) Captain ; # O-3
+	set ranks(ar:575) "First Lieutenant" ; # O-2
+	set ranks(ar:550) "Second Lieutenant" ; # O-1
+	set ranks(ar:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(ar:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(ar:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(ar:510) "Chief Warrant Officer-2" ; # CWO-2
+	set ranks(ar:501) "Warrant Officer-1" ; # WO-1
 
-     # Local levels
-     set ranks(ar:500) "Sergeant Major" ; # E-9
-     set ranks(ar:450) "Master Sergeant" ; # E-8 (First Sergeant)
-     set ranks(ar:400) "Sergeant First Class" ; # E-7
-     set ranks(ar:300) "Staff Sergeant" ; # E-6
-     set ranks(ar:200) "Sergeant" ; # E-5
-     set ranks(ar:100) "Corporal" ; # E-4
-     set ranks(ar:75) "Private First Class" ; # E-3
-     set ranks(ar:50) "Private E-2" ; # E-2
-     set ranks(ar:1) "Private" ; # E-1
-     set ranks(ar:0) Civilian
-     set ranks(ar:-1) Civilian
+	# Local levels
+	set ranks(ar:500) "Sergeant Major" ; # E-9
+	set ranks(ar:450) "Master Sergeant" ; # E-8 (First Sergeant)
+	set ranks(ar:400) "Sergeant First Class" ; # E-7
+	set ranks(ar:300) "Staff Sergeant" ; # E-6
+	set ranks(ar:200) "Sergeant" ; # E-5
+	set ranks(ar:100) "Corporal" ; # E-4
+	set ranks(ar:75) "Private First Class" ; # E-3
+	set ranks(ar:50) "Private E-2" ; # E-2
+	set ranks(ar:1) "Private" ; # E-1
+	set ranks(ar:0) Civilian
+	set ranks(ar:-1) Civilian
 
-     ##### AIR FORCE #####
+	##### AIR FORCE #####
 
-     set ranks(af:1001) "General of the Air Force" ; # O-11
-     set ranks(af:1000) General ; # O-10
-     set ranks(af:975) "Lieutenant General" ; # O-9
-     set ranks(af:950) "Major General" ; # O-8
-     set ranks(af:925) "Brigadier General" ; # O-7
-     set ranks(af:900) Colonel ; # O-6
-     set ranks(af:800) "Lieutenant Colonel" ; # O-5
-     set ranks(af:700) Major ; # O-4
-     set ranks(af:600) Captain ; # O-3
-     set ranks(af:550) "First Lieutenant" ; # O-2
-     set ranks(af:501) "Second Lieutenant" ; # O-1
-     # Air Force does not use Warrant Officers
+	set ranks(af:1001) "General of the Air Force" ; # O-11
+	set ranks(af:1000) General ; # O-10
+	set ranks(af:975) "Lieutenant General" ; # O-9
+	set ranks(af:950) "Major General" ; # O-8
+	set ranks(af:925) "Brigadier General" ; # O-7
+	set ranks(af:900) Colonel ; # O-6
+	set ranks(af:800) "Lieutenant Colonel" ; # O-5
+	set ranks(af:700) Major ; # O-4
+	set ranks(af:600) Captain ; # O-3
+	set ranks(af:550) "First Lieutenant" ; # O-2
+	set ranks(af:501) "Second Lieutenant" ; # O-1
+	# Air Force does not use Warrant Officers
 
-     # Local levels
-     set ranks(af:500) "Chief Master Sergeant" ; # E-9 (First Sergeant)
-     set ranks(af:450) "Senor Master Sergeant" ; # E-8 (First Sergeant)
-     set ranks(af:400) "Master Sergeant" ; # E-7 (First Sergeant)
-     set ranks(af:300) "Technical Sergeant" ; # E-6
-     set ranks(af:200) "Staff Sergeant" ; # E-5
-     set ranks(af:100) "Senior Airman" ; # E-4
-     set ranks(af:75) "Airman First Class" ; # E-3
-     set ranks(af:50) Airman ; # E-2
-     set ranks(af:1) "Airman Basic" ; # E-1
-     set ranks(af:0) Civilian
-     set ranks(af:-1) Civilian
+	# Local levels
+	set ranks(af:500) "Chief Master Sergeant" ; # E-9 (First Sergeant)
+	set ranks(af:450) "Senor Master Sergeant" ; # E-8 (First Sergeant)
+	set ranks(af:400) "Master Sergeant" ; # E-7 (First Sergeant)
+	set ranks(af:300) "Technical Sergeant" ; # E-6
+	set ranks(af:200) "Staff Sergeant" ; # E-5
+	set ranks(af:100) "Senior Airman" ; # E-4
+	set ranks(af:75) "Airman First Class" ; # E-3
+	set ranks(af:50) Airman ; # E-2
+	set ranks(af:1) "Airman Basic" ; # E-1
+	set ranks(af:0) Civilian
+	set ranks(af:-1) Civilian
 
-     ##### MARINES #####
+	##### MARINES #####
 
-     # Marines do not use O-11 -- set ranks(ma:1001) "General of the Army" ; # O-11
-     set ranks(ma:1000) General ; # O-10 (Commandant of the Marine Corps)
-     set ranks(ma:975) "Lieutenant General" ; # O-9
-     set ranks(ma:950) "Major General" ; # O-8
-     set ranks(ma:925) "Brigadier General" ; # O-7
-     set ranks(ma:900) Colonel ; # O-6
-     set ranks(ma:800) "Lieutenant Colonel" ; # O-5
-     set ranks(ma:700) Major ; # O-4
-     set ranks(ma:600) Captain ; # O-3
-     set ranks(ma:575) "First Lieutenant" ; # O-2
-     set ranks(ma:550) "Second Lieutenant" ; # O-1
-     set ranks(ma:540) "Chief Warrant Officer-5" ; # CWO-5
-     set ranks(ma:530) "Chief Warrant Officer-4" ; # CWO-4
-     set ranks(ma:520) "Chief Warrant Officer-3" ; # CWO-3
-     set ranks(ma:510) "Chief Warrant Officer-2" ; # CWO-2
-     set ranks(ma:501) "Warrant Officer-1" ; # WO-1
+	# Marines do not use O-11 -- set ranks(ma:1001) "General of the Army" ; # O-11
+	set ranks(ma:1000) General ; # O-10 (Commandant of the Marine Corps)
+	set ranks(ma:975) "Lieutenant General" ; # O-9
+	set ranks(ma:950) "Major General" ; # O-8
+	set ranks(ma:925) "Brigadier General" ; # O-7
+	set ranks(ma:900) Colonel ; # O-6
+	set ranks(ma:800) "Lieutenant Colonel" ; # O-5
+	set ranks(ma:700) Major ; # O-4
+	set ranks(ma:600) Captain ; # O-3
+	set ranks(ma:575) "First Lieutenant" ; # O-2
+	set ranks(ma:550) "Second Lieutenant" ; # O-1
+	set ranks(ma:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(ma:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(ma:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(ma:510) "Chief Warrant Officer-2" ; # CWO-2
+	set ranks(ma:501) "Warrant Officer-1" ; # WO-1
 
-     # Local levels
-     set ranks(ma:500) "Sergeant Major" ; # E-9 (Master Gunnery Sergeant)
-     set ranks(ma:450) "Master Sergeant" ; # E-8 (First Sergeant)
-     set ranks(ma:400) "Gunnery Sergeant" ; # E-7
-     set ranks(ma:300) "Staff Sergeant" ; # E-6
-     set ranks(ma:200) Sergeant ; # E-5
-     set ranks(ma:100) Corporal ; # E-4
-     set ranks(ma:75) "Lance Corporal" ; # E-3
-     set ranks(ma:50) "Private First Class" ; # E-2
-     set ranks(ma:1) Private ; # E-1
-     set ranks(ma:0) Civilian
-     set ranks(ma:-1) Civilian
+	# Local levels
+	set ranks(ma:500) "Sergeant Major" ; # E-9 (Master Gunnery Sergeant)
+	set ranks(ma:450) "Master Sergeant" ; # E-8 (First Sergeant)
+	set ranks(ma:400) "Gunnery Sergeant" ; # E-7
+	set ranks(ma:300) "Staff Sergeant" ; # E-6
+	set ranks(ma:200) Sergeant ; # E-5
+	set ranks(ma:100) Corporal ; # E-4
+	set ranks(ma:75) "Lance Corporal" ; # E-3
+	set ranks(ma:50) "Private First Class" ; # E-2
+	set ranks(ma:1) Private ; # E-1
+	set ranks(ma:0) Civilian
+	set ranks(ma:-1) Civilian
 
-     if [isnum -integer $who] {
-          set level $who
-     } elseif [string eq -nocase LIST $who] {
-          empty list
-          foreach a [array names ranks ${abbr}:*] { lappend list [mid $a 4] $ranks($a) }
-          return $list
-     } {
-          if ![validuser $who] { error "\[RANK\] Syntax error: \"${who}\" (expected user handle or literal access level)" }
-          if [validflag -global] { set level [access get $who] } { set level [access get $who $chan] }
-     }
+	if [isnum -integer $who] {
+		set level $who
+	} elseif [string eq -nocase LIST $who] {
+		if [isempty flags] { return [list -navy -coastguard -army -airforce -marines] }
+		empty list
+		foreach a [array names ranks ${abbr}:*] { lappend list [mid $a 4] $ranks($a) }
+		return $list
+	} {
+		if ![validuser $who] { error "\[RANK\] Syntax error: \"${who}\" (expected user handle or literal access level)" }
+		if [validflag -global] { set level [access get $who] } { set level [access get $who $chan] }
+	}
 
-     foreach loop [lsort -dec -uni -dictionary [array names ranks ${abbr}:*]] {
-          set rank [lindex [split $loop :] 1]
-          if { $level >= $rank } { return $ranks($loop) }
-     }
-     ?
+	foreach loop [lsort -dec -uni -dictionary [array names ranks ${abbr}:*]] {
+		set rank [lindex [split $loop :] 1]
+		if { $level >= $rank } { return $ranks($loop) }
+	}
+	?
 }
 
 # WHOIS
@@ -485,13 +486,17 @@ proc @whois { nick host handle chan arg } {
 		print -help $nick "Syntax: $::botnick WHOIS HELP"
 		print -help $nick "Syntax: $::botnick WHOIS <user>"
 		print -help $nick "Syntax: $::botnick WHOIS \$<user>"
+		print -help $nick "Syntax: $::botnick WHOIS <user> \[specific types\]"
 		print -help $nick ""
 		print -help $nick "WHOIS displays information about a given user. I will return the following information:"
 		print -help $nick "User status (online / offline)"
 		print -help $nick "Access level(s)"
 		print -help $nick "Other information (via the SET command)"
-		print -help $nick "If you need to indicate a user's handle, and there's someone using a nick that matches your target handle (causing a false-positive against that user), use a \"\$\" in front of the handle."
+		print -help $nick "If you need to indicate a user's handle, and there's someone using a nick that matches your target handle (causing a false-positive against that user), "
+		print -help $nick "... or ... you're trying to find out why a user isn't seen by $::botnick as their correct handle, use a \"\$\" in front of the handle."
 		print -help $nick "Example: $::botnick WHOIS \$$handle"
+		print -help $nick "You can also request only specific information."
+		print -help $nick "Example: $::botnick WHOIS $handle gmt timezone"
 		return
 	}
 	lassign:array whois [whois [join $1] $handle] online nick host handle channel authhandle authnick
@@ -504,396 +509,411 @@ proc @whois { nick host handle chan arg } {
 	print $private $nick "\[WHOIS\] [caseall [join $1]] ($whois(handle)):"
 	if $whois(online) { print $private $nick "[space 5]Online as: [nph $whois(nick) $whois(handle)]" } { print $nick "[space 5]Currently offline" }
 	print $private $nick "[space 5]Global flags ([chattr $whois(handle)])/[access get $whois(handle)] - $chan flags ([lindex [split [chattr $whois(handle) $chan] |] 1])/[access get $whois(handle) $chan]"
-	set valid [uniquematch [concat hosts [data get @SET:VALID]] [none $2e *]]
-	foreach info $valid { print $private $nick "[space 5]${info}: [none [userinfo get $whois(handle) $info] <none>]" }
+	set rank [userinfo get $whois(handle) rank]
+	if ![string eq "" $rank] {
+		set local [access get $whois(handle) $chan]
+		set gloval [access get $whois(handle)] ; # GLOVAL! (:
+		print $private $nick "[space 5]Rank ([stt $rank]): [rank -$rank [expr ( $gloval > $local ) ? $gloval : $local]]"
+	}
+	print $private $nick ""
+	set valid [ldestroy -not -all -mult -glob [concat hosts [data get @set:valid]] [none $2e *]]
+	foreach info $valid { 
+		switch -exact -- [string tolower $info] {
+
+			alias { print $private $nick "[space 5][stt $info]: [none [ajl [userinfo get $whois(handle) $info]] <none>]"  }
+
+			default { print $private $nick "[space 5][stt $info]: [none [userinfo get $whois(handle) $info] <none>]"  }
+
+		}
+
+	}
 	print $private $nick "End of WHOIS [join $1]"
 	return
 }
 
 # WHO
 proc @who { nick host handle chan arg } {
-     sb7 setvars -unknown -global
+SUPERCEDED! (intentional error)
+	sb7 setvars -unknown -global
 
-     if [string eq -nocase HELP $1] {
-          set b ${::botnick} ; # Too many reverences to the global variable
-          print -help $nick "\[WHO\]:"
-          print -help $nick "Syntax: $::botnick WHO HELP"
-          print -help $nick "Syntax: $::botnick WHO"
-          print -help $nick "Syntax: $::botnick WHO -UNKNOWN"
-          print -help $nick
-          print -help $nick "The WHO command identifies all persons on the channel by the following parameters:"
-          print -help $nick "(1) handle, (2) authorized as whom, (3) channel level, & (4) global level"
-          print -help $nick "If a user has access to the bot due to global levels (but NOT through channel-level access), the WHO command will identify the user by their global rank. This will expose \"global runners\" (those who interfere with \[and abuse\] channels with their global access)."
-          print -help $nick "Note: colors are used to identify the different access levels. A future option will allow a -NOCOLOR flag to change colors to other options (such as bold / underline / reverse). This will be attempted when StormBot.TCL v7 is out of beta testing."
-          print -help $nick ""
-          print -help $nick "Examples:"
-          print -help $nick "\"${b}\" -- the user is either: (1) not authed, (2) is authed as the same handle as their nick, or (3) a bot"
-          print -help $nick "\"${b} (me!)\" -- it's me! :)"
-          print -help $nick "\"${b} (IAm${b})\" -- the user is known to me as \"IAm${b}\" but is currently using the nick \"${b}\""
-          print -help $nick "\"${b} (IAm${b} -> Little${b})\" -- The user \"appears\" to mask-match \"IAm${b}\" but the user, in fact, used LOGIN to log in as Little${b} instead. All internal StormBot.TCL v7 references will be to \"Little${b}.\" This will be common with overly-open hostmasks on users, or, \"+c\" common user accounts (which are used for \"internet cafe\" type accounts)."
-          return
-     }
+	if [string eq -nocase HELP $1] {
+		set b ${::botnick} ; # Too many reverences (references?) to the global variable
+		print -help $nick "\[WHO\]:"
+		print -help $nick "Syntax: $::botnick WHO HELP"
+		print -help $nick "Syntax: $::botnick WHO"
+		print -help $nick "Syntax: $::botnick WHO -UNKNOWN"
+		print -help $nick
+		print -help $nick "The WHO command identifies all persons on the channel by the following parameters:"
+		print -help $nick "(1) handle, (2) authorized as whom, (3) channel level, & (4) global level"
+		print -help $nick "If a user has access to the bot due to global levels (but NOT through channel-level access), the WHO command will identify the user by their global rank. This will expose \"global runners\" (those who interfere with \[and abuse\] channels with their global access)."
+		print -help $nick "Note: colors are used to identify the different access levels. A future option will allow a -NOCOLOR flag to change colors to other options (such as bold / underline / reverse). This will be attempted when StormBot.TCL v7 is out of beta testing."
+		print -help $nick ""
+		print -help $nick "Examples:"
+		print -help $nick "\"${b}\" -- the user is either: (1) not authed, (2) is authed as the same handle as their nick, or (3) a bot"
+		print -help $nick "\"${b} (me!)\" -- it's me! :)"
+		print -help $nick "\"${b} (IAm${b})\" -- the user is known to me as \"IAm${b}\" but is currently using the nick \"${b}\""
+		print -help $nick "\"${b} (IAm${b} -> Little${b})\" -- The user \"appears\" to mask-match \"IAm${b}\" but the user, in fact, used LOGIN to log in as Little${b} instead. All internal StormBot.TCL v7 references will be to \"Little${b}.\" This will be common with overly-open hostmasks on users, or, \"+c\" common user accounts (which are used for \"internet cafe\" type accounts)."
+		return
+	}
 
-     # Options:
-     # If user is authed to a different handle than they mask-match, show that!
+	# Options:
+	# If user is authed to a different handle than they mask-match, show that!
 
-     empty o
-     foreach user [chanlist $chan] {
-          lassign [whois $user $user $chan] wonline wnick whost whandle wchan wauthed
+	empty o
+	foreach user [chanlist $chan] {
+		lassign [whois $user $user $chan] wonline wnick whost whandle wchan wauthed
 #debug user wonline wnick whost whandle wchan wauthed
-          if !$wonline { error "\[WHO:WHOIS\] Somehow, \$WONLINE = 0 , yet , the user is listed in CHANLIST ([highlight:list [chanlist $chan] $user bold reverse])" }
-          empty o1 o2 o3
-          if [isempty wauthed] {
-#               set wcombo $whandle
-               set o2 $whandle
-          } {
-#               set wcombo [iff [string eq -nocase $whandle $wauthed] $whandle "$whandle -> $wauthed"]
-               set o2 $whandle
-               set o3 $wauthed
-          }
-          if [string eq -nocase $wnick $wcombo] {
-#               set id $wnick
-               set o1 $wnick
-          } {
-               if [isempty wcombo] {
-#                    set id $wnick
-                    set o1 $wnick
-               } {
-#                    set id "$wnick (${wcombo})"
-                    set o1 $wnick
-                    set o2 $wcombo
-               }
-          }
-#          lappend o "[get opsymbol $wnick $chan]$id"
-          lappend o [list [get opsymbol $wnick $chan] $o1 $o2 $o3]
-     }
+		if !$wonline { error "\[WHO:WHOIS\] Somehow, \$WONLINE = 0 , yet , the user is listed in CHANLIST ([highlight:list [chanlist $chan] $user bold reverse])" }
+		empty o1 o2 o3
+		if [isempty wauthed] {
+#			set wcombo $whandle
+			set o2 $whandle
+		} {
+#			set wcombo [iff [string eq -nocase $whandle $wauthed] $whandle "$whandle -> $wauthed"]
+			set o2 $whandle
+			set o3 $wauthed
+		}
+		if [string eq -nocase $wnick $wcombo] {
+#			set id $wnick
+			set o1 $wnick
+		} {
+			if [isempty wcombo] {
+#				set id $wnick
+				set o1 $wnick
+			} {
+#				set id "$wnick (${wcombo})"
+				set o1 $wnick
+				set o2 $wcombo
+			}
+		}
+#		lappend o "[get opsymbol $wnick $chan]$id"
+		lappend o [list [get opsymbol $wnick $chan] $o1 $o2 $o3]
+	}
 
-     # Sort list by channel rank (~&@%+), then, nick
+	# Sort list by channel rank (~&@%+), then, nick
 debug =0 o
-     set o [lsort -inc -uni -dict -command lsort:chanop $o]
-     array set totals [list * 0 ~ 0 & 0 @ 0 % 0 + 0 "" 0 -bot 0 -cserv 0 -known 0 -unknown 0 - 0]
+	set o [lsort -inc -uni -dict -command lsort:chanop $o]
+	array set totals [list * 0 ~ 0 & 0 @ 0 % 0 + 0 "" 0 -bot 0 -cserv 0 -known 0 -unknown 0 - 0]
 
-     array set colors [list 1001 11,12 =1000 0,1 501-999 11 500 4 400-499 7 100-399 8 75-99 3 50-74 12 1-49 6 <=0 1,0 @bot 14 @cserv 5] ; # In order
-     array set list [list]
-     foreach { op a a2 a3 } $o {
-          empty color
-          if [regexp -- {^[\~\&\@\%\+]} $a] { set op [left $a 1] } { empty op }
-          set s [lindex [split [string trimleft $a ~&@%+]] 0]
-          lassign [whois $s $s $chan] - - - h - -
-          if [notempty h] { set s $h }
-          if [is cserv $s] {
-               set color $colors(@cserv)
-               incr totals(-cserv)
-               set access 0
-          } elseif [is bot $s] {
-               set color $colors(@bot)
-               incr totals(-bot) 
-               if [string eq -nocase $s $::botnick] { set a "[lindex [split $a] 0] (me!)" }
-               set access 0
-          } else {
-               # Check for GLOBAL levels if local levels isn't set?
-               # Global flag to override?
-               lassign [whois $s $s $chan] - - - who
-               if [validuser $who] {
-                    set al [access get $who $chan]
-                    set ag [access get $who]
-                    if [validflag -global] {
-                         # Let local level through if no global access
-                         set access [access highest $who $chan]
-                    } {
-                         if !$al {
-                              if { $ag >= 501 } { set access $ag } { set access $al }
-                         } {
-                              set access $al
-                         }
-                    }
-                    if { $access == 1000 } { if [is permowner $who] { set access 1001 } }
-               } {
-                    set access -1
-               }
-               foreach c [array names colors] {
-                    if [inrange $c $access] { set color $colors($c) }
-               }
-          }
-          if { $access == -1 } { incr totals(-unknown) } { incr totals(-known) }
-          lappend list($op) [color $color]${a}[color]
-     }
+	array set colors [list 1001 11,12 =1000 0,1 501-999 11 500 4 400-499 7 100-399 8 75-99 3 50-74 12 1-49 6 <=0 1,0 @bot 14 @cserv 5] ; # In order
+	array set list [list]
+	foreach { op a a2 a3 } $o {
+		empty color
+		if [regexp -- {^[\~\&\@\%\+]} $a] { set op [left $a 1] } { empty op }
+		set s [lindex [split [string trimleft $a ~&@%+]] 0]
+		lassign [whois $s $s $chan] - - - h - -
+		if [notempty h] { set s $h }
+		if [is cserv $s] {
+			set color $colors(@cserv)
+			incr totals(-cserv)
+			set access 0
+		} elseif [is bot $s] {
+			set color $colors(@bot)
+			incr totals(-bot) 
+			if [string eq -nocase $s $::botnick] { set a "[lindex [split $a] 0] (me!)" }
+			set access 0
+		} else {
+			# Check for GLOBAL levels if local levels isn't set?
+			# Global flag to override?
+			lassign [whois $s $s $chan] - - - who
+			if [validuser $who] {
+				set al [access get $who $chan]
+				set ag [access get $who]
+				if [validflag -global] {
+					# Let local level through if no global access
+					set access [access highest $who $chan]
+				} {
+					if !$al {
+						if { $ag >= 501 } { set access $ag } { set access $al }
+					} {
+						set access $al
+					}
+				}
+				if { $access == 1000 } { if [is permowner $who] { set access 1001 } }
+			} {
+				set access -1
+			}
+			foreach c [array names colors] {
+				if [inrange $c $access] { set color $colors($c) }
+			}
+		}
+		if { $access == -1 } { incr totals(-unknown) } { incr totals(-known) }
+		lappend list($op) [color $color]${a}[color]
+	}
 
-     # Create legend
-     empty o
-     foreach { a b c } [list 1001 11,12 "permanent owner" =1000 0,1 "bot owner" 501-999 11 "global staff" 500 4 "channel owner" 400-499 7 "channel master" 100-399 8 "channel op" 75-99 3 "channel halfop" 50-74 12 "channel voice" 1-49 6 "channel friend" <=0 1,0 "channel visitor" @bot 14 "known bot" @cserv 5 "cservice bot"] {
-          lappend o "[color $b][stt $c][iff ![left $a 1 @] " ($a)"][color]"
-     }
+	# Create legend
+	empty o
+	foreach { a b c } [list 1001 11,12 "permanent owner" =1000 0,1 "bot owner" 501-999 11 "global staff" 500 4 "channel owner" 400-499 7 "channel master" 100-399 8 "channel op" 75-99 3 "channel halfop" 50-74 12 "channel voice" 1-49 6 "channel friend" <=0 1,0 "channel visitor" @bot 14 "known bot" @cserv 5 "cservice bot"] {
+		lappend o "[color $b][stt $c][iff ![left $a 1 @] " ($a)"][color]"
+	}
 
-     # Print results
-     print $nick "\[WHO\] Channel members for ${chan}:"
-     print $nick "Legend: \[[join $o " | "]\]"
-     foreach { a b } [list ~ own & prot @ op % halfop + voice "" visitor] {
-          if [info exists list($a)] { \
-               set ll [llength $list($a)]
-               incr totals(*) $ll
-               incr totals($a) $ll
-               print $nick "[string totitle $b] (${a}): [aj $list($a) " , "]"
-          }
-     }
-     print $nick "$chan members: [ expr $totals(-known) + $totals(-unknown) ] ( [comma $totals(-known)] known [plural user $totals(-known)], [comma $totals(-unknown)] unknown [plural user $totals(-unknown)], [comma $totals(-bot)] [plural bot $totals(-bot)], [comma $totals(-cserv)] cserv [plural bot $totals(-cserv)]): ~:$totals(~) &:$totals(&) @:$totals(@) %:$totals(%) +:$totals(+)"
-     return
+	# Print results
+	print $nick "\[WHO\] Channel members for ${chan}:"
+	print $nick "Legend: \[[join $o " | "]\]"
+	foreach { a b } [list ~ own & prot @ op % halfop + voice "" visitor] {
+		if [info exists list($a)] { \
+			set ll [llength $list($a)]
+			incr totals(*) $ll
+			incr totals($a) $ll
+			print $nick "[string totitle $b] (${a}): [aj $list($a) " , "]"
+		}
+	}
+	print $nick "$chan members: [ expr $totals(-known) + $totals(-unknown) ] ( [comma $totals(-known)] known [plural user $totals(-known)], [comma $totals(-unknown)] unknown [plural user $totals(-unknown)], [comma $totals(-bot)] [plural bot $totals(-bot)], [comma $totals(-cserv)] cserv [plural bot $totals(-cserv)]): ~:$totals(~) &:$totals(&) @:$totals(@) %:$totals(%) +:$totals(+)"
+	return
 }
 
 # REPLACEMENT PROC
 # WHO
 proc @who { nick host handle chan arg } {
-     sb7 setvars -unknown -global
+	sb7 setvars -unknown -global
 
-     if [string eq -nocase HELP $1] {
-          set b ${::botnick} ; # Too many reverences to the global variable
-          print -help $nick "\[WHO\]:"
-          print -help $nick "Syntax: $::botnick WHO HELP"
-          print -help $nick "Syntax: $::botnick WHO"
-          print -help $nick "Syntax: $::botnick WHO -UNKNOWN"
-          print -help $nick
-          print -help $nick "The WHO command identifies all persons on the channel by the following parameters:"
-          print -help $nick "(1) handle, (2) authorized as whom, (3) channel level, & (4) global level"
-          print -help $nick "If a user has access to the bot due to global levels (but NOT through channel-level access), the WHO command will identify the user by their global rank. This will expose \"global runners\" (those who interfere with \[and abuse\] channels with their global access)."
-          print -help $nick "Note: colors are used to identify the different access levels. A future option will allow a -NOCOLOR flag to change colors to other options (such as bold / underline / reverse). This will be attempted when StormBot.TCL v7 is out of beta testing."
-          print -help $nick ""
-          print -help $nick "Examples:"
-          print -help $nick "\"${b}\" -- the user is either: (1) not authed, (2) is authed as the same handle as their nick, or (3) a bot"
-          print -help $nick "\"${b} (me!)\" -- it's me! :)"
-          print -help $nick "\"${b} (IAm${b})\" -- the user is known to me as \"IAm${b}\" but is currently using the nick \"${b}\""
-          print -help $nick "\"${b} (IAm${b} -> Little${b})\" -- The user \"appears\" to mask-match \"IAm${b}\" but the user, in fact, used LOGIN to log in as Little${b} instead. All internal StormBot.TCL v7 references will be to \"Little${b}.\" This will be common with overly-open hostmasks on users, or, \"+c\" common user accounts (which are used for \"internet cafe\" type accounts)."
-          return
-     }
+	if [string eq -nocase HELP $1] {
+		set b ${::botnick} ; # Too many reverences to the global variable
+		print -help $nick "\[WHO\]:"
+		print -help $nick "Syntax: $::botnick WHO HELP"
+		print -help $nick "Syntax: $::botnick WHO"
+		print -help $nick "Syntax: $::botnick WHO -UNKNOWN"
+		print -help $nick
+		print -help $nick "The WHO command identifies all persons on the channel by the following parameters:"
+		print -help $nick "(1) handle, (2) authorized as whom, (3) channel level, & (4) global level"
+		print -help $nick "If a user has access to the bot due to global levels (but NOT through channel-level access), the WHO command will identify the user by their global rank. This will expose \"global runners\" (those who interfere with \[and abuse\] channels with their global access)."
+		print -help $nick "Note: colors are used to identify the different access levels. A future option will allow a -NOCOLOR flag to change colors to other options (such as bold / underline / reverse). This will be attempted when StormBot.TCL v7 is out of beta testing."
+		print -help $nick ""
+		print -help $nick "Examples:"
+		print -help $nick "\"${b}\" -- the user is either: (1) not authed, (2) is authed as the same handle as their nick, or (3) a bot"
+		print -help $nick "\"${b} (me!)\" -- it's me! :)"
+		print -help $nick "\"${b} (IAm${b})\" -- the user is known to me as \"IAm${b}\" but is currently using the nick \"${b}\""
+		print -help $nick "\"${b} (IAm${b} -> Little${b})\" -- The user \"appears\" to mask-match \"IAm${b}\" but the user, in fact, used LOGIN to log in as Little${b} instead. All internal StormBot.TCL v7 references will be to \"Little${b}.\" This will be common with overly-open hostmasks on users, or, \"+c\" common user accounts (which are used for \"internet cafe\" type accounts)."
+		return
+	}
 
-     # Options:
-     # If user is authed to a different handle than they mask-match, show that!
+	# Options:
+	# If user is authed to a different handle than they mask-match, show that!
 
-     empty o
-     foreach user [chanlist $chan] {
-          lassign [whois $user $user $chan] wonline wnick whost whandle wchan wauthedh wauthedn
+	empty o
+	foreach user [chanlist $chan] {
+		lassign [whois $user $user $chan] wonline wnick whost whandle wchan wauthedh wauthedn
 #debug user wonline wnick whost whandle wchan wauthedh wauthedn
-          if !$wonline { error "\[WHO:WHOIS\] Somehow, \$WONLINE = 0 , yet , the user is listed in CHANLIST ([highlight:list [chanlist $chan] $user bold reverse])" }
-          lappend o [list [get opsymbol $wnick $chan] $user $whandle $wauthedh]
-     }
+		if !$wonline { error "\[WHO:WHOIS\] Somehow, \$WONLINE = 0 , yet , the user is listed in CHANLIST ([highlight:list [chanlist $chan] $user bold reverse])" }
+		lappend o [list [get opsymbol $wnick $chan] $user $whandle $wauthedh]
+	}
 
-     # Sort list by channel rank (~&@%+), then, nick
-     set o [lsort -inc -uni -dict -command lsort:chanop $o]
-     array set totals [list * 0 ~ 0 & 0 @ 0 % 0 + 0 "" 0 -bot 0 -cserv 0 -known 0 -unknown 0 -human 0 - 0]
+	# Sort list by channel rank (~&@%+), then, nick
+	set o [lsort -inc -uni -dict -command lsort:chanop $o]
+	array set totals [list * 0 ~ 0 & 0 @ 0 % 0 + 0 "" 0 -bot 0 -cserv 0 -known 0 -unknown 0 -human 0 - 0]
 
-     array set colors [list 1001 11,12 =1000 0,1 501-999 11 500 4 400-499 7 100-399 8 75-99 3 50-74 12 1-49 6 <=0 1,0 @bot 14 @cserv 5] ; # In order
-     array set list [list]
-     foreach chunk $o {
-          lassign $chunk loop_symbol loop_nick loop_handle loop_authed
-          if [string eq $loop_handle $loop_authed] { set user $loop_handle } { set user "$loop_handle -> $loop_authed" }
-          empty color
-          if [regexp -- {^[\~\&\@\%\+]} $loop_symbol] { set op $loop_symbol } { empty op }
-          if [is cserv $loop_handle] {
-               set color $colors(@cserv)
-               incr totals(-cserv)
-               set access 0
-               set text "${op}[nph $loop_nick $loop_handle]"
-          } elseif [string eq -nocase $::botnick $loop_nick] {
-               set color $colors(@bot)
-               incr totals(-bot) 
-               set access 0
-               set text "${op}[nph $loop_nick me!]"
-          } elseif [is bot $loop_handle] {
-               set color $colors(@bot)
-               incr totals(-bot) 
-               if [string eq -nocase $loop_handle $::botnick] { set a "$loop_nick (me!)" }
-               set access 0
-               set text "${op}[nph $loop_nick $loop_handle]"
-          } else {
-               # Check for GLOBAL levels if local levels isn't set?
-               # Global flag to override?
-               if [validuser $loop_authed] {
-                    incr totals(-human)
-                    set al [access get $loop_authed $chan]
-                    set ag [access get $loop_authed]
-                    if [validflag -global] {
-                         # Let local level through if no global access
-                         set access [access highest $loop_authed $chan]
-                    } {
-                         if !$al {
-                              if { $ag > 500 } { set access $ag } { set access $al }
-                         } {
-                              set access $al
-                         }
-                    }
-                    if { $access == 1000 } { if [is permowner $loop_authed] { set access 1001 } }
-               } {
-                    set access -1
-               }
-               foreach c [array names colors] {
-                    if [inrange $c $access] { set color $colors($c) }
-               }
-               set text "${op}[nph $loop_nick [iff [string eq $loop_handle $loop_authed] $loop_handle "$loop_handle -> $loop_authed"]]"
-          }
-          if { $access == -1 } { incr totals(-unknown) } { incr totals(-known) }
-          lappend list($op) [color $color]${text}[color]
-     }
-     # Create legend
-     empty o
-     foreach { g a b c } [list 1 1001 11,12 "permanent owner" 1 =1000 0,1 "bot owner" 1 501-999 11 "global staff" 0 500 4 "channel owner" 0 400-499 7 "channel master" 0 100-399 8 "channel op" 0 75-99 3 "channel halfop" 0 50-74 12 "channel voice" 0 1-49 6 "channel friend" 0 <=0 1,0 "channel visitor" 0 @bot 14 "known bot" 0 @cserv 5 "cservice bot"] {
-          if $g { if ![validflag -global] continue }
-          lappend o "[color $b][stt $c][iff ![left $a 1 @] " ($a)"][color]"
-     }
+	array set colors [list 1001 11,12 =1000 0,1 501-999 11 500 4 400-499 7 100-399 8 75-99 3 50-74 12 1-49 6 <=0 1,0 @bot 14 @cserv 5] ; # In order
+	array set list [list]
+	foreach chunk $o {
+		lassign $chunk loop_symbol loop_nick loop_handle loop_authed
+		if [string eq $loop_handle $loop_authed] { set user $loop_handle } { set user "$loop_handle -> $loop_authed" }
+		empty color
+		if [regexp -- {^[\~\&\@\%\+]} $loop_symbol] { set op $loop_symbol } { empty op }
+		if [is cserv $loop_handle] {
+			set color $colors(@cserv)
+			incr totals(-cserv)
+			set access 0
+			set text "${op}[nph $loop_nick $loop_handle]"
+		} elseif [string eq -nocase $::botnick $loop_nick] {
+			set color $colors(@bot)
+			incr totals(-bot) 
+			set access 0
+			set text "${op}[nph $loop_nick me!]"
+		} elseif [is bot $loop_handle] {
+			set color $colors(@bot)
+			incr totals(-bot) 
+			if [string eq -nocase $loop_handle $::botnick] { set a "$loop_nick (me!)" }
+			set access 0
+			set text "${op}[nph $loop_nick $loop_handle]"
+		} else {
+			# Check for GLOBAL levels if local levels isn't set?
+			# Global flag to override?
+			if [validuser $loop_authed] {
+				incr totals(-human)
+				set al [access get $loop_authed $chan]
+				set ag [access get $loop_authed]
+				if [validflag -global] {
+					# Let local level through if no global access
+					set access [access highest $loop_authed $chan]
+				} {
+					if !$al {
+						if { $ag > 500 } { set access $ag } { set access $al }
+					} {
+						set access $al
+					}
+				}
+				if { $access == 1000 } { if [is permowner $loop_authed] { set access 1001 } }
+			} {
+				set access -1
+			}
+			foreach c [array names colors] {
+				if [inrange $c $access] { set color $colors($c) }
+			}
+			set text "${op}[nph $loop_nick [iff [string eq $loop_handle $loop_authed] $loop_handle "$loop_handle -> $loop_authed"]]"
+		}
+		if { $access == -1 } { incr totals(-unknown) } { incr totals(-known) }
+		lappend list($op) [color $color]${text}[color]
+	}
+	# Create legend
+	empty o
+	foreach { g a b c } [list 1 1001 11,12 "permanent owner" 1 =1000 0,1 "bot owner" 1 501-999 11 "global staff" 0 500 4 "channel owner" 0 400-499 7 "channel master" 0 100-399 8 "channel op" 0 75-99 3 "channel halfop" 0 50-74 12 "channel voice" 0 1-49 6 "channel friend" 0 <=0 1,0 "channel visitor" 0 @bot 14 "known bot" 0 @cserv 5 "cservice bot"] {
+		if $g { if ![validflag -global] continue }
+		lappend o "[color $b][stt $c][iff ![left $a 1 @] " ($a)"][color]"
+	}
 
-     # Print results
-     print $nick "\[WHO\] Channel members for ${chan}:"
-     print $nick "Legend: \[[join $o " | "]\]"
-     foreach { a b } [list ~ own & prot @ op % halfop + voice "" visitor] {
-          if [info exists list($a)] {
-               set ll [llength $list($a)]
-               incr totals(*) $ll
-               incr totals($a) $ll
-               print $nick "[comma [llength $list($a)]] [plural [string totitle $b] [llength $list($a)]][iff [notempty a] " (${a})"]: [ajl $list($a) " , "]"
-          }
-     }
-     print $nick [string repeat - 50]
-     set total [ expr $totals(-known) + $totals(-unknown) ]
-     print $nick "[comma $total] $chan [plural members $total]:"
-     print $nick "[comma $totals(-known)] known [plural user $totals(-known)] ([comma $totals(-human)] [plural human $totals(-human)], [comma $totals(-bot)] known [plural bot $totals(-bot)], [comma $totals(-cserv)] cserv [plural bot $totals(-cserv)])"
-     print $nick "[comma $totals(-unknown)] unknown [plural user $totals(-unknown)]"
+	# Print results
+	print $nick "\[WHO\] Channel members for ${chan}:"
+	print $nick "Legend: \[[join $o " | "]\]"
+	foreach { a b } [list ~ own & prot @ op % halfop + voice "" visitor] {
+		if [info exists list($a)] {
+			set ll [llength $list($a)]
+			incr totals(*) $ll
+			incr totals($a) $ll
+			print $nick "[comma [llength $list($a)]] [plural [string totitle $b] [llength $list($a)]][iff [notempty a] " (${a})"]: [ajl $list($a) " , "]"
+		}
+	}
+	print $nick [string repeat - 50]
+	set total [ expr $totals(-known) + $totals(-unknown) ]
+	print $nick "[comma $total] $chan [plural members $total]:"
+	print $nick "[comma $totals(-known)] known [plural user $totals(-known)] ([comma $totals(-human)] [plural human $totals(-human)], [comma $totals(-bot)] known [plural bot $totals(-bot)], [comma $totals(-cserv)] cserv [plural bot $totals(-cserv)])"
+	print $nick "[comma $totals(-unknown)] unknown [plural user $totals(-unknown)]"
 # Superceded by counts above -- print $nick "~:$totals(~) &:$totals(&) @:$totals(@) %:$totals(%) +:$totals(+)"
-     return
+	return
 }
-
-#%# WHOIS
 
 # WHOAMI
 proc @whoami { nick host handle chan arg } {
-     sb7 setvars
-     if [string eq -nocase HELP $1] {
-          print -help $nick "\[WHOAMI\]:"
-          print -help $nick "Syntax: $::botnick WHOAMI HELP"
-          print -help $nick "Syntax: $::botnick WHOAMI"
-          print -help $nick "The WHOAMI command will identify how I see you. It will also catch and resolve any \$OWNER / =1000 access issues that may exist."
-          return
-     }
+	sb7 setvars
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[WHOAMI\]:"
+		print -help $nick "Syntax: $::botnick WHOAMI HELP"
+		print -help $nick "Syntax: $::botnick WHOAMI"
+		print -help $nick "The WHOAMI command will identify how I see you. It will also catch and resolve any \$OWNER / =1000 access issues that may exist."
+		return
+	}
 
-     # Only do this if authed!
-     if [isnum -integer $nick] { set who $idx2nick ; set host "\[DCCIDX:$nick\]" } { set who $nick }
-     set authed [sb7 auth find handle $nick]
-     mset g c -1
-     if [string eq $authed $handle] {
-          set authed $handle
-          set g [access get $handle]
-          if { $g >= 900 } {
-               if [is owner $handle] {
-                    set level [access get $handle]
-                    set check [access owner:check $handle]
-                    if { $level != $check } {
-                         set problem *
-                         switch -exact -- $check {
-     
-                              1000 {
-                                   print -home "\[WHOAMI\] Automatically adjusting global access for $nick (${handle}): 1000"
-                                   print $nick "User (${handle}) is flagged as an owner (global +n) but should be a permanent owner (=1000) due to being listed in my \$OWNER variable in my configuration file. Adjusting ...."
-                                   access set $handle 1000 GLOBAL
-                              }
-     
-                              1001 {
-                                   print -home "\[WHOAMI\] Automatically adjusting global access for $nick (${handle}): 1001"
-                                   print $nick "User (${handle}) is flagged as an owner (global +n) but should be a primary permanent owner (=1001) due to being listed in my \$OWNER variable in my configuration file. Adjusting ...."
-                                   access set $handle 1001 GLOBAL
-                              }
-     
-                              default { ? 900 ISOWNER \$CHECK vs \$LEVEL }
-     
-                         }
-                         saveme user
-                         # Fall-through ....
-                    }
-               }
-          }
-          set c [access get $handle $chan]
-          set list_access "global access:$g - ${chan}:$c"
-          print $nick "I see you as: [nph $idx2nick $authed]@$::botnick ( ${idx2nick}!$host ): $list_access"
-     } {
-          # User is not authed ....
-          set authed "unauthorized user"
-          set list_access "global access:0 - ${chan}:[lindex [list -1 0] [validuser $handle]]"
-          print $nick "I see you as: [nph $idx2nick $authed]@$::botnick ( ${idx2nick}!$host ): $list_access"
-     }
-     return
+	# Only do this if authed!
+	if [isnum -integer $nick] { set who $idx2nick ; set host "\[DCCIDX:$nick\]" } { set who $nick }
+	set authed [sb7 auth find handle $nick]
+	mset g c -1
+	if [string eq $authed $handle] {
+		set authed $handle
+		set g [access get $handle]
+		if { $g >= 900 } {
+			if [is owner $handle] {
+				set level [access get $handle]
+				set check [access owner:check $handle]
+				if { $level != $check } {
+					set problem *
+					switch -exact -- $check {
+	
+						1000 {
+							print -home "\[WHOAMI\] Automatically adjusting global access for $nick (${handle}): 1000"
+							print $nick "User (${handle}) is flagged as an owner (global +n) but should be a permanent owner (=1000) due to being listed in my \$OWNER variable in my configuration file. Adjusting ...."
+							access set $handle 1000 GLOBAL
+						}
+	
+						1001 {
+							print -home "\[WHOAMI\] Automatically adjusting global access for $nick (${handle}): 1001"
+							print $nick "User (${handle}) is flagged as an owner (global +n) but should be a primary permanent owner (=1001) due to being listed in my \$OWNER variable in my configuration file. Adjusting ...."
+							access set $handle 1001 GLOBAL
+						}
+	
+						default { ? 900 ISOWNER \$CHECK vs \$LEVEL }
+	
+					}
+					saveme user
+					# Fall-through ....
+				}
+			}
+		}
+		set c [access get $handle $chan]
+		set list_access "global access:$g - ${chan}:$c"
+		print $nick "I see you as: [nph $idx2nick $authed]@$::botnick ( ${idx2nick}!$host ): $list_access"
+	} {
+		# User is not authed ....
+		set authed "unauthorized user"
+		set list_access "global access:0 - ${chan}:[lindex [list -1 0] [validuser $handle]]"
+		print $nick "I see you as: [nph $idx2nick $authed]@$::botnick ( ${idx2nick}!$host ): $list_access"
+	}
+	return
 }
 
 proc @tokens { nick host handle chan arg } {
-     sb7 setvars
-     if [string eq -nocase HELP $1] {
-          print -help $nick "\[TOKENS\]:"
-          print -help $nick "Syntax: $::botnick TOKENS HELP"
-          print -help $nick "Syntax: $::botnick TOKENS"
-          print -help $nick "Syntax: $::botnick TOKENS <user>"
-          print -help $nick "Syntax: $::botnick TOKENS <token>"
-          print -help $nick "The TOKENS command will identify the different \"hard tokens\" available in various commands (ACCESS, NOTE, et cetera). This command will do a look-up based on your input."
-          print -help $nick "If you provide a user name, the command will show you what tokens that person would be part of. If you specify an established token, the command will show all users who are part of that group."
-          print -help $nick "Using the command without any parameters will show you all established tokens."
-          print -help $nick "Note: to use a token within a command, you must be 400+ access (chanmaster or higher) for local \[channel\] tokens, or 501+ access (global friend or higher) for the global tokens."
-          return
-     }
+	sb7 setvars
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[TOKENS\]:"
+		print -help $nick "Syntax: $::botnick TOKENS HELP"
+		print -help $nick "Syntax: $::botnick TOKENS"
+		print -help $nick "Syntax: $::botnick TOKENS <user>"
+		print -help $nick "Syntax: $::botnick TOKENS <token>"
+		print -help $nick "The TOKENS command will identify the different \"hard tokens\" available in various commands (ACCESS, NOTE, et cetera). This command will do a look-up based on your input."
+		print -help $nick "If you provide a user name, the command will show you what tokens that person would be part of. If you specify an established token, the command will show all users who are part of that group."
+		print -help $nick "Using the command without any parameters will show you all established tokens."
+		print -help $nick "Note: to use a token within a command, you must be 400+ access (chanmaster or higher) for local \[channel\] tokens, or 501+ access (global friend or higher) for the global tokens."
+		return
+	}
 
-     set list [ldestroy -not -mult -glob [get first [data get userlevels]] [list chan* global* bot*]]
-     if [isempty 1] { print -short -return $nick "Currently available tokens: [ajl $list]" }
+	set list [ldestroy -not -mult -glob [get first [data get userlevels]] [list chan* global* bot*]]
+	if [isempty 1] { print -short -return $nick "Currently available tokens: [ajl $list]" }
 
-     # Find by token name ....
-     set matches [ldestroy -not -glob -nocase -mult $list [regsub -all -- {\$} $1e "" ]]
-     if [notempty matches] {
-          foreach token $matches {
-               set data [get token $token $chan]
-               if [notempty data] { print $nick "[string toupper $token]: $data" }
-          }
-          return
-     }
+	# Find by token name ....
+	set matches [ldestroy -not -glob -nocase -mult $list [regsub -all -- {\$} $1e "" ]]
+	if [notempty matches] {
+		foreach token $matches {
+			set data [get token $token $chan]
+			if [notempty data] { print $nick "[string toupper $token]: $data" }
+		}
+		return
+	}
 
-     # Find by user ....
-     lassign [whois $1 $nick $chan] wo wn wm wh wc wa
-     if [isempty wh] { set user $wn } { if [notempty wa] { set user $wa } { set user $wh } }
-     empty o
-     foreach element $list {
-          set token [get token $element]
-          if { [lsearch -exact $token $handle] != -1 } { lappend o $element }
-     }
-     if [isempty o] { print -short $nick "$user is not part of any tokenized groups." } { print -short $nick "$user is part of the following tokens: [ajl $o]" }
-     return
+	# Find by user ....
+	lassign [whois $1 $nick $chan] wo wn wm wh wc wa
+	if [isempty wh] { set user $wn } { if [notempty wa] { set user $wa } { set user $wh } }
+	empty o
+	foreach element $list {
+		set token [get token $element]
+		if { [lsearch -exact $token $handle] != -1 } { lappend o $element }
+	}
+	if [isempty o] { print -short $nick "$user is not part of any tokenized groups." } { print -short $nick "$user is part of the following tokens: [ajl $o]" }
+	return
 }
 
 proc sb7:dcc:-user {handle idx arg} {
-     if [SB:commandlist iscmd PROTECT] {
-          if [validuser $arg] {
-               if [nozero [getdata $arg PROTECT]] {
-                    if ![chkaccess [SB:commandlist level protect] $handle] {
-                         putidx $idx "You can't use the core EGGDROP command \"-user\" to delete this user: PROTECTion is currently on."
-                         return 1
-                    }
-               }
-          }
-     }
-     *dcc:-user $handle $idx $arg
-     return 1
+	if [SB:commandlist iscmd PROTECT] {
+		if [validuser $arg] {
+			if [nozero [getdata $arg PROTECT]] {
+				if ![chkaccess [SB:commandlist level protect] $handle] {
+					putidx $idx "You can't use the core EGGDROP command \"-user\" to delete this user: PROTECTion is currently on."
+					return 1
+				}
+			}
+		}
+	}
+	*dcc:-user $handle $idx $arg
+	return 1
 }
 
 proc sb7:dcc:-bot { handle idx arg } {
-     if [SB:commandlist iscmd PROTECT] {
-          if [validuser $arg] {
-               if [nozero [getdata $arg PROTECT]] {
-                    if ![chkaccess [SB:commandlist level protect] $handle] {
-                         putidx $idx "You can't use the core EGGDROP command \"-bot\" to delete this user: PROTECTion is currently on."
-                         return 1
-                    }
-               }
-          }
-     }
-     *dcc:-bot $handle $idx $arg
-     return 1
+	if [SB:commandlist iscmd PROTECT] {
+		if [validuser $arg] {
+			if [nozero [getdata $arg PROTECT]] {
+				if ![chkaccess [SB:commandlist level protect] $handle] {
+					putidx $idx "You can't use the core EGGDROP command \"-bot\" to delete this user: PROTECTion is currently on."
+					return 1
+				}
+			}
+		}
+	}
+	*dcc:-bot $handle $idx $arg
+	return 1
 }
 
 #####
 # Bootstrap:
 
-catch { unbind dcc m|-  -user    *dcc:-user }
+catch { unbind dcc m|-  -user *dcc:-user }
 catch {   bind dcc m|- /-user sb7:dcc:-user }
-catch { unbind dcc t|-  -bot     *dcc:-bot  }
+catch { unbind dcc t|-  -bot  *dcc:-bot  }
 catch {   bind dcc t|- /-bot  sb7:dcc:-bot  }
 

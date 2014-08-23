@@ -1,11 +1,11 @@
 sb7 command add SET 1 -none
 sb7 command add INFO 1 -none
 sb7 command add MY 1 -none
-#sb7 register global @SET:VALID
 
 # NOTE: "getuser <handle> XTRA" gives a full list of set items (COPYUSER? :)
 
-data set @SET:VALID [list output gmt timezone burst prefix postfix alias color datetime]
+# This is needed for WHOIS and COPYUSER
+data set @SET:VALID [list output gmt timezone burst prefix postfix alias color datetime private rank]
 
 proc @my { nick host handle chan arg } {
 	sb7 parseflags
@@ -33,19 +33,32 @@ proc @set { nick host handle chan arg } {
 		default {
 			set param [uniquematch $valid $1]
 			if [isempty 2] { print -short -return $nick "\[SET [string toupper $1]\] Value: [none [userinfo get $handle $param] <none>]" }
-			if { [string eq -nocase NONE $2] || [string eq -nocase OFF $2] } {
+			#if { [string eq -nocase NONE $2] || [string eq -nocase OFF $2] }
+			if [string eq -nocase NONE $2] {
 				# Can't use ISFALSE because "0" is valid for COLOR and other options
 				empty value 
 			} {
 				set value [join [join $2e]]
 			}
 			if [isempty param] { print -error -header:short -return $nick "Unknown parameter to set" }
-			if [string eq -nocase COLOR $param] {
-				if [left $value 1 \003] { 
-					set value [mid $value 2]
-					print -help $nick "You don't need the CTRL-K code here\; I just need the digits." 
+
+			# Any specific / special considerations?
+			switch -exact -- [string tolower $param] {
+
+				color {
+					if [left $value 1 \003] { 
+						set value [mid $value 2]
+						print -help $nick "You don't need the CTRL-K code here\; I just need the digits." 
+					}
 				}
+
+				rank {
+					set value [stt [uniquematch [list navy coastguard army airforce marines] [join $value ""]]]
+					if [isempty value] { print -short -return $nick "Options for rank: Navy, Coast Guard, Army, Air Force, & Marines (any unique abbreviation (and spaces) accepted)" }
+				}
+
 			}
+
 			userinfo set $handle $param $value
 			saveme data
 			print -header:short $nick "Updating your \"${param}\" setting to: [none $value <none>]"
@@ -99,3 +112,4 @@ proc @info { nick host handle chan arg } {
 	}
 	return 
 }
+

@@ -3,9 +3,8 @@ This is the README for StormBot.TCL version 7.0 by Mai 'Domino' Mizuno (Domino@B
 Here is how you you should set-up SB7 with your eggdrop:
 
 Step #0:
-     # unzip / untar the script in the bot's scripts directory:
+     # unzip / untar the script in the bot's HOME directory (this is a change!): 
      cd <bot's home directory>
-     cd scripts
      tar -zxvf <stormbot tarball>
      # All files will dump into "scripts/sb7/"
 

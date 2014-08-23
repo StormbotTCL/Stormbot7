@@ -1,3 +1,5 @@
+# BOTMON:INTERPRET: combine the output sections? (none missing, some missing)
+
 sb7 command add BOTMON 700 BM BMON
 sb7 register global BOTMON ; # ARRAY!
 # @BOTMON BOT:<bot> [list hub TS:connect TS:disconnect join left]
@@ -12,7 +14,7 @@ proc @botmon { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick BOTMON CHECK"
 			print -help $nick "Syntax: $::botnick BOTMON ADD <bots> | DEL <bots> | LIST | CLEAR"
 			print -help $nick "Syntax: $::botnick BOTMON GROUP <HELP | name> <add | del | list | clear | marker | name> \[bots or info\]"
-			print -help $nick "Syntax: $::botnick BOTMON IGNORE <add | del | list | clear>"
+			print -help $nick "Syntax: $::botnick BOTMON IGNORE <add | del | list | clear | mode>"
 			print -help $nick "Syntax: $::botnick BOTMON OFFLINE <add | del | list | clear>"
 			print -help $nick "Syntax: $::botnick BOTMON FREE <add | del | list | clear>"
 			print -help $nick "Syntax: $::botnick BOTMON NOTIFY <hourly | links | hubs> <off | on>"
@@ -38,6 +40,7 @@ proc @botmon { nick host handle chan arg } {
 			print $nick "Botnet: missing bots: [none [ajl [ldestroy -nocase -all -multiple [concat [data array get BOTMON BOTS] [data array get BOTMON IGNORE]] [bots]]] <none>]"
 			print $nick "Botnet: extra bots: [none [ldestroy -all -multiple -nocase [bots] [concat [data array get BOTMON IGNORE] [data array get BOTMON OFFLINE] [data array get BOTMON BOTS]]] <none>]"
 			print $nick "Defer to: [none [data array get BOTMON deferto] <none>]"
+			print $nick "Ignore mode: [none [data array get BOTMON IGNOREMODE] "default (report)"]"
 			return
 		}
 
@@ -190,6 +193,44 @@ proc @botmon { nick host handle chan arg } {
 					data array set BOTMON IGNORE  ""
 					saveme data
 					print -return -short $nick "Ignore list has been cleared."
+				}
+
+				mode {
+					switch -exact -- $3 {
+
+						help {
+							print -help $nick "\[BOTMON IGNORE MODE\]:"
+							print -help $nick "Syntax: ::botnick BOTMON IGNORE HELP"
+							print -help $nick "Syntax: ::botnick BOTMON IGNORE REPORT (complain about \"unknown bots\" -- default behavior)"
+							print -help $nick "Syntax: ::botnick BOTMON IGNORE ADD (will add bots to the IGNORE list if found on the botnet)"
+							print -help $nick "Syntax: ::botnick BOTMON IGNORE SILENT (will not mention anything)"
+							return
+						}
+
+						report {
+							data array set BOTMON IGNOREMODE report
+							saveme data
+							print -short $nick "IGNORE mode is now: report (bots will be listed as \"unknown bots\" when encountered on the botnet)"
+							return
+						}
+
+						silent {
+							data array set BOTMON IGNOREMODE silent
+							saveme data
+							print -short $nick "IGNORE mode is now: silent (bots will be ignored quietly when encountered on the botnet)"
+							return
+						}
+
+						add - auto - autoadd {
+							data array set BOTMON IGNOREMODE add
+							saveme data
+							print -short $nick "IGNORE mode is now: auto-add (bots will be added to the IGNORE list when encountered on the botnet)"
+							return
+						}
+
+						default { print -short -return $nick "Current IGNORE mode: [none [data array get BOTMON IGNOREMODE] "default (report)"]" }
+
+					}
 				}
 			
 				default { print -short -return $nick "Unknown option for IGNORE: $2" }
@@ -510,6 +551,8 @@ proc @botmon:hourly args {
 }
 
 proc @botmon:interpret args {
+	# BOTMON:INTERPRET: combine the output sections? (none missing, some missing)
+
 	# NO! -- Manual triggering will get lost this way! -- if [@botmon:deferred] return
 	if [isempty args] { lassign [@botmon:check] ok missing extra } { lassign $args ok missing extra }
 	empty output
@@ -517,7 +560,48 @@ proc @botmon:interpret args {
 		set percentage 100%
 		set output_missing "All bots present! (Botnet: [comma [llength $ok]] -- [home]: [comma [llength $ok]])"
 		lappend output "$output_missing"
-		if [notempty extra] { lappend output "Extra bots: [ajl $extra]" }
+		set ignoremode [data array get BOTMON IGNOREMODE]
+		if [notempty extra] { 
+			switch -exact -- [string tolower $ignoremode] {
+
+				"" - report { lappend output "Extra bots: [ajl $extra]" }
+
+				silent { # Do Nothing # }
+
+				add {
+					set ignores [data array get BOTMON IGNORE]
+					set ignores [concat $ignores $extra]
+					data array set BOTMON IGNORE $ignores
+					saveme data
+					lappend output "Extra bots (auto-added to IGNORE list): [ajl $extra]"
+				}
+
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 		set output [join $output \n]
 
 	} {
@@ -575,7 +659,24 @@ proc @botmon:interpret args {
 		empty output
 		lappend output $percentage
 		lappend output $output_missing
-		if [notempty botnet(extra)] { lappend output "Extra bots: [ajl $botnet(extra)]" }
+		set ignoremode [data array get BOTMON IGNOREMODE]
+		if [notempty botnet(extra)] { 
+			switch -exact -- [string tolower $ignoremode] {
+
+				"" - report { lappend output "Extra bots: [ajl $botnet(extra)]" }
+
+				silent { # Do Nothing # }
+
+				add {
+					set ignores [data array get BOTMON IGNORE]
+					set ignores [concat $ignores $botnet(extra)]
+					data array set BOTMON IGNORE $ignores
+					saveme data
+					lappend output "Extra bots (auto-added to IGNORE list): [ajl $botnet(extra)]"
+				}
+
+			}
+		}
 		lappend output $legend
 		set output [join $output \n]
 	}
