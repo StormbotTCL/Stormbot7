@@ -65,3 +65,4 @@ proc @bmi { nick host handle chan arg } {
 	print -short $nick "Your BMI is: [format %0.3f [expr ($weight / pow(${height},2)) * $multiple]]"
 	return
 }
+

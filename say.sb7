@@ -4,16 +4,17 @@ sb7 command add HI 1 -chanspe
 proc @hi {nick host handle chan arg} { msg $chan "Hi!" ; return }
 
 proc @say { nick host handle chan arg } {
-     sb7 parseflags
-          switch -exact -- [string tolower $1] {
+	sb7 parseflags
+		switch -exact -- [string tolower $1] {
 
-               help {}
+			help {}
 
-               hint { print -help -short -return $nick "No HINTs available for this command." }
+			hint { print -help -short -return $nick "No HINTs available for this command." }
 
-               default { print $chan [join [lrange $arg 1 end]] }
-          }
-     }
-     return
+			default { print $chan [join [lrange $arg 1 end]] }
+		}
+	}
+	return
 }
+
 

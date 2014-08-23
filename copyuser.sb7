@@ -2,15 +2,78 @@ sb7 command add COPYUSER 700 -none CU
 
 proc @copyuser { nick host handle chan arg } {
 	# HELP stuff
-	sb7 parseflags -force
+	sb7 parseflags -force -raw
 	if [string eq -nocase HELP $1] {
 		print -help $nick "\[COPYUSER\]:"
 		print -help $nick "Syntax: $::botnick COPYUSER HELP"
 		print -help $nick "Syntax: $::botnick COPYUSER <list of users> : <list of target bots>"
+		print -help $nick "Syntax: $::botnick COPYUSER -raw <list of users>"
 		print -help $nick "Syntax: $::botnick COPYUSER -force <list of users> : <list of target bots>"
 		print -help $nick "COPYUSER does just that: copies user data from me to another bot."
 		print -help $nick "If the user exists on the target bot, the data will be rejected (the -FORCE flag will override this behavior)."
 		print -help $nick "You have to have access on the target bot to be able to transfer user data (and be ABOVE that user to do it)."
+		print -help $nick "-RAW: display a raw TCL-based copy / paste data stream to dump into DCC with a bot to add a user. Info will not be displayed publicly."
+		return
+	}
+
+	if [validflag -raw] {
+		empty datapacket
+		set userlist [userlist]
+		set users [ldestroy -debug -all -not -glob -multiple [join $1e]]
+debug userlist 1e users
+		foreach user [lsort -inc -uni -dict $users] {
+			lassign [whois $user $handle] online wn wh who wc wah wan
+			print $nick "Output piped to /NOTICE (or .DCC) for privacy ...."
+			lappend datapacket ".-user $who"
+			if [matchattr $who b] {
+				lappend datapacket ".+bot $who"
+				if {[getuser $who BOTFL] != ""} {lappend datapacket ".tcl setuser $who botfl [getuser $who BOTFL]" }
+				if {[getuser $who BOTADDR] != ""} {lappend datapacket ".tcl setuser $who botaddr]"}
+			} else {
+				lappend datapacket ".+user $who"
+			}
+			if {[getuser $who PASS] != ""} {lappend datapacket ".tcl setuser $who pass [getuser $who PASS]"}
+			if {[chattr $who] != ""} {lappend datapacket ".chattr $who +[chattr $who]"}
+			if {[getuser $who info] != ""} {lappend datapacket ".tcl setuser $who info \{[getuser $who info]\}"}
+			if {[getuser $who COMMENT] != ""} {lappend datapacket ".tcl setuser $who commend \{[getuser $who COMMENT]\}"}
+			foreach a [getuser $who HOSTS] { lappend datapacket ".+host $who $a" }
+			# Channel-level stuff #
+			foreach ch [channels] {
+				if {[lindex [split [chattr $who $ch] |] 1] != ""} {lappend datapacket ".chattr $who +|[l1 [split [chattr $who $ch] |]] $ch"}
+				if {[getchaninfo $who $ch] != ""} {lappend datapacket ".tcl setchaninfo $who $ch [getchaninfo $who $ch]"}
+			}
+
+			# StormBot.TCL internal data for users #
+			empty more
+			if [info exists ::userinfo-fields] {set more ${::userinfo-fields}}
+			if [info exists ::sb_copyuser_include] {set more "$more $::sb_copyuser_include"}
+			if [info exists custom(user)] {set more "$more $custom(user)"}
+			foreach a $more {
+				if [string match *#* $a] {
+					foreach ch [channels] {
+						regsub -all # $a $ch b
+						if {[getdata $who $b] != ""} {lappend datapacket ".tcl setdata $who $b \{[getdata $who $b]\}"}
+					}
+				} else {
+					if {[getdata $who $a] != ""} {lappend datapacket ".tcl setdata $who $a \{[getdata $who $a]\}"}
+				}
+			}
+		
+			# StormBot.TCL internal global data needed for users #
+			foreach a [sbd:get custom(global)] {
+				set chunk [sbd:get $a]
+				if ![instr $chunk !] continue
+				regsub -all ! $chunk $who chunk
+				foreach ch [channels] {
+					regsub -all # $chunk $ch newchunk
+					foreach b [sbd:find $newchunk] {# Find "*" entries
+						if {[sbd:get $b] != ""} {lappend datapacket ".tcl sbd:set $b \{[sbd:get $b]\}"}
+					}
+				}
+			}
+			lappend datapacket ".save"
+		}
+		foreach a $datapacket { print -private $nick $a }
 		return
 	}
 
@@ -144,3 +207,5 @@ proc @copyuser:receive { bot cmd arg } {
 # Bootstrap
 
 bind bot - sb7:copyuser:receive @copyuser:receive
+
+

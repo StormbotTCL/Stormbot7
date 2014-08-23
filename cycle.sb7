@@ -1,23 +1,25 @@
 sb7 command add CYCLE 400 -core -chanspec
 
 proc @cycle { nick host handle chan arg } {
-     sb7 parseflags -all
-     if [string eq -nocase HELP $1] {
-          print -help $nick "\[CYCLE\]:"
-          print -help $nick "Syntax: $::botnick CYCLE \[-ALL\]"
-          print -help $nick "Bot parts a channel then rejoins it. The ALL option makes the bot cycle all of its channels (prepare for lag, though)."
-          return 0
-     }
-     if [validflag -all] {
-          msghome "[nph $nick $handle] is making me CYCLE all channels.... Pardon me while I go laggy for a bit."
-          putserv "join 0"
-          foreach a [channels] { raw "JOIN $a" }
-          msghome "I'm caught-up from the CYCLE ALL."
-          return 0
-     }
-     print $nick "\[CYCLE\] Cycling $chan...."
-     putserv "PART $chan"
-     putserv "JOIN $chan"
-     msghome "\[CYCLE\] [nph $nick $handle] cycled me in ${chan}."
-     return 0
+	sb7 parseflags -all
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[CYCLE\]:"
+		print -help $nick "Syntax: $::botnick CYCLE \[-ALL\]"
+		print -help $nick "Bot parts a channel then rejoins it. The ALL option makes the bot cycle all of its channels (prepare for lag, though)."
+		return 0
+	}
+	if [validflag -all] {
+		msghome "[nph $nick $handle] is making me CYCLE all channels.... Pardon me while I go laggy for a bit."
+		putserv "join 0"
+		foreach a [channels] { raw "JOIN $a" }
+		msghome "I'm caught-up from the CYCLE ALL."
+		return 0
+	}
+	print $nick "\[CYCLE\] Cycling $chan...."
+	putserv "PART $chan"
+	putserv "JOIN $chan"
+	msghome "\[CYCLE\] [nph $nick $handle] cycled me in ${chan}."
+	return 0
 }
+
+

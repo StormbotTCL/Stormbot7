@@ -2,74 +2,74 @@ sb7 command add TEXTPAD 1 -chanspec TP TEXT PAD TEXTEDIT
 sb7 register user TEXTPAD
 
 proc @textpad { nick host handle chan arg } {
-     sb7 parseflags -linenumbers -all -global -allow
+	sb7 parseflags -linenumbers -all -global -allow
 
 	# User settings:
-     array set settings [@textpad:settings $handle]
+	array set settings [@textpad:settings $handle]
 
-     set cmdlevel [sb7 command get $0 level] 
+	set cmdlevel [sb7 command get $0 level] 
 
 	# File name in INDEX #0 so that line numbers DON'T have to be shifted! (:
-     binary scan *[join [split $handle ""] *]* H* base; # Allow "binary" chars (CJKV) in handles
+	binary scan *[join [split $handle ""] *]* H* base; # Allow "binary" chars (CJKV) in handles
 	if [validflag -global] {
 		# Anyone can use -GLOBAL (don't restrict to a specific level)
-          #if ![string eq "" [data get @TEXTPAD:GLOBAL:FILENAME]] { print -help $nick "There is already a file open in the global TEXTPAD namespace. Try again later." ; return 0 }
+		#if ![string eq "" [data get @TEXTPAD:GLOBAL:FILENAME]] { print -help $nick "There is already a file open in the global TEXTPAD namespace. Try again later." ; return 0 }
 		set base GLOBAL
 	}
 
 	# Override!
 	if [info exists settings(set:global)] { if $settings(set:global) { set base GLOBAL } }
 
-     set textpad          [data get          @TEXTPAD:${base}]
-     set textpad_filename [data get          @TEXTPAD:${base}:FILENAME]
-     set textpad_created  [data get          @TEXTPAD:${base}:CREATED]
-     set textpad_edited   [data get          @TEXTPAD:${base}:EDITED]
-     set textpad_autosave [data get -boolean @TEXTPAD:${base}:AUTOSAVE]
-     set textpad_dir      ./textpad-users/$base
-     set textpad_allow    [string eq "" [data get @TEXTPAD:${base}:ALLOW]]
-     if [isempty textpad_allow] { set textpad_allow [sb7 command get $0 level] }
+	set textpad          [data get          @TEXTPAD:${base}]
+	set textpad_filename [data get          @TEXTPAD:${base}:FILENAME]
+	set textpad_created  [data get          @TEXTPAD:${base}:CREATED]
+	set textpad_edited   [data get          @TEXTPAD:${base}:EDITED]
+	set textpad_autosave [data get -boolean @TEXTPAD:${base}:AUTOSAVE]
+	set textpad_dir      ./textpad-users/$base
+	set textpad_allow    [string eq "" [data get @TEXTPAD:${base}:ALLOW]]
+	if [isempty textpad_allow] { set textpad_allow [sb7 command get $0 level] }
 
 	# Override global setting with local one
-     if [notempty settings(set:autosave)] { if $settings(set:autosave) { one textpad_autosave } }
+	if [notempty settings(set:autosave)] { if $settings(set:autosave) { one textpad_autosave } }
 
 	switch -exact -- $l1 {
 
 		help {
-               print -help $nick "\[TEXTPAD\]:"
-               print -help $nick "$::botnick TEXTPAD HELP"
-               print -help $nick "$::botnick TEXTPAD LOAD \[-ALLOW \[level\]\] <filename>"
-               print -help $nick "$::botnick TEXTPAD CLOSE"
-               print -help $nick "$::botnick TEXTPAD ALLOW <level> (can be set with \"LOAD -ALLOW\" above)"
-               print -help $nick "$::botnick TEXTPAD AUTOSAVE <OFF | ON>"
-               print -help $nick "$::botnick TEXTPAD SAVE \[filename\]"
-               print -help $nick "$::botnick TEXTPAD FILE <new filename>"
-               print -help $nick "$::botnick TEXTPAD ADD <text>"
-               print -help $nick "$::botnick TEXTPAD EDIT <line # to edit> <text>"
-               print -help $nick "$::botnick TEXTPAD INSERT <in front of line #> <text>"
-               print -help $nick "$::botnick TEXTPAD COPY <line #(s)>"
-               print -help $nick "$::botnick TEXTPAD MOVE <line #(s)> <new line #>"
-               print -help $nick "$::botnick TEXTPAD DEL <line #>"
-               print -help $nick "$::botnick TEXTPAD FIND <text to find | wildcard>"
-               print -help $nick "$::botnick TEXTPAD LIST \[line #'s\]"
-               print -help $nick "$::botnick TEXTPAD SPLIT <split by>"
-               print -help $nick "$::botnick TEXTPAD \[-ALL\] REPLACE <text to find> | <replacement text> (the \"|\" is a literal)"
-               print -help $nick "$::botnick TEXTPAD \[-LINENUMBERS\] READ (show you entire \"document\" with optional ilne #'s)"
-               print -help $nick "$::botnick TEXTPAD INFO"
-               print -help $nick "$::botnick TEXTPAD SET <setting> <new value>"
-               print -help $nick "TEXTPAD allows you to create and edit a text file, based on the way StormBot.TCL stores ONJOIN, CHANGELOG, and other data internally."
-               print -help $nick "Use the LOAD option to load the file into memory. Use the ALLOW option to specify an optional level that a user must be to edit the file (if you put the file in the -GLOBAL namespace). Otherwise (default), you must be level =[SB:commandlist level $u0] (or above) to use any $u0 options."
-               print -help $nick "You can SAVE your data any time you like. When you LOAD a file, the file name stays in memory (just use SAVE to store the file with the same name). Or, you can specify a new filename when SAVING (or even change the stored file name via FILE)."
-               print -help $nick "Your data is saved in the following encoding: [encoding system]."
-               print -help $nick "Note: the READ option doesn't display line numbers by default\; it's meant to be a clean as possible for you to copy / paste the text (after editing out timestamps & botnicks, of course). If you want line numbers listed, either: (1) use the LIST option, or (2) use READ with the -LINENUMBERS flag."
-               print -help $nick "\002Please note: you must MANUALLY use the SAVE command to save your file. If you do not, the next bot death (DIE or error), RESTART or REHASH will erase your file!\002"
-               print -help $nick "You can also turn on the AUTOSAVE flag after you load a file. This will make TEXTPAD save your file after every edit. Because sysadmins don't like unnecesarily aggressive disk activity, I'm setting this so a per-file basis. When you load a new file, the AUTOSAVE flag will be cleared\; set it again."
-               print -help $nick "-GLOBAL: you can edit the GLOBAL TEXTPAD space (so other persons with access to the command can work on the same file as you). By default, everyone has their own TEXTPAD space. Only one (1) file can be open in the global namespace at a given time."
-               print -help $nick "SET: create personal settings for TEXTPAD. Use \"$::botnick TEXTPAD SET HELP\" to see current options"
-               print -help $nick "Command suggestion: Mikey (1269299966)"
+			print -help $nick "\[TEXTPAD\]:"
+			print -help $nick "$::botnick TEXTPAD HELP"
+			print -help $nick "$::botnick TEXTPAD LOAD \[-ALLOW \[level\]\] <filename>"
+			print -help $nick "$::botnick TEXTPAD CLOSE"
+			print -help $nick "$::botnick TEXTPAD ALLOW <level> (can be set with \"LOAD -ALLOW\" above)"
+			print -help $nick "$::botnick TEXTPAD AUTOSAVE <OFF | ON>"
+			print -help $nick "$::botnick TEXTPAD SAVE \[filename\]"
+			print -help $nick "$::botnick TEXTPAD FILE <new filename>"
+			print -help $nick "$::botnick TEXTPAD ADD <text>"
+			print -help $nick "$::botnick TEXTPAD EDIT <line # to edit> <text>"
+			print -help $nick "$::botnick TEXTPAD INSERT <in front of line #> <text>"
+			print -help $nick "$::botnick TEXTPAD COPY <line #(s)>"
+			print -help $nick "$::botnick TEXTPAD MOVE <line #(s)> <new line #>"
+			print -help $nick "$::botnick TEXTPAD DEL <line #>"
+			print -help $nick "$::botnick TEXTPAD FIND <text to find | wildcard>"
+			print -help $nick "$::botnick TEXTPAD LIST \[line #'s\]"
+			print -help $nick "$::botnick TEXTPAD SPLIT <split by>"
+			print -help $nick "$::botnick TEXTPAD \[-ALL\] REPLACE <text to find> | <replacement text> (the \"|\" is a literal)"
+			print -help $nick "$::botnick TEXTPAD \[-LINENUMBERS\] READ (show you entire \"document\" with optional ilne #'s)"
+			print -help $nick "$::botnick TEXTPAD INFO"
+			print -help $nick "$::botnick TEXTPAD SET <setting> <new value>"
+			print -help $nick "TEXTPAD allows you to create and edit a text file, based on the way StormBot.TCL stores ONJOIN, CHANGELOG, and other data internally."
+			print -help $nick "Use the LOAD option to load the file into memory. Use the ALLOW option to specify an optional level that a user must be to edit the file (if you put the file in the -GLOBAL namespace). Otherwise (default), you must be level =[SB:commandlist level $u0] (or above) to use any $u0 options."
+			print -help $nick "You can SAVE your data any time you like. When you LOAD a file, the file name stays in memory (just use SAVE to store the file with the same name). Or, you can specify a new filename when SAVING (or even change the stored file name via FILE)."
+			print -help $nick "Your data is saved in the following encoding: [encoding system]."
+			print -help $nick "Note: the READ option doesn't display line numbers by default\; it's meant to be a clean as possible for you to copy / paste the text (after editing out timestamps & botnicks, of course). If you want line numbers listed, either: (1) use the LIST option, or (2) use READ with the -LINENUMBERS flag."
+			print -help $nick "\002Please note: you must MANUALLY use the SAVE command to save your file. If you do not, the next bot death (DIE or error), RESTART or REHASH will erase your file!\002"
+			print -help $nick "You can also turn on the AUTOSAVE flag after you load a file. This will make TEXTPAD save your file after every edit. Because sysadmins don't like unnecesarily aggressive disk activity, I'm setting this so a per-file basis. When you load a new file, the AUTOSAVE flag will be cleared\; set it again."
+			print -help $nick "-GLOBAL: you can edit the GLOBAL TEXTPAD space (so other persons with access to the command can work on the same file as you). By default, everyone has their own TEXTPAD space. Only one (1) file can be open in the global namespace at a given time."
+			print -help $nick "SET: create personal settings for TEXTPAD. Use \"$::botnick TEXTPAD SET HELP\" to see current options"
+			print -help $nick "Command suggestion: Mikey (1269299966)"
 		}
 
 		as - auto - autosave {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty 2] {print $nick "\[TEXTPAD\] AUTOSAVE: [stu [offon [sbd:nozero @TEXTPAD:${base}:AUTOSAVE]]]"; return 0}
 			sbd:set @TEXTPAD:${base}:AUTOSAVE [istrue $2]
 			print $nick "\[TEXTPAD\] AUTOSAVE: [stu [offon [istrue $2]]]"
@@ -77,22 +77,22 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		allow {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "\[TEXTPAD\] You don't have access to change this setting."; return 0}
-               if [isempty textpad_filename] {print -help $nick "\[TEXTPAD\] There are no files currently open for you. You can not set a \"default\" allow level."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "\[TEXTPAD\] You don't have access to change this setting."; return 0}
+			if [isempty textpad_filename] {print -help $nick "\[TEXTPAD\] There are no files currently open for you. You can not set a \"default\" allow level."; return 0}
 			if [isempty 2] {print $nick "\[TEXTPAD\] ALLOW level currently: [ifemptyval $textpad_allow] [SB:commandlist level $u0]]"; return 0}
-               if ![isint $2] {print -help $nick "You must specify a user level to which I should restrict access."; return 0}
-               if {$2 < -1} {print -help $nick "Pretend I know what you're talking about. Actually, pretend I'm a lonely, voluptuous, blonde-bombshell rocket scientist that you're about to chat-up. While we're playing make believe, can you buy me a pet giraffe?"; return 0}
-               if {$2 < 0} {print -help $nick "I don't care what you say, I will not allow \"universal\" access to ${textpad_filename}!"; return 0}
-               if ![SB:checkaccess $2 $handle $chan 1] {print -help $nick "You're locking YOURSELF out from TEXTPAD access?! You must be ill. Let me take your temperature. Oh, and this is NOT an \037ORAL\037 thermometer ...."; return 0}
-               if {$2 > [SB:commandlist level $u0]} {print -help $nick "Oh, dear. You want to lock EVERYONE out from TEXTPAD access? [jtext anta]"; return 0}
-               if ![validflag -global] {print -help $nick "The ALLOW option only applies to the -GLOBAL TEXTPAD namespace. If you don't want anyone (other than you) to affect your TEXTPAD work, just open the file normally (no -GLOBAL flag): everyone has their own TEXTPAD namespace."; return 0}
+			if ![isint $2] {print -help $nick "You must specify a user level to which I should restrict access."; return 0}
+			if {$2 < -1} {print -help $nick "Pretend I know what you're talking about. Actually, pretend I'm a lonely, voluptuous, blonde-bombshell rocket scientist that you're about to chat-up. While we're playing make believe, can you buy me a pet giraffe?"; return 0}
+			if {$2 < 0} {print -help $nick "I don't care what you say, I will not allow \"universal\" access to ${textpad_filename}!"; return 0}
+			if ![SB:checkaccess $2 $handle $chan 1] {print -help $nick "You're locking YOURSELF out from TEXTPAD access?! You must be ill. Let me take your temperature. Oh, and this is NOT an \037ORAL\037 thermometer ...."; return 0}
+			if {$2 > [SB:commandlist level $u0]} {print -help $nick "Oh, dear. You want to lock EVERYONE out from TEXTPAD access? [jtext anta]"; return 0}
+			if ![validflag -global] {print -help $nick "The ALLOW option only applies to the -GLOBAL TEXTPAD namespace. If you don't want anyone (other than you) to affect your TEXTPAD work, just open the file normally (no -GLOBAL flag): everyone has their own TEXTPAD namespace."; return 0}
 			sbd:set @TEXTPAD:ALLOW $2
 			print $nick "\[TEXTPAD\] ALLOW level now: $2"
 			return 0
 		}
 
 		file - name - filename {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty 2] {print $nick "Current file name: [ifemptyval $textpad_filename <undefined>]"}
 
 			set tail [file tail $j2e]
@@ -111,12 +111,12 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		repl - replace {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			set phrase $j2e
-               if ![instr $phrase |] {print -help $nick "You must use the \"|\" to separate the \"find me\" text from the \"replace with\" text."; return 0}
+			if ![instr $phrase |] {print -help $nick "You must use the \"|\" to separate the \"find me\" text from the \"replace with\" text."; return 0}
 			lassign [split $phrase |] find replace
-               if [isempty find] {print -help $nick "For what text am I searching?"; return 0}
-               if [isempty replace] {print -help $nick "What is the replacement text?"; return 0}
+			if [isempty find] {print -help $nick "For what text am I searching?"; return 0}
+			if [isempty replace] {print -help $nick "What is the replacement text?"; return 0}
 			if [validflag -all] {
 				set matches [regsub -all -nocase -- [trim $find] $textpad [trim $replace] textpad]
 			} {
@@ -133,7 +133,7 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		add {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			sbd:lappend @TEXTPAD:${base} $j2e
 			sbd:set @TEXTPAD:${base}:EDITED [clock seconds]
 			print $nick "\[TEXTPAD\] added line #[sbd:llength @TEXTPAD:${base}]: [SB:textpad_apply_settings $j2e $handle]"
@@ -142,12 +142,12 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		ed - edit {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty textpad] {print $nick "There's nothing to edit."; return 0}
-               if [isempty 2] {print -help $nick "What line number?"; return 0}
-               if ![isint $2] {print -help $nick "Line numbers are integers: use one."; return 0}
-               if {$2 < 1} {print -help $nick "Line number out of range."; return 0}
-               if {$2 > [llength $textpad]} {print -help $nick "Line number out of range."; return 0}
+			if [isempty 2] {print -help $nick "What line number?"; return 0}
+			if ![isint $2] {print -help $nick "Line numbers are integers: use one."; return 0}
+			if {$2 < 1} {print -help $nick "Line number out of range."; return 0}
+			if {$2 > [llength $textpad]} {print -help $nick "Line number out of range."; return 0}
 			set index $2
 			decr index
 			sbd:lset @TEXTPAD:${base} $index $j3e
@@ -158,12 +158,12 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		ins - insert {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty textpad] {print $nick "There's nothing to process. Use ADD instead."; return 0}
-               if [isempty 2] {print -help $nick "What line number?"; return 0}
-               if ![isint $2] {print -help $nick "Line numbers are integers: use one."; return 0}
-               if {$2 < 1} {print -help $nick "Line number out of range."; return 0}
-               if {$2 > [llength $textpad]} {print -help $nick "Line number out of range."; return 0}
+			if [isempty 2] {print -help $nick "What line number?"; return 0}
+			if ![isint $2] {print -help $nick "Line numbers are integers: use one."; return 0}
+			if {$2 < 1} {print -help $nick "Line number out of range."; return 0}
+			if {$2 > [llength $textpad]} {print -help $nick "Line number out of range."; return 0}
 			set index $2
 			decr index
 			sbd:linsert @TEXTPAD:${base} $index $j3e
@@ -174,14 +174,14 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		cp - copy {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty textpad] {print $nick "There's nothing to process. Use ADD instead."; return 0}
-               if [isempty 2] {print -help $nick "What line number?"; return 0}
+			if [isempty 2] {print -help $nick "What line number?"; return 0}
 
 			set range $2
 			if [isint $range] {prepend range =}
 			set range [getrange $range 1 [llength $textpad]]
-               if [string eq $range -1] {print -help $nick "Invalid line # / range."; return 0}
+			if [string eq $range -1] {print -help $nick "Invalid line # / range."; return 0}
 			lassign $range range_begin range_end
 			for {set x $range_begin} {$x <= $range_end} {incr x} {
 				lappend textpad [lindex $textpad [ expr $x - 1 ]]
@@ -194,23 +194,23 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		mv - move {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty textpad] {print $nick "There's nothing to process. Use ADD instead."; return 0}
-               if [isempty 2] {print -help $nick "What line number?"; return 0}
+			if [isempty 2] {print -help $nick "What line number?"; return 0}
 
-               if [isempty 3] {print -help $nick "What line number?"; return 0}
-               if ![isint $3] {print -help $nick "Line numbers are integers: use one."; return 0}
-               if {$3 < 1} {print -help $nick "Target line number out of range."; return 0}
-               if {$3 > [llength $textpad]} {print -help $nick "Target line number out of range."; return 0}
+			if [isempty 3] {print -help $nick "What line number?"; return 0}
+			if ![isint $3] {print -help $nick "Line numbers are integers: use one."; return 0}
+			if {$3 < 1} {print -help $nick "Target line number out of range."; return 0}
+			if {$3 > [llength $textpad]} {print -help $nick "Target line number out of range."; return 0}
 			set target $3
 
 			set range $2
 			if [isint $range] {prepend range =}
 			set range [getrange $range 1 [llength $textpad]]
-               if [string eq $range -1] {print -help $nick "Invalid line # / range."; return 0}
+			if [string eq $range -1] {print -help $nick "Invalid line # / range."; return 0}
 			lassign $range range_begin range_end
 
-               if [iswithin [join $range -] $target] {print -help $nick "Illegal range: don't move text onto itself (within its own range)!"; return 0}
+			if [iswithin [join $range -] $target] {print -help $nick "Illegal range: don't move text onto itself (within its own range)!"; return 0}
 			if {$range_begin > $target} {
 				set text [lrange $textpad [ expr $range_begin - 1 ] [ expr $range_end - 1 ]]
 				set textpad [lreplace $textpad [ expr $range_begin - 1 ] [ expr $range_end - 1 ]]
@@ -232,12 +232,12 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		del {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty textpad] {print $nick "There's nothing to delete."; return 0}
-               if [isempty 2] {print -help $nick "What line number?"; return 0}
-               if ![isint $2] {print -help $nick "Line numbers are integers: use one."; return 0}
-               if {$2 < 1} {print -help $nick "Line number out of range."; return 0}
-               if {$2 > [llength $textpad]} {print -help $nick "Line number out of range."; return 0}
+			if [isempty 2] {print -help $nick "What line number?"; return 0}
+			if ![isint $2] {print -help $nick "Line numbers are integers: use one."; return 0}
+			if {$2 < 1} {print -help $nick "Line number out of range."; return 0}
+			if {$2 > [llength $textpad]} {print -help $nick "Line number out of range."; return 0}
 			set index $2
 			decr index
 			set line [lindex $textpad $index]
@@ -249,8 +249,8 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		split {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
-               print -help $nick "\[TEXTPAD\] this option is not ready yet."
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			print -help $nick "\[TEXTPAD\] this option is not ready yet."
 			return 0
 
 			if [isempty 2] {print $nick "How am I splitting this text up?"; return 0}
@@ -269,7 +269,7 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		find - list {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty textpad] {print $nick "There's nothing to list."; return 0}
 			if [isempty textpad_created] {set ts_start "<never>"} {set ts_start [formattime $textpad_created $handle]}
 			if [isempty textpad_edited ] {set ts_last  "<never>"} {set ts_last  [formattime $textpad_edited  $handle]}
@@ -308,8 +308,8 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		read {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
-               if [notempty 2] {print -help $nick "Are you sure you don't want the LOAD option?"; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if [notempty 2] {print -help $nick "Are you sure you don't want the LOAD option?"; return 0}
 			if [isempty textpad] {print $nick "There's nothing to read."; return 0}
 			if [isempty textpad_created] {set ts_start "<never>"} {set ts_start [formattime $textpad_created $handle]}
 			if [isempty textpad_edited ] {set ts_last  "<never>"} {set ts_last  [formattime $textpad_edited  $handle]}
@@ -324,7 +324,7 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		info {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [isempty textpad] {print $nick "There's nothing to detail."; return 0}
 			set words [llength [join $textpad]]
 			print $nick "\[TEXTPAD\] current file name: $textpad_filename"
@@ -337,7 +337,7 @@ proc @textpad { nick host handle chan arg } {
 		}
 
 		close {
-               if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
+			if ![SB:checkaccess $textpad_allow $handle $chan] {print -help $nick "You don't have access to this TEXTPAD option."; return 0}
 			if [sbd:nozero @TEXTPAD:${base}:FILE_HAS_BEEN_EDITED] {
 				if ![string eq FORCE $u2] {print $nick "\[TEXTPAD\] You have made changes since your last SAVE. If you're \002\037SURE\037\002 you want to close this file, use:\n$::botnick $u0 CLOSE FORCE"; return 0}
 			}
@@ -371,7 +371,7 @@ proc @textpad { nick host handle chan arg } {
 			}
 
 			set tail [file tail $filename]
-               if ![file exists ${dir}/$tail] {print -help $nick "No such file: ${dir}/$tail"; return 0}
+			if ![file exists ${dir}/$tail] {print -help $nick "No such file: ${dir}/$tail"; return 0}
 
 			# Trim final CR|LF
 			sbd:set @TEXTPAD:${base} [lrange [readfile ${dir}/$tail \n] 0 end-1]
@@ -385,14 +385,14 @@ proc @textpad { nick host handle chan arg } {
 			return 0
 		}
 
-          # #
+		# #
 
 		save - write {
 			if [notempty 2] {
 				sbd:set @TEXTPAD:${base}:FILENAME $j2e
 				set textpad_filename $j2e
 			}
-               if [isempty textpad_filename] {print -help $nick "You don't have a file name set yet!"; return 0}
+			if [isempty textpad_filename] {print -help $nick "You don't have a file name set yet!"; return 0}
 			set split [file split $textpad_filename]
 
 			if [SB:checkaccess [sbd:get USERLEVEL:BOTOWNER] $handle $chan] {
@@ -403,7 +403,7 @@ proc @textpad { nick host handle chan arg } {
 			set tail [file tail $textpad_filename]
 
 			if ![file isdirectory $dir] {file mkdir $dir}
-               file:write ${dir}/$tail $textpad true
+			file:write ${dir}/$tail $textpad true
 			sbd:zero @TEXTPAD:${base}:FILE_HAS_BEEN_EDITED
 			print $nick "\[TEXTPAD\] saved: $tail ([comma [llength $textpad]] [plural line [llength $textpad]], [comma [len $textpad]] [plural character [len $textpad]])"
 			return 0
@@ -411,98 +411,98 @@ proc @textpad { nick host handle chan arg } {
 
 		set {
 
-               switch -exact -- $2l {
+			switch -exact -- $2l {
 
 				glob - global {
-                         if [isempty 3] { print -help $nick "\[TEXTPAD SET GLOBAL\] Current value: [stu [offon $settings(set:global)]]" ; return 0 }
-                         if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET ENTER\] This option forces your file to be read / written to the global TEXTPAD space. By setting this, you're putting the -GLOBAL flag off / on permanently." ; return 0 }
+					if [isempty 3] { print -help $nick "\[TEXTPAD SET GLOBAL\] Current value: [stu [offon $settings(set:global)]]" ; return 0 }
+					if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET ENTER\] This option forces your file to be read / written to the global TEXTPAD space. By setting this, you're putting the -GLOBAL flag off / on permanently." ; return 0 }
 					set true [istrue $3]
 					set settings(set:global) $true
-                         userdata set $handle TEXTPAD [array get settings]
-                         saveme user
-                         print $nick "\[TEXTPAD SET GLOBAL\] Now: [string toupper [offon $true]]"
+					userdata set $handle TEXTPAD [array get settings]
+					saveme user
+					print $nick "\[TEXTPAD SET GLOBAL\] Now: [string toupper [offon $true]]"
 					return 0
 				}
 
 				enter - lf - cr - crlf - line - linefeed {
-                         if [isempty 3] { print -help $nick "\[TEXTPAD SET ENTER\] Current value: [stu [offon $settings(set:enter)]]" ; return 0 }
-                         if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET ENTER\] This option shows where lines end with the text \"<LINEFEED>\" at the end of a line of text. \"<BLANK LINE>\" will be used for a completely blank line, obviously." ; return 0 }
+					if [isempty 3] { print -help $nick "\[TEXTPAD SET ENTER\] Current value: [stu [offon $settings(set:enter)]]" ; return 0 }
+					if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET ENTER\] This option shows where lines end with the text \"<LINEFEED>\" at the end of a line of text. \"<BLANK LINE>\" will be used for a completely blank line, obviously." ; return 0 }
 					set true [istrue $3]
 					set settings(set:enter) $true
-                         userinfo set $handle TEXTPAD [array get settings]
-                         saveme user
+					userinfo set $handle TEXTPAD [array get settings]
+					saveme user
 					print $nick "\[TEXTPAD SET ENTER\] Now: [stu [offon $true]]"
 					return 0
 				}
 
 				tab {
-                         if [isempty 3] { print -help $nick "\[TEXTPAD SET TAB\] Current value: [string toupper [offon $settings(set:tab)]]" ; return 0 }
-                         if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET TAB\] This option shows TAB codes (0x09) where they may exist in text, as \"<TAB>\" in the text. Otherwise, they will be replaced with a single space." ; return 0 }
+					if [isempty 3] { print -help $nick "\[TEXTPAD SET TAB\] Current value: [string toupper [offon $settings(set:tab)]]" ; return 0 }
+					if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET TAB\] This option shows TAB codes (0x09) where they may exist in text, as \"<TAB>\" in the text. Otherwise, they will be replaced with a single space." ; return 0 }
 					set true [istrue $3]
 					set settings(set:tab) $true
-                         userinfo set $handle TEXTPAD [array get settings]
-                         saveme user
+					userinfo set $handle TEXTPAD [array get settings]
+					saveme user
 					print $nick "\[TEXTPAD SET TAB\] Now: [stu [offon $true]]"
 					return 0
 				}
 
 				space {
-                         if [isempty 3] { print -help $nick "\[TEXTPAD SET SPACE\] Current value: [stu [offon $settings(set:space)]]" ; return 0 }
-                         if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET SPACE\] This option shows SPACEs (0x20) where they may exist in text, as \"<SPACE>\" in the text. Otherwise, you will just see the normal space. \"SPACE\" includes the following codes: 0x20 (space), 0xA0 (no-break space), 0xE38080 (full-width space)" ; return 0 }
+					if [isempty 3] { print -help $nick "\[TEXTPAD SET SPACE\] Current value: [stu [offon $settings(set:space)]]" ; return 0 }
+					if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET SPACE\] This option shows SPACEs (0x20) where they may exist in text, as \"<SPACE>\" in the text. Otherwise, you will just see the normal space. \"SPACE\" includes the following codes: 0x20 (space), 0xA0 (no-break space), 0xE38080 (full-width space)" ; return 0 }
 					set true [istrue $3]
 					set settings(set:space) $true
-                         userinfo set $handle TEXTPAD [array get settings]
-                         saveme user
-                         print $nick "\[TEXTPAD SET SPACE\] Now: [string toupper [offon $true]]"
+					userinfo set $handle TEXTPAD [array get settings]
+					saveme user
+					print $nick "\[TEXTPAD SET SPACE\] Now: [string toupper [offon $true]]"
 					return 0
 				}
 
 				color - colour {
-                         if [isempty 3] { print -help $nick "\[TEXTPAD SET COLOUR\] Current value: [ifemptyval $settings(set:colour) <none>]" ; return 0 }
-                         if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET COLOUR\] This option defines what colour the other \"TEXTPAD\" options will have. Default is no colour change, but you can set them to be a separate colour than your other text with this option." ; return 0 }
-                         if ![regexp -- {^\d{1,2}(,\d{1,2})?$} $3] { print -help $nick "\[TEXTPAD SET COLOUR\] Illegal colour code: [join $3]" ; return 0 }
+					if [isempty 3] { print -help $nick "\[TEXTPAD SET COLOUR\] Current value: [ifemptyval $settings(set:colour) <none>]" ; return 0 }
+					if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET COLOUR\] This option defines what colour the other \"TEXTPAD\" options will have. Default is no colour change, but you can set them to be a separate colour than your other text with this option." ; return 0 }
+					if ![regexp -- {^\d{1,2}(,\d{1,2})?$} $3] { print -help $nick "\[TEXTPAD SET COLOUR\] Illegal colour code: [join $3]" ; return 0 }
 					set settings(set:colour) $3
-                         userinfo set $handle TEXTPAD [array get settings]
-                         saveme data
+					userinfo set $handle TEXTPAD [array get settings]
+					saveme data
 					print $nick "\[TEXTPAD SET COLOUR\] Now: $3 ([color $3]sample[color])"
 					return 0
 				}
 
 				save - autosave {
-                         if [isempty 3] { print -help $nick "\[TEXTPAD SET AUTOSAVE\] Current value: [stu [offon $settings(set:autosave)]]" ; return 0 }
-                         if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET AUTOSAVE\] This option records whether or not to AUTOSAVE your TEXTPAD data after each edit. If not, it will only save (1) if you made any changes by asking you (2) if you try to close the file." ; return 0 }
+					if [isempty 3] { print -help $nick "\[TEXTPAD SET AUTOSAVE\] Current value: [stu [offon $settings(set:autosave)]]" ; return 0 }
+					if [string eq HELP $3u] { print -help $nick "\[TEXTPAD SET AUTOSAVE\] This option records whether or not to AUTOSAVE your TEXTPAD data after each edit. If not, it will only save (1) if you made any changes by asking you (2) if you try to close the file." ; return 0 }
 					set true [istrue $3]
 					set settings(set:autosave) $true
-                         userinfo set $handle TEXTPAD [array get settings]
-                         saveme user
-                         print $nick "\[TEXTPAD SET AUTOSAVE\] Now: [string toupper [offon $true]]"
+					userinfo set $handle TEXTPAD [array get settings]
+					saveme user
+					print $nick "\[TEXTPAD SET AUTOSAVE\] Now: [string toupper [offon $true]]"
 					return 0
 				}
 
 				default {
-                         print -help $nick "\[TEXTPAD SET HELP\] You have the following options:"
-                         print -help $nick "[space 5]LINE <OFF | ON>"
-                         print -help $nick "[space 5]TAB <OFF | ON>" 
-                         print -help $nick "[space 5]SPACE <OFF | ON>" 
-                         print -help $nick "[space 5]COLOUR/COLOR <colour code>"
-                         print -help $nick "[space 5]AUTOSAVE <OFF | ON>"
-                         print -help $nick "[space 5]GLOBAL <OFF | ON>"
-                         return 
+					print -help $nick "\[TEXTPAD SET HELP\] You have the following options:"
+					print -help $nick "[space 5]LINE <OFF | ON>"
+					print -help $nick "[space 5]TAB <OFF | ON>" 
+					print -help $nick "[space 5]SPACE <OFF | ON>" 
+					print -help $nick "[space 5]COLOUR/COLOR <colour code>"
+					print -help $nick "[space 5]AUTOSAVE <OFF | ON>"
+					print -help $nick "[space 5]GLOBAL <OFF | ON>"
+					return 
 				}
 
 			}
 
-               return
+			return
 		}
 
-          default {print -help -error -return $nick "Unknown option: \"${1}\"" }
+		default {print -help -error -return $nick "Unknown option: \"${1}\"" }
 
 	}
 	return 0
 }
 
 proc @textpad:apply_settings {text handle} {
-     array set settings [@textpad:settings $handle]
+	array set settings [@textpad:settings $handle]
 	foreach {mode char replace} [list enter \n <ENTER> tab \t <TAB> space [space] <SPACE> space \xA0 <SPACE> space \xE3\x80\x80 <SPACE>] {
 		if $settings(set:$mode) {
 			if [string eq -nocase ENTER $mode] {
@@ -520,7 +520,9 @@ proc @textpad:apply_settings {text handle} {
 }
 
 proc @textpad:settings handle {
-     array set settings [list set:enter 0 set:tab 0 set:space 0 set:colour "" set:global 0]
-     array set settings [userinfo get $handle TEXTPAD]
-     array get settings
+	array set settings [list set:enter 0 set:tab 0 set:space 0 set:colour "" set:global 0]
+	array set settings [userinfo get $handle TEXTPAD]
+	array get settings
 }
+
+

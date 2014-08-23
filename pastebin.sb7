@@ -1,185 +1,187 @@
 sb7 command add PASTEBIN 600 -locklevel PB
 
 proc @pastebin { nick host handle chan arg } {
-     sb7 parseflags
+	sb7 parseflags
 
-     set base http://pastebin.bothouse.net
-     set view ${base}/view
-     set api ${base}/api
-     switch -exact -- $1l {
+	set base http://pastebin.bothouse.net
+	set view ${base}/view
+	set api ${base}/api
+	switch -exact -- $1l {
 
-          help {
-               print -help $nick "\[PASTEBIN\]:"
-               print -help $nick "Syntax: $::botnick PASTEBIN HELP"
-               print -help $nick "Syntax: $::botnick PASTEBIN GET -show <ID>"
-               print -help $nick "Syntax: $::botnick PASTEBIN LIST <range>"
-               print -help $nick "Syntax: $::botnick PASTEBIN \[-EXPIRE <expiration in minutes>\] <file>"
-               print -help $nick "Posts a file to the pastebin website, or, reads one."
-               print -help $nick "Acceptable range specifications for LIST: \"1\" \"First 5\" \"Last 7\" \"3-9\""
-               if [data value get -boolean @pastebin error] { print -help $nick "\[JSON\] While I can read the data from the website, I can not interpret it for you: the JSON package is not available to me." }
-               return
-          }
+		help {
+			print -help $nick "\[PASTEBIN\]:"
+			print -help $nick "Syntax: $::botnick PASTEBIN HELP"
+			print -help $nick "Syntax: $::botnick PASTEBIN GET -show <ID>"
+			print -help $nick "Syntax: $::botnick PASTEBIN LIST <range>"
+			print -help $nick "Syntax: $::botnick PASTEBIN \[-EXPIRE <expiration in minutes>\] <file>"
+			print -help $nick "Posts a file to the pastebin website, or, reads one."
+			print -help $nick "Acceptable range specifications for LIST: \"1\" \"First 5\" \"Last 7\" \"3-9\""
+			if [data value get -boolean @pastebin error] { print -help $nick "\[JSON\] While I can read the data from the website, I can not interpret it for you: the JSON package is not available to me." }
+			return
+		}
 
-          test {
-               pastebin:bootstrap
-               print -return $nick "\[JSON\] Package is currently: [lindex [list [color 3] "[color 4]un"] [data array value -boolean @pastebin error]]available[color]"
-          }
+		test {
+			pastebin:bootstrap
+			print -return $nick "\[JSON\] Package is currently: [lindex [list [color 3] "[color 4]un"] [data array value -boolean @pastebin error]]available[color]"
+		}
 
-          get - read {
-               flags:simple $2e -show text flags
-               if [isempty text] { print -error -return $nick "What paste am I reading?" }
-               lassign [www ${api}/paste/$text] error html code
-               if $error { print -error -return $nick "An error was returned: $html" }
+		get - read {
+			flags:simple $2e -show text flags
+			if [isempty text] { print -error -return $nick "What paste am I reading?" }
+			lassign [www ${api}/paste/$text] error html code
+			if $error { print -error -return $nick "An error was returned: $html" }
 
-               array set data [json decode $html]
-               lassign [www ${base}/view/raw/$text] error raw code
-               if $error { print -error -return $nick "An error was returned whlie reading the raw code: $raw" }
-               set ll [llength [split $raw \n]]
-               set cc [join [split $raw \n] ""]
-               print $nick "\"$data(title)\" ( [color 3]$data(url)[color] ) [color 2]$data(lang)[color] paste by \"[color 6]$data(name)[color]\" written: [clock format $data(created) -format "%Y-%m-%d %H:%M:%S (%z)"]: [comma $ll] [plural line $ll] ([comma [string length $cc]] [plural character $cc] / [bytes [string length $cc] 1])"
-               if [validflag -show] { print $nick $raw }
-               return
-          }
+			array set data [json decode $html]
+			lassign [www ${base}/view/raw/$text] error raw code
+			if $error { print -error -return $nick "An error was returned whlie reading the raw code: $raw" }
+			set ll [llength [split $raw \n]]
+			set cc [join [split $raw \n] ""]
+			print $nick "\"$data(title)\" ( [color 3]$data(url)[color] ) [color 2]$data(lang)[color] paste by \"[color 6]$data(name)[color]\" written: [clock format $data(created) -format "%Y-%m-%d %H:%M:%S (%z)"]: [comma $ll] [plural line $ll] ([comma [string length $cc]] [plural character $cc] / [bytes [string length $cc] 1])"
+			if [validflag -show] { print $nick $raw }
+			return
+		}
 
-          list - recent {
-               lassign [www ${api}/recent] error html ok
-               if $error { print -return -help $nick "Error while retrieving list: $html" }
-               set json [::json::json2dict $html]
-               array set pastebin [list]
-               empty pids
-               foreach element $json {
-                    set m [lsearch -exact $element pid]
-                    set n [expr $m + 1]
-                    set pid [lindex $element $n]
-                    lappend pids $pid
-                    foreach { name info } $element { set pastebin(${pid}:$name) $info }
-                    if ![info exists pastebin(${pid}"updated)] { set pastebin(${pid}:updated) $pastebin(${pid}:created) }
-               }
+		list - recent {
+			lassign [www ${api}/recent] error html ok
+			if $error { print -return -help $nick "Error while retrieving list: $html" }
+			set json [::json::json2dict $html]
+			array set pastebin [list]
+			empty pids
+			foreach element $json {
+				set m [lsearch -exact $element pid]
+				set n [expr $m + 1]
+				set pid [lindex $element $n]
+				lappend pids $pid
+				foreach { name info } $element { set pastebin(${pid}:$name) $info }
+				if ![info exists pastebin(${pid}"updated)] { set pastebin(${pid}:updated) $pastebin(${pid}:created) }
+			}
 
-               empty printme
-               switch -exact -- $2l {
-               
-                    after - since {
-                         set timeval [timeval $3]
-                         if { $timeval == -1 } { print -return -error -short "Illegal $2u time designation: $3" }
-                         set target [expr [clock seconds] - $timeval]
-                         foreach pid $pids {
-                              if { $pastebin(${pid}:updated) < $target } continue
-                              lappend printme $pid
-                         }
-                         return 0
-                    }
+			empty printme
+			switch -exact -- $2l {
+			
+				after - since {
+					set timeval [timeval $3]
+					if { $timeval == -1 } { print -return -error -short "Illegal $2u time designation: $3" }
+					set target [expr [clock seconds] - $timeval]
+					foreach pid $pids {
+						if { $pastebin(${pid}:updated) < $target } continue
+						lappend printme $pid
+					}
+					return 0
+				}
 
-                    before - b4 - within - wi {
-                         set timeval [timeval $3]
-                         if { $timeval == -1 } { print -return -error -short "Illegal $2u time designation: $3" }
-                         set target [expr [clock seconds] - $timeval]
-                         foreach pid $pids {
-                              if { $pastebin(${pid}:updated) > $target } continue
-                              lappend printme $pid
-                         }
-                         # Fall-through ....
-                         return 0
-                    }
+				before - b4 - within - wi {
+					set timeval [timeval $3]
+					if { $timeval == -1 } { print -return -error -short "Illegal $2u time designation: $3" }
+					set target [expr [clock seconds] - $timeval]
+					foreach pid $pids {
+						if { $pastebin(${pid}:updated) > $target } continue
+						lappend printme $pid
+					}
+					# Fall-through ....
+					return 0
+				}
 
-                    first - last {
-                         # To do first / last, we need to invert the list, process it,
-                         # then re-invert it to keep proper chronological order.
-                         set pid_ [lreverse $pids]
-                         set printme [lreverse [get range $pid_ $2 $3]] ; # Let GET RANGE error-check
-                         # Fall-through ....
-                    }
+				first - last {
+					# To do first / last, we need to invert the list, process it,
+					# then re-invert it to keep proper chronological order.
+					set pid_ [lreverse $pids]
+					set printme [lreverse [get range $pid_ $2 $3]] ; # Let GET RANGE error-check
+					# Fall-through ....
+				}
 
-                    default {
-                         if [isempty 2] {
-                              set printme $pids
-                         } {
-                              set _1 $2
-                              set _2 $3
-                              if [notempty _1] { incr _1 -1 }
-                              if [notempty _2] { incr _2 -1 }
-                              set printme [get index $pids $_1 $_2]
-                         }
-                    }
+				default {
+					if [isempty 2] {
+						set printme $pids
+					} {
+						set _1 $2
+						set _2 $3
+						if [notempty _1] { incr _1 -1 }
+						if [notempty _2] { incr _2 -1 }
+						set printme [get index $pids $_1 $_2]
+					}
+				}
 
-               }
+			}
 
-               if [isempty printme] { print -short -return $nick "No matching / available entries mathing your request." }
-               foreach pid $printme {
-                    set date "uploaded: [clock format $pastebin(${pid}:created) -format "%Y-%m-%d %H:%M:%S (%z)"]"
-                    set ago "[datediff [clock seconds] $pastebin(${pid}:created) *] ago"
-                    print $nick "\"$pastebin(${pid}:title)\" ( [color 3]${view}/${pid}[color] ) [color 2]$pastebin(${pid}:lang)[color] paste by \"[color 6]$pastebin(${pid}:name)[color]\" -- $date ($ago)"
-               }
-               return 0
-          }
+			if [isempty printme] { print -short -return $nick "No matching / available entries mathing your request." }
+			foreach pid $printme {
+				set date "uploaded: [clock format $pastebin(${pid}:created) -format "%Y-%m-%d %H:%M:%S (%z)"]"
+				set ago "[datediff [clock seconds] $pastebin(${pid}:created) *] ago"
+				print $nick "\"$pastebin(${pid}:title)\" ( [color 3]${view}/${pid}[color] ) [color 2]$pastebin(${pid}:lang)[color] paste by \"[color 6]$pastebin(${pid}:name)[color]\" -- $date ($ago)"
+			}
+			return 0
+		}
 
-          default {
-               if [isempty 1] { print -help -return -short $nick "Unknown request." }
+		default {
+			if [isempty 1] { print -help -return -short $nick "Unknown request." }
 
-               # Post a paste! ( Or poste a past? :p )
-               flags:simple $1e -expire text flags
-               if [validflag -expire] {
-                    set expire [lindex $text 0]
-                    set text [lreplace $text 0 0]
-               } {
-                    set expire 5256000
-               }
-               set filename $text
-               if ![file exists $filename] { print -return -error -short $nick "No such file: $filename" }
-               if [string match -nocase *.tcl $filename] { set type tcl } { set type text } 
-               set text [file:read $filename]
-               if [info exists flags(-expire)] { set expire $flags(-expire) } { set expire 0 }
-               set list [list title [file tail $filename] name "[nph $idx2nick $handle] via $::botnick" private 1 text $text code $text lang $type expire $expire]
-               lassign [www ${api}/create $list] error html code
-               if $error { print -error -short -help -return $nick "Error while pasting file: $html" }
-               regexp -nocase -- {(http\:\/\/[^\/]+\/view\/[a-f0-9]{8})} $html - url
-               print -short $nick "Successfully pasted: $filename ( [color 4]${url}[color] )"
-               return 0
-          }
-     }
+			# Post a paste! ( Or poste a past? :p )
+			flags:simple $1e -expire text flags
+			if [validflag -expire] {
+				set expire [lindex $text 0]
+				set text [lreplace $text 0 0]
+			} {
+				set expire 5256000
+			}
+			set filename $text
+			if ![file exists $filename] { print -return -error -short $nick "No such file: $filename" }
+			if [string match -nocase *.tcl $filename] { set type tcl } { set type text } 
+			set text [file:read $filename]
+			if [info exists flags(-expire)] { set expire $flags(-expire) } { set expire 0 }
+			set list [list title [file tail $filename] name "[nph $idx2nick $handle] via $::botnick" private 1 text $text code $text lang $type expire $expire]
+			lassign [www ${api}/create $list] error html code
+			if $error { print -error -short -help -return $nick "Error while pasting file: $html" }
+			regexp -nocase -- {(http\:\/\/[^\/]+\/view\/[a-f0-9]{8})} $html - url
+			print -short $nick "Successfully pasted: $filename ( [color 4]${url}[color] )"
+			return 0
+		}
+	}
 
-     ?
+	?
 }
 
 proc json { mode code } {
-     switch -exact -- $mode {
+	switch -exact -- $mode {
 
-          encode { }
+		encode { }
 
-          decode {
-               array set json [list]
-               if [regexp -- {^\[.*?\]$} $code] { set code [mid $code 2 -1] }
-               regsub -all -- {\},\{} $code "\} \{" code
-               # We're gonna ignore the {"blah":"blah"},{"blah":"blah"}
-               # data (the delimiting comma between brace pairs). The
-               # REGEXP below will get around that just fine.
+		decode {
+			array set json [list]
+			if [regexp -- {^\[.*?\]$} $code] { set code [mid $code 2 -1] }
+			regsub -all -- {\},\{} $code "\} \{" code
+			# We're gonna ignore the {"blah":"blah"},{"blah":"blah"}
+			# data (the delimiting comma between brace pairs). The
+			# REGEXP below will get around that just fine.
 
-               # Due to damned backslashes, we need to re-combine escaped chars
-               # For some reason, normal chars are BS'd like solidus ....
-               regsub -all -- {\\"} $code _\002\002\002\002\002_ code
-               foreach pair [regexp -inline -all -nocase -- {\".*?\"\:\".*?\"} $code] {
-                    regexp -- {^\"([^\"]*)\"\:\"([^\"]*)\"$} $pair - name definition
-                    regsub -all -- _\002\002\002\002\002_ $definition \\\" definition
-                    if [string eq -nocase PASTE $name] continue
-                    if [string eq -nocase RAW $name] { regsub -all -- {\\n} $definition \n definition }
+			# Due to damned backslashes, we need to re-combine escaped chars
+			# For some reason, normal chars are BS'd like solidus ....
+			regsub -all -- {\\"} $code _\002\002\002\002\002_ code
+			foreach pair [regexp -inline -all -nocase -- {\".*?\"\:\".*?\"} $code] {
+				regexp -- {^\"([^\"]*)\"\:\"([^\"]*)\"$} $pair - name definition
+				regsub -all -- _\002\002\002\002\002_ $definition \\\" definition
+				if [string eq -nocase PASTE $name] continue
+				if [string eq -nocase RAW $name] { regsub -all -- {\\n} $definition \n definition }
 #debug name definition
-                    catch { set definition [join $definition] }
-                    set json($name) $definition
-               }
-               return [array get json]
-          }
+				catch { set definition [join $definition] }
+				set json($name) $definition
+			}
+			return [array get json]
+		}
 
-          default { error "\[JSON\] Unknown mode: $mode" }
+		default { error "\[JSON\] Unknown mode: $mode" }
 
-     }
+	}
 }
 
 proc pastebin:bootstrap args {
-     data array set @pastebin error [ catch { package require json } crap ]
-     data array set @pastebin error:info $crap
+	data array set @pastebin error [ catch { package require json } crap ]
+	data array set @pastebin error:info $crap
 }
 
 #####
 # Bootstrap
 
 pastebin:bootstrap
+
+

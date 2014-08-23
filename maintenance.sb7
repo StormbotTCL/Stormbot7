@@ -2,73 +2,75 @@ sb7 command add MAINTENANCE 1000 -locklevel -core MAINT
 
 proc @maintenance { nick host handle chan arg } {
 #debug *
-     sb7 parseflags
-     switch -exact -- [string tolower $1] {
+	sb7 parseflags
+	switch -exact -- [string tolower $1] {
 
-          help {
-               print -help $nick "\[MAINTENANCE\]:"
-               print -help $nick "Syntax: $::botnick MAINTENANCE HELP"
-               print -help $nick "Syntax: $::botnick MAINTENANCE LOAD <list of beads>"
-               print -help $nick "Syntax: $::botnick MAINTENANCE REHASH"
-               #print -help $nick "Syntax: $::botnick MAINTENANCE PURGE"
-               #print -help $nick "Syntax: $::botnick MAINTENANCE CHECK"
-               #print -help $nick "Syntax: $::botnick MAINTENANCE UPDATE"
-               #print -help $nick "Syntax: $::botnick MAINTENANCE BOTNET"
-               print -help $nick "The MAINTENANCE command manages the beads loaded by StormBot.TCL into your bot. This command allows you, for example, to load an individual bead after it has been updated. This permits you to prevent the \"wear-and-tear\" on your bot from performing a full REHASH or RESTART."
-               print -help $nick "Other options will become available as StormBot.TCL V7 (\"SB7\") is developed fully."
-               return 0
-          }
+		help {
+			print -help $nick "\[MAINTENANCE\]:"
+			print -help $nick "Syntax: $::botnick MAINTENANCE HELP"
+			print -help $nick "Syntax: $::botnick MAINTENANCE LOAD <list of beads>"
+			print -help $nick "Syntax: $::botnick MAINTENANCE REHASH"
+			#print -help $nick "Syntax: $::botnick MAINTENANCE PURGE"
+			#print -help $nick "Syntax: $::botnick MAINTENANCE CHECK"
+			#print -help $nick "Syntax: $::botnick MAINTENANCE UPDATE"
+			#print -help $nick "Syntax: $::botnick MAINTENANCE BOTNET"
+			print -help $nick "The MAINTENANCE command manages the beads loaded by StormBot.TCL into your bot. This command allows you, for example, to load an individual bead after it has been updated. This permits you to prevent the \"wear-and-tear\" on your bot from performing a full REHASH or RESTART."
+			print -help $nick "Other options will become available as StormBot.TCL V7 (\"SB7\") is developed fully."
+			return 0
+		}
 
-          l - ld - laod - load {
+		l - ld - laod - load {
 #debug nick host handle chan arg 1 2e
-               if [isempty 2] { sb7 error $nick * "Missing list of beads to load" }
-               empty ok dne bad wrong files
-               set temp $2e
-               foreach file $temp {
-                    if [is wildcard $file] {
-                         set glob [glob -n -types f -tails -directory [file dirname [file normalize $::config]]/scripts/sb7 -- $file]
-                         if [notempty glob] { set files [concat $files $glob] }
-                    } {
-                         lappend files $file
-                    }
-               }
-               foreach file $files {
-                    set ::sb7_beadname [sb7 component $file] ; # If error, RETURN original name
-                    if ![regexp -- {^(sb7.*?\.tcl|.+?\.sb7)$} [file tail $::sb7_beadname]] { lappend wrong $file ; continue }
+			if [isempty 2] { sb7 error $nick * "Missing list of beads to load" }
+			empty ok dne bad wrong files
+			set temp $2e
+			foreach file $temp {
+				if [is wildcard $file] {
+					set glob [glob -n -types f -tails -directory [file dirname [file normalize $::config]]/scripts/sb7 -- $file]
+					if [notempty glob] { set files [concat $files $glob] }
+				} {
+					lappend files $file
+				}
+			}
+			foreach file $files {
+				set ::sb7_beadname [sb7 component $file] ; # If error, RETURN original name
+				if ![regexp -- {^(sb7.*?\.tcl|.+?\.sb7)$} [file tail $::sb7_beadname]] { lappend wrong $file ; continue }
 #debug file ::sb7_beadname =EXISTS([file exists $::sb7_beadname])
-                    if ![file exists $::sb7_beadname] { lappend dne $file ; continue }
-                    set error [ catch { uplevel #0 { source $::sb7_beadname } } fail ]
+				if ![file exists $::sb7_beadname] { lappend dne $file ; continue }
+				set error [ catch { uplevel #0 { source $::sb7_beadname } } fail ]
 #debug file ::sb7_beadname error fail
-                    if $error {
-                         print $nick "\[MAINTENANCE\] Bead load error (${file}): $fail"
-                         lappend bad $file
-                    } {
-                         lappend ok $file
-                    }
-               }
-               if [notempty ok] { print $nick "\[MAINTENANCE\] Successfully loaded: [ajl $ok]" }
-               if [notempty bad] { print $nick "\[MAINTENANCE\] Load errors: [ajl $bad]" }
-               if [notempty dne] { print $nick "\[MAINTENANCE\] No such bead: [ajl $dne]" }
-               if [notempty wrong] { print $nick "\[MAINTENANCE\] Wrong file type (not SB7 component): [ajl $wrong]" }
-               return 0
-          }
+				if $error {
+					print $nick "\[MAINTENANCE\] Bead load error (${file}): $fail"
+					lappend bad $file
+				} {
+					lappend ok $file
+				}
+			}
+			if [notempty ok] { print $nick "\[MAINTENANCE\] Successfully loaded: [ajl $ok]" }
+			if [notempty bad] { print $nick "\[MAINTENANCE\] Load errors: [ajl $bad]" }
+			if [notempty dne] { print $nick "\[MAINTENANCE\] No such bead: [ajl $dne]" }
+			if [notempty wrong] { print $nick "\[MAINTENANCE\] Wrong file type (not SB7 component): [ajl $wrong]" }
+			return 0
+		}
 
-          rehash {
-               print $nick "\[MAINTENANCE REHASH\] Reloading StormBot.TCL v[data get @Version] ...."
-               set error [ catch { uplevel #0 { source [file dirname [file normalize $::config]]/scripts/sb7/sb7.tcl } } fail ]
-               if $error { print -help $nick "\[MAINTENANCE REHASH\] Error whlie reloading: $fail" ; return 0 }
-               print $nick "\[MAINTENANCE REHASH\] REHASH complete: currently running StormBot.TCL v[data get @VERSION]"
-          }
+		rehash {
+			print $nick "\[MAINTENANCE REHASH\] Reloading StormBot.TCL v[data get @Version] ...."
+			set error [ catch { uplevel #0 { source [file dirname [file normalize $::config]]/scripts/sb7/sb7.tcl } } fail ]
+			if $error { print -help $nick "\[MAINTENANCE REHASH\] Error whlie reloading: $fail" ; return 0 }
+			print $nick "\[MAINTENANCE REHASH\] REHASH complete: currently running StormBot.TCL v[data get @VERSION]"
+		}
 
-          purge { print -help $nick "\[MAINTENANCE PURGE\] Not available yet." ; return 0 }
+		purge { print -help $nick "\[MAINTENANCE PURGE\] Not available yet." ; return 0 }
 
-          check { print -help $nick "\[MAINTENANCE CHECK\] Not available yet." ; return 0 }
+		check { print -help $nick "\[MAINTENANCE CHECK\] Not available yet." ; return 0 }
 
-          update { print -help $nick "\[MAINTENANCE UPDATE\] Not available yet." ; return 0 }
+		update { print -help $nick "\[MAINTENANCE UPDATE\] Not available yet." ; return 0 }
 
-          botnet { print -help $nick "\[MAINTENANCE BOTNET\] Not available yet." ; return 0 }
+		botnet { print -help $nick "\[MAINTENANCE BOTNET\] Not available yet." ; return 0 }
 
-          default { print -help -return -header:s $nick "Unknown option: $1" }
+		default { print -help -return -header:s $nick "Unknown option: $1" }
 
-     }
+	}
 }
+
+

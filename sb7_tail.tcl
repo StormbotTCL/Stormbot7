@@ -3834,8 +3834,12 @@ proc www:headers url {
 }
 
 proc pingpong { { time "" } } {
+	# IRCd
 	if [string eq "" $time] { set time [clock seconds] }
 	raw "PING :$time"
+
+	# Botnet
+	foreach data [dcclist bot] { putidx [lindex $data 0] pi }
 	return
 }
 
@@ -5324,4 +5328,5 @@ utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
 sb7:setup ; # Last thing to be executed!
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data get @VERSION] (by Mai \"Domino\" Mizuno) loaded"
+
 

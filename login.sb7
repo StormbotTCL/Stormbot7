@@ -294,3 +294,5 @@ proc @passhint { nick host handle chan arg } {
 
 bind BOT - XLOGIN @botnet:xlogin
 bind BOT - OLOGIN @botnet:ologin
+
+

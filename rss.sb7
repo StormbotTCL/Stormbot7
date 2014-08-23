@@ -259,3 +259,4 @@ proc rss:cleantext text {
 	set text [encoding convertto utf-8 $text]
 	return $text
 }
+

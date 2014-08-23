@@ -266,3 +266,4 @@ proc @config { nick host handle chan arg } {
 	?
 }
 
+
