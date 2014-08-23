@@ -1,0 +1,120 @@
+sb7 command add DNS 501 -none
+#if { [sb7 command get dns level] < 501 } { sb7 command change DNS level 501 } ; # CHANGE isn't coded yet ....
+
+proc @dns { nick host handle chan arg } {
+	sb7 parseflags -dig -host -nslookup -more
+
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[DNS\]:"
+		print -help $nick "The DNS command will \037ATTEMPT\037 to resolve the given DNS or IP into the other. Note that this bead can not handle IPv6-formatted addresses at this time."
+		print -help $nick "Syntax: $::botnick DNS \[flags\] <IP> (\037finds the DNS name for the given IP\037)"
+		print -help $nick "Syntax: $::botnick DNS \[flags\] <DNS> (\037finds the IP for the given DNS name\037)"
+		print -help $nick "Syntax: $::botnick DNS COUNTRY <IP> (\037looks-up what country a given IP is from\037)"
+		print -help $nick "DNS will return all matching entries. By default, DNS will implement NSLOOKUP on a Windows machine (including on Cygwin), and HOST on a *nix machine."
+		print -help $nick "To make a *nix machine use DIG or NSLOOKUP, use the -DIG & -NSLOOKUP flags, respectively (these flags are ignored on Windows machines)."
+		print -help $nick "If, on a *nix machine, -DIG & -NSLOOKUP are both specified, -DIG will overrule (cancel) -NSLOOKUP for a DNS name lookup. DIG can not handle IP address lookups."
+		return 0
+	}
+
+	if [isempty 1] { print -help -short $nick "I need a value to research." ; return }
+
+	if [string eq -nocase COUNTRY $1] {
+		if ![regexp -- {^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$} $2] { print $nick "I need an IP in IPv4 format (that's the website's restriction, not mine)." ; return }
+
+		lassign [www http://api.hostip.info/get_html.php?ip=$2] error www code
+		if $error {print -help -short $nick "An error occurred while researching ${2}: $www"; return 0}
+
+		set reply [list "" ""]
+		set www_split [split $www \n]
+		if ![instr [sl1 $www_split] unknown] { lset reply 0 [lrange [lindex $www_split 1] 1 end] }
+		lset reply 1 [lrange [lindex $www_split 0] 1 end]
+		print -short $nick "${2}: [join [ldestroy -nonull $reply] " -- "]"
+		return
+	}
+
+	# Defaults
+
+	set mode nslookup
+	if [os unix] { set mode host }
+	if [isempty mode] {error "Unknown OS name: ask the coder to include coding for \"PROC os\" to handle this OS: ${::tcl_platform(os)}. Thank you."}
+
+	# Check for overrides
+
+	# nix -> unix
+	if [os unix] { # DIG cancels NSLOOKUP
+		if [validflag -nslookup] {set mode nslookup}
+		if [validflag -dig] {
+			if [testip $1] {
+				set mode [lindex [list host nslookup] [validflag -nslookup]]
+				print $nick "DIG can not look-up DNS names from their IPs, as requested. I will use the [string toupper $mode] method instead."
+			} else {
+				set mode dig
+			}
+		}
+	} else {
+		if {[validflag -dig] || [validflag -host]} {print $nick "Windows users can not use the -DIG nor -HOST flags, because those commands are *nix-only commands. Defaulting to NSLOOKUP ...."; # Fall-through!}
+	}
+
+	switch -exact -- [string tolower $mode] {
+		nslookup {
+			empty o
+			if [os nix] {
+				set error [catch {set reply [exec nslookup -silent $1]} reply]
+				set reply [split $reply \n]
+				if [instr $reply **] {print $nick "There was no matching entry found for: $1"; return ""}
+				foreach line [lrange $reply 3 end] {
+					if [testip $1] {
+						if [left [string tolower $line] 5 name:] {lappend o [lindex $line end]}
+					} else {
+						if [left [string tolower $line] 8 address:] {lappend o [lindex $line end]}
+					}
+				}
+			} else {# Windows version
+				set error [catch {set reply [exec nslookup -d $1]} reply]
+				set reply [split [regsub -all -- \t $reply ""] \n]
+
+				set answers [lsearch -glob [string tolower $reply] server:*]
+				if {$answers < 0} {error "> DNS - -NSLOOKUP -MORE: search for 'Server:' marker: \$ANSWERS ($answers)"}
+				set reply [lreplace $reply 0 $answers]
+				# Wipe out all lines up to SERVER:* (inclusive)
+
+				set m [lsearch -glob [string tolower $reply] *answers:*]
+				if {$m < 0} {print $nick "No matches made to: $1"; return ""}
+
+				if [testip $1] {
+					set addresses [lsearch -inline -all -glob [string tolower $reply] "name = *"]
+				} else {
+					set addresses [lsearch -inline -all -glob [string tolower $reply] "internet address = *"]
+				}
+				if [notempty addresses] {
+					foreach address $addresses {lappend o [lindex [split $address] end]}
+				}
+			}
+			if [isempty o] {print $nick "Unable to find an entry for: $1"; return ""}
+			print $nick "[string toupper $mode] lookup for $1 --> [ajl $o]"
+			return $o
+		}
+		host {
+			set error [catch {set reply [exec host $1]} shit]
+			if $error {
+				print -help $nick "${1}: does not resolve"
+				#print -help $nick "An error occurred while using HOST: $shit"
+				return
+			}
+			if [string match -nocase HOST*NOT*FOUND*:* $reply] {print $nick "There was no matching entry found for: $1"; return ""}
+			empty o
+			foreach a [split $reply \n] {lappend o [lindex $a end]}
+			print $nick "[string toupper $mode] lookup for $1 --> [ajl $o]"
+			return $o
+		}
+		dig {
+			set error [catch {set reply [exec dig +short $1]} shit]
+			if ($error) {print -help $nick "An error occurred while using DIG: $shit"; return ""}
+			if [isempty reply] {print $nick "There was no matching entry found for: $1"; return ""}
+			print $nick "[string toupper $mode] lookup for $1 --> [ajl $reply]"
+			return $reply
+		}
+		default {print -help $nick "You have three choices: HOST, NSLOOKUP, or DIG. Don't make up dumb things like \"${ju1}\" or somesuch ...."; return ""}
+	}
+	return ""
+}

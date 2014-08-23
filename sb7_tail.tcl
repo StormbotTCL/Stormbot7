@@ -1,4 +1,3 @@
-# REPLACE ALL 5-SPACES with TABS!
 # --- TAIL ---
 
 # ISEGGCORECMD must be first!
@@ -3845,6 +3844,38 @@ proc pingpong { { time "" } } {
 
 # --- Other commands ---
 
+proc os { { checkme "" } } {
+	if [string eq -nocase VERSION $checkme] {
+		set os $::tcl_platform(os)
+		switch -glob -- [stl $os] {
+			cygwin_nt-* {return [array set temp [list 1.0 "Windows 1.0" 2.0 "Windows 2.0" 3.0 "Windows 3.0" 3.1 "Windows 3.1" 3.11 "Windows 3.11" 4.0 "Windows NT4" 5.0 "Windows 2000" 5.1 "Windows XP" 6.0 "Windows Vista" 7.0 "Windows 7" 8.0 "Windows 8" 8.1 "Windows 8.1"]]$temp([right $os 3])}
+			cygwin*     {return [string trimleft [mid $os 7] _]}
+			windows*    {return $os}
+			default     {return $os}
+		}
+	}
+
+	if [regexp -nocase -- {^[\*]?n[i\?]x$} $checkme] { set checkme *n?x }
+
+	set platform $::tcl_platform(platform)
+	if [string eq -nocase UNIX $platform] {
+		switch -glob -- [string tolower $::tcl_platform(os)] {
+			unix - linux - *bsd { set os unix }
+			windows { set os windows }
+			cygwin* { set os cygwin }
+			mac* - darwin* { set os mac }
+			default { error "\[SB:os\] what OS am I? platform ($::tcl_platform(platform)), os ($::tcl_platform(os))" }
+		}
+	} {
+		set os unix
+	}
+	if [isempty checkme] { return $os }
+
+	# Specific OS check
+	if ![is wildcard $checkme] { append checkme * }
+	string match -nocase $checkme $os
+}
+
 proc rglob { dirpath patterns { recursive 0 } { sizes 0 } } {
 	# Custom-written by thommey [1347803875] :: http://paste.tclhelp.net/?id=bn7
 
@@ -4740,6 +4771,8 @@ proc validflag args {
 	return $m
 }
 
+proc isvalidflag { flags flag } { validflag $flag } ; # Allow use of a variable
+
 proc flags args { # Have to allow several variations in order to unite everything
 	# Be careful with debugs: DATA GET & DATA ARRAY GET/VALUE (and others)
 	# call for a flag check, causing an endless loop.
@@ -5328,5 +5361,4 @@ utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
 sb7:setup ; # Last thing to be executed!
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data get @VERSION] (by Mai \"Domino\" Mizuno) loaded"
-
 
