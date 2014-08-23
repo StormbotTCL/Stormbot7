@@ -12,7 +12,7 @@ proc @version { nick host handle chan arg } {
 			return
 		}
 
-		default { print -return -short $nick "StormBot.TCL v[data get @VERSION] ([data get @DISTRO]) on $::botnick (Eggdrop v[lindex $::version 0] running TCL v[info patchlevel])" }
+		default { print -return -short $nick "StormBot.TCL v[data array get @VERSION stormbot] ([data get @VERSION distro]) on $::botnick (Eggdrop v[lindex $::version 0] running TCL v[info patchlevel])" }
 
 	}
 }
