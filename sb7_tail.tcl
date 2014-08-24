@@ -1344,7 +1344,7 @@ proc data args {
 }
 
 proc saveme { cmd { now false } } {
-	# Using !ISFALSE below allows variats like "-now" or "now" to be used, in case I forget the sytnax. :p
+	# Using !ISFALSE below allows variats like "-now" or "now" to be used, in case I forget the syntax. :p
 	switch -exact -- [string tolower $cmd] {
 
 		* - all {
@@ -1821,7 +1821,7 @@ proc ajl args {
 
 			# It's okay to do this: we're gonna convert LIST -> STRING via JOIN anyway
 			set oxford ""
-			if $oxford_comma {
+			if [boolean $oxford_comma] {
 				set oxford [iff $oxford_comma $comma]
 				if [right $oxford 1 " "] { set oxford [left $oxford -1] }
 			}
@@ -2505,6 +2505,7 @@ proc ldefault args {
 
 proc lpad { var_list llength { pad_with "" } } {
 	upvar 1 $var_list list
+	if ![info exists list] { empty list }
 	if ![isnum -integer $llength] { error "\[LPAD\] Expected integer but got: $llength" }
 	if { $llength < 0 } return
 	set ll [llength $list]
@@ -4313,10 +4314,11 @@ proc get { cmd args } {
 				if { ![regexp -- , $list] && ( [llength $list] > 2 ) } {
 					error "If you're going to use any keywords, you must use delimiters like commas (,), colons (:), or semi-colons (\;)."
 				}
-				set list [split $list {,:;}]
+				set list [split $list { ,:;}] ; # 1408864315: Was missing the space! "1-5, 11-15; 22 24" was splitting into "1-5 { 11-15} { 22 24}"
 			}
 
 			empty final
+			lremove list ""
 			for { set main_index 0 } { $main_index < [llength $list] } { incr main_index } {
 				set element [string trim [string tolower [lindex $list $main_index]]]
 				if [isempty element] continue

@@ -1,0 +1,142 @@
+sb7 command add FINDPORT 1000 -none FP
+
+proc @findport { nick host handle chan arg } {
+	sb7 parseflags -dns
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[FINDPORT\]:"
+		print -help $nick "Syntax: $::botnick FINDPORT <port | range of ports>"
+		print -help $nick "Use a combination of commands (PS & NETSTAT) to determine who is using, connecting to, or holding open a given port"
+		return
+	}
+
+	set range [get range [none $1e 0-65535] 0 65535]
+	if [isempty range] { print -help $nick "\[${0u}\] Invalid port number range: $1e" ; return }
+	set os [os]
+	zero matched
+	switch -glob -- [string tolower $os] {
+
+		*n?x {
+			set error [ catch { set netstat [exec netstat -alnp] } extra]
+			if $error {
+				set netstat [split $extra \n]
+			} {
+				set netstat [split $netstat \n]
+			}
+			empty connections
+			set header [string toupper [lindex $netstat 0]]
+			foreach line [lrange $netstat 1 end] {
+				empty pid port local remote status pid program local+port remote+port
+				lassign $line proto - - local+port remote+port status pid/program
+				if [isempty pid/program] { set pid/program $status ; empty status }
+				lassign [split ${pid/program} /] pid program
+				regexp -- {(\d+)$} ${local+port} - port
+				regexp -- {^([0-9\.A-F\:]+)\:\d+$} ${local+port} - local
+				regexp -- {^([0-9\.A-F\:]+)\:(\d+|\*)$} ${remote+port} - remote
+				if ![regexp -nocase -- {^[0-9]+$} $port] continue
+				if ![regexp -nocase -- {^[0-9\.A-F\:]+$} $local] continue
+				if ![regexp -nocase -- {^[0-9\.A-F\:]+$} $remote] continue
+				set remote [none $remote <unknown>]
+				if [string eq $pid -] { set pid "<root / other user>" ; set program "<protected>" }
+				if { [lsearch -exact $range $port] != -1 } {
+					incr matched
+					if [string match -nocase LISTEN* $status] {
+						print $nick "\[${0u}\] Listening on port ${port}: PID ${pid}: $program"
+					} {
+						lappend connections $remote
+						print $nick "\[${0u}\] Connected to port ${port}: PID ${pid}: $program (from: $remote)"
+					}
+				}
+			}
+			print $nick "\[${0u}\] Total matches: [comma $matched]"
+			if [validflag -dns] {
+				if [notempty connections] {
+					set connections [nodup $connections]
+					print $nick "Connections found: [ajl -empty $connections " -- "]"
+					foreach connection $connections { [sb7 command get dns proc] $nick $host $handle $chan "DNS $connection" }
+				}
+				print $nick "End of $0u -DNS lookups"
+			}
+			return 0
+		}
+
+		cygwin {
+			# Need PS information first ....
+			set temp [split [ exec ps s -W ] \n]
+			array set pids [list]
+			array set wipids [list]
+			set header [stu [mid [lindex $temp 0] 5]]
+			set c [instr $header COMMAND]
+			set p [instr $header PID] ; decr p 2
+			set w [instr $header WINPID] ; #decr w 2
+			if !$c { print -help $nick "\[${0u}\] I can't figure out where the COMMAND is listed within the \"PS -Ws\" command. I can't continue." ; return 0 }
+			foreach line [lrange $temp 1 end] {
+				set line [mid $line 5]
+				set pid [trim [mid $line $p 7]]
+				set winpid [trim [mid $line $w 7]]
+				set program [mid $line $c]
+				if [isnum -integer $pid] { set pids($pid) $program }
+				if [isnum -integer $winpid] { set winpids($winpid) $program }
+			}
+			set netstat [ exec netstat -nao ]
+			foreach line [split $netstat \n] {
+				empty port local remote pid status program
+				lassign $line proto local+port remote+port status pid/program
+				if [isempty pid/program] { set pid/program $status ; empty status }
+				lassign [split ${pid/program} /] pid program
+				if ![isnum -integer $pid] continue
+				if [info exists pids($pid)] {
+					set program $pids($pid)
+				} {
+					if [info exists winpids($pid)] {
+						set program $winpids($pid)
+					} {
+					set program "<UNKNOWN PID>"
+					}
+				}
+				if ![isnum -integer $pid] continue
+				regexp -- {\:(\d+)$} ${local+port} - port
+				regexp -- {^(.+?)\:\d+$} ${remote+port} - local
+				regexp -- {^(.+?)\:\d+$} ${remote+port} - remote
+				set remote [none $remote <unknown>]
+				if { [lsearch -exact $range $port] != -1 } {
+					incr matched
+					if [string match -nocase LISTEN* $status] {
+						print $nick "\[${0u}\] Listening on port ${port}: PID ${pid}: $program"
+					} {
+						print $nick "\[${0u}\] Connected to port ${port}: PID ${pid}: $program (from: $remote)"
+					}
+				}
+			}
+			print $nick "\[${0u}\] Total matches: [comma $matched]"
+			return 0
+		}
+
+		mac {
+			# Mac does NOT show PIDs in the NETSTAT info, regardless of flags (on certain versions)
+			set netstat [ exec [exec whereis netstat] -AnWl ]
+			foreach line [split $netstat \n] {
+				empty port local remote pid status program
+				lassign $line socket proto - - local+port remote+port status
+				regexp -- {\.(\d+)$} ${local+port} - port
+				regexp -- {^(.+?)\.\d+$} ${remote+port} - local
+				regexp -- {^(.+?)\.\d+$} ${remote+port} - remote
+				set remote [none $remote <unknown>]
+				if { [lsearch -exact $range $port] != -1 } {
+					incr matched
+					if [string match -nocase LISTEN* $status] {
+						print $nick "\[${0u}\] Listening on port ${port}"
+					} {
+						print $nick "\[${0u}\] Connected to port ${port} (from: $remote)"
+					}
+				}
+			}
+			print $nick "\[${0u}\] Total matches: [comma $matched]"
+			return 0
+		}
+
+		default { print -help $nick "\[${0u}\] I have NO IDEA how to proceed that won't guarantee me locking up internally." ; return 0 }
+
+	}
+	?
+}
+

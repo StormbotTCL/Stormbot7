@@ -592,7 +592,7 @@ proc @notes { cmd args } {
 
 		del - delete {
 			empty delete
-			set range [join [lassign $args handle archive]] ; # $RANGE may be multi-word
+			set range [join [join [lassign $args handle archive]]] ; # $RANGE may be multi-word
 			if ![validuser $handle] return
 			set notes [data array get NOTES:$handle $archive]
 			if [isempty notes] return
@@ -763,5 +763,4 @@ bind join - * @notes:onjoin
 bind nkch - * @notes:nkch
 
 @notes:bootstrap
-
 
