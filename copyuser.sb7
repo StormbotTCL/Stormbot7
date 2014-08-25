@@ -20,11 +20,8 @@ proc @copyuser { nick host handle chan arg } {
 
 	if [validflag -raw] {
 		empty datapacket
-		set userlist [userlist]
-		set users [ldestroy -debug -all -not -glob -multiple [join $1e]]
-debug userlist 1e users
-		foreach user [lsort -inc -uni -dict $users] {
-			lassign [whois $user $handle] online wn wh who wc wah wan
+		foreach user [lsort -inc -uni -dict $1e] {
+			lassign [whois [join $user] $handle] online wn wh who wc wah wan
 			print $nick "Output piped to /NOTICE (or .DCC) for privacy ...."
 			lappend datapacket ".-user $who"
 			if [matchattr $who b] {
@@ -34,14 +31,21 @@ debug userlist 1e users
 			} else {
 				lappend datapacket ".+user $who"
 			}
-			if {[getuser $who PASS] != ""} {lappend datapacket ".tcl setuser $who pass [getuser $who PASS]"}
+			if {[getuser $who pass] != ""} {lappend datapacket ".tcl setuser $who pass [getuser $who PASS]"}
 			if {[chattr $who] != ""} {lappend datapacket ".chattr $who +[chattr $who]"}
 			if {[getuser $who info] != ""} {lappend datapacket ".tcl setuser $who info \{[getuser $who info]\}"}
-			if {[getuser $who COMMENT] != ""} {lappend datapacket ".tcl setuser $who commend \{[getuser $who COMMENT]\}"}
+			if {[getuser $who comment] != ""} {lappend datapacket ".tcl setuser $who comment \{[getuser $who COMMENT]\}"}
+			if {[getuser $who console] != ""} {lappend datapacket ".tcl setuser $who console [getuser $who console]"}
 			foreach a [getuser $who HOSTS] { lappend datapacket ".+host $who $a" }
+			lappend datapacket ".tcl setuser $who fstat d [getuser $who fstat d]"
+			lappend datapacket ".tcl setuser $who fstat u [getuser $who fstat u]"
+
 			# Channel-level stuff #
 			foreach ch [channels] {
-				if {[lindex [split [chattr $who $ch] |] 1] != ""} {lappend datapacket ".chattr $who +|[l1 [split [chattr $who $ch] |]] $ch"}
+				set chattr_chan [lindex [split [chattr $who $ch] |] 1]
+				if { ! ( [string eq "" $chattr_chan] || [string eq $chattr_chan "-"] ) } {
+					lappend datapacket ".chattr $who +|[lindex [split [chattr $who $ch] |] 1] $ch"
+				}
 				if {[getchaninfo $who $ch] != ""} {lappend datapacket ".tcl setchaninfo $who $ch [getchaninfo $who $ch]"}
 			}
 
@@ -49,30 +53,42 @@ debug userlist 1e users
 			empty more
 			if [info exists ::userinfo-fields] {set more ${::userinfo-fields}}
 			if [info exists ::sb_copyuser_include] {set more "$more $::sb_copyuser_include"}
-			if [info exists custom(user)] {set more "$more $custom(user)"}
 			foreach a $more {
 				if [string match *#* $a] {
 					foreach ch [channels] {
 						regsub -all # $a $ch b
-						if {[getdata $who $b] != ""} {lappend datapacket ".tcl setdata $who $b \{[getdata $who $b]\}"}
+						if {[userinfo get $who $b] != ""} {lappend datapacket ".tcl setuser $who XTRA $b \{[userinfo get $who $b]\}"}
 					}
 				} else {
-					if {[getdata $who $a] != ""} {lappend datapacket ".tcl setdata $who $a \{[getdata $who $a]\}"}
+					if {[userinfo get $who $a] != ""} {lappend datapacket ".tcl setuser $who XTRA $a \{[userinfo get $who $a]\}"}
 				}
 			}
 		
 			# StormBot.TCL internal global data needed for users #
-			foreach a [sbd:get custom(global)] {
-				set chunk [sbd:get $a]
-				if ![instr $chunk !] continue
-				regsub -all ! $chunk $who chunk
+			# User-specific
+			foreach a [data array get %VARIABLES user] {
+				regsub -all -- ! $a $who a
 				foreach ch [channels] {
-					regsub -all # $chunk $ch newchunk
-					foreach b [sbd:find $newchunk] {# Find "*" entries
-						if {[sbd:get $b] != ""} {lappend datapacket ".tcl sbd:set $b \{[sbd:get $b]\}"}
+					regsub -all -- # $a $ch dataname
+					foreach b [userinfo list $who $dataname] {
+						if ![string eq "" [userinfo get $who $b]] {lappend datapacket ".tcl userinfo set $who $b \{[userinfo get $who $b]\}"}
 					}
 				}
 			}
+
+			# User data within global data stream
+			foreach a [data array get %VARIABLES global] {
+				if ![instr $a 1] continue ; # Only transfer global data that's user-related
+				if { [lsearch -exact [data array get -lower %variables block] [string tolower $a]] != -1 } continue
+				regsub -all -- ! $a $who a
+				foreach ch [channels] {
+					regsub -all -- # $a $ch dataname
+					foreach b [data find $dataname] {
+						if ![string eq "" [data get $b]] {lappend datapacket ".tcl data set $b \{[data get $b]\}"}
+					}
+				}
+			}
+
 			lappend datapacket ".save"
 		}
 		foreach a $datapacket { print -private $nick $a }

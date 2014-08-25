@@ -152,12 +152,13 @@ proc sb7 args { # General
 		}
 
 		register {
-			set valid [list global user chan]
+			if [isempty 2] return
+			set valid [list global user chan block]
 			set match [uniquematch $valid $1]
 
 			switch -exact -- $match {
 
-				user - global - chan {
+				user - global - chan - block {
 					set data [data array value %VARIABLES $match]
 					set data [lsort -increasing -unique [concat $data [lrange $args 2 end]]]
 					data array set %VARIABLES $match $data
@@ -2758,6 +2759,7 @@ proc access args {
 			access fix $handle $chan
 			if [isempty chan] { set chan global }
 			set level [userinfo get $handle access:$chan]
+			if [isempty level] { set level 0 }
 			if [notempty level] { return $level }
 		}
 

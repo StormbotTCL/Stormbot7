@@ -143,7 +143,7 @@ proc @botsend { nick host handle chan arg } {
 			}
 		}
 
-		send {
+		sedn - send {
 			array set status [list ok "" utl "" perm "" botnet "" open ""]
 			array set send [list bots "" files ""]
 

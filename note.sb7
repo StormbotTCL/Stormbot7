@@ -1,9 +1,10 @@
 # When a note is sent somewhere else (FWD / copy / BOTNET), restore the modes to the original note text!
 
-sb7 command add note 0 -core notes ntoe no
+sb7 command add note 1 -core notes ntoe no
 sb7 register user note:setting:*
 sb7 register global note
 sb7 register global notes:!
+sb7 register block notes:!
 
 proc @note { nick host handle chan arg } {
 	# Old flags: -global -archive -name -shortdate -private -receipt -urgent -important -none -unread -quiet -show -bcc -notme -copyme -delete -strip -doublespace -debug -nohexconvert -forcehexconvert -tab2space -notabs -noread
