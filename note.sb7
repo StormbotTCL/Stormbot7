@@ -103,11 +103,21 @@ proc @note { nick host handle chan arg } {
 				if $alwaysprivate { set outputflag -private }
 
 				# Override all
-				if [validflag -show] { set outputflag -none }
+				if [validflag -show] { set outputflag -none ; set outputflag -channel }
 
 				one shown
- 				set what [join $what] ; # LIST issues: do this AFTER all other manipulating!
-				print $outputflag $nick "${number}/${max}:$tag $who ([formatdate $when $handle]): ${color_open}${what}${color_close}"
+ 				set error [ catch { set what [join $what] } ] ; # LIST issues: do this AFTER all other manipulating!
+				if $error { set what "\{parsing error: showing raw text\} $what" }
+				if [instr $what ||] {
+					regsub -all -- {\|\|} $what \000 what
+					set s [split $what \000]
+					print $outputflag $nick "${number}/${max}:$tag $who ([formatdate $when $handle]):"
+					foreach a $s {
+						print $outputflag $nick "[space 5]${color_open}${a}${color_close}"
+					}
+				} {
+					print $outputflag $nick "${number}/${max}:$tag $who ([formatdate $when $handle]): ${color_open}${what}${color_close}"
+				}
 			}
 			if !$shown { print -short $nick "No valid notes within requested range." }
 			if ![validflag -noread] { userinfo set $handle note:setting:lastread [clock seconds] ; saveme user }
@@ -120,7 +130,7 @@ proc @note { nick host handle chan arg } {
 			# "all notes AFTER this timestamp are unread." This solves a race condition where a
 			# note may have arrived the same second (but chronologically after) a user read her/his notes.
 			# Side effect: due to the same race condition, additional notes may qualify as unread
-			# (thus, a user indicating note #5 as a refernce might also be including notes #3-4).
+			# (thus, a user indicating note #5 as a reference might also be including notes #3-4).
 
 			if [isempty 2] { userinfo set $handle note:setting:lastread [clock seconds] ; saveme data ; print -return -short $nick "All notes marked as read." }
 			if [string eq -nocase HELP $2] {
@@ -324,7 +334,7 @@ proc @note { nick host handle chan arg } {
 			}
 		}
 
-		forward - fwd {
+		fwd - forward {
 			if [isempty 2] { print -help -short -return $nick "To what user are we forwarding notes?" }
 			if [isempty 3] { print -help -short -return $nick "Which notes are we forwarding?" }
 			set count [@notes count $handle main]
@@ -357,6 +367,32 @@ proc @note { nick host handle chan arg } {
 				if [notempty error(default)] { print -short $nick "Note #[comma $num]: unknown delivery problem: [ajl $error(default)]" }
 				unset error
 			}
+			if $saveme { saveme data }
+			return
+		}
+
+		rpy - reply {
+			if [isempty 2] { print -help -short -return $nick "To which notes are we replying?" }
+			if [isempty 3] { print -help -short -return $nick "What is your reply?" }
+			set count [@notes count $handle $archivename]
+			set number [get range $2 1 $count]
+			if ![isnum -integer $number] { print -help -short -return $nick "Illegal note number: $2" }
+			set note [lindex [@notes get $handle $archivename $number] 0]
+			if [isempty note] { print -help -short -return $nick "Illegal note number: $2 (out of range)" }
+			lassign $note num max who when what modes
+			set message $3e
+			zero saveme
+			set what "(Originally sent [format:date $when @short]: [join $what])||$handle replied: $message"
+			if [boolean [userinfo get $handle note:setting:private:send]] { set what [@notes mode set $what private] }
+			lassign [whois $who $handle] - wn - wh
+			set result [@notes send $who main $handle $when $what]
+			# Ignore SPECIFIC result codes for FWD; just report generally that the notes were sent or not
+			switch -exact -- $result {
+				0 - 2 - 3 - 5 { lappend error(ok) [nph $wn $wh] ; print -short $wn "${wn}: you just received a note from [iff [string eq -nocase $wn $nick] "... yourself?!?" "[nph $nick $handle]."]" }
+				1 - 4 { lappend error(default) [nph $wn $wh] }
+			}
+			if [notempty error(ok)] { one saveme ; print -short $nick "Note #[comma $num]: delivered messages: [ajl $error(ok)]" }
+			if [notempty error(default)] { print -short $nick "Note #[comma $num]: unknown delivery problem: [ajl $error(default)]" }
 			if $saveme { saveme data }
 			return
 		}
@@ -558,10 +594,10 @@ proc @notes { cmd args } {
 			set returncode 0
 			set autofwd [getuser $handle fwd]
 			if [notempty autofwd] {
-				lassign [split $autofwd] user bot
+			lassign [split $autofwd @] user bot
 				if [isempty bot] { set bot $user ; set user $handle }
 				set id ${::botnet-nick}:[clock seconds]:[clock clicks -milli]
-				set data [encrypt sb7:note:encrypted [list ${from}@${::botnet-nick} [clock seconds] [$message]]]
+				set data [encrypt sb7:note:encrypted [list ${from}@${::botnet-nick} [clock seconds] $message]]
 				putbot $bot [list sb7:note:send start $id $user]
 				while { [notempty data] } {
 					putbot $bot [list sb7:note:send data $id $user [left $data 80] ]
@@ -573,7 +609,7 @@ proc @notes { cmd args } {
 			# Use "ADD" to not broadcast a note to DCC channel
 			if [string eq -nocase send $cmd] {
 				set idx [hand2idx $handle]
-				if [valididx $idx] { putidx $idx "[color 3]\[NOTE\] From ${from}: ${message}[color]" ; set returncode 3 }
+				if [valididx $idx] { putidx $idx "[color 3]\[NOTE\] From ${from}: [@notes:flags -strip $message][color]" ; set returncode 3 }
 			}
 			data array lappend NOTES:$handle $archive [list $from $ts $message]
 

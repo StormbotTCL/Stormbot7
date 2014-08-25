@@ -1,5 +1,6 @@
 sb7 command add LOGIN    0 -locklevel -core -auth -ok:logout ; # Why remove OK:LOGOUT for this?
 sb7 command add LOGOUT   0 -locklevel -core
+sb7 command add OPASS 1000 -locklevel -core
 sb7 command add PASSHINT 1 -locklevel -core -ok:logout ; # Levels -1 & 0 don't require authing
 sb7 register user PASSWORD:HINT
 sb7 register user PASSWORD:HINT:OUTH
@@ -7,9 +8,10 @@ sb7 register user PASSWORD:HINT:OUTH
 proc @login { nick host handle - arg } {
 	# LOGIN not permitted from PUB[M] ($CHAN is useless HERE; will be useful elsewhere)
 	# Syntax: /msg BOT LOGIN <PW> -ologin <OPASS> -xlogin -xologin -invite #chan -op #chan -voice #chan ....
-	set options [lassign $arg 0 pw target]
+	sb7 parseflags
+	set options [lassign $arg - pw target]
 
-	if [string eq -nocase HINT $pw] {
+	if [string eq -nocase HINT $1] {
 		print -help $nick "Updated syntaces:"
 		print -help $nick "   /msg $::botnick LOGIN mypass $handle"
 		print -help $nick "\[*\] /msg $::botnick LOGIN mypass $handle -xlogin"
@@ -24,27 +26,29 @@ proc @login { nick host handle - arg } {
 		return 0
 	}
 
-	if [string eq -nocase HELP $pw] {
-		print -help $nick "\[LOGIN\]:"
+	if [string eq -nocase HELP $1] {
+	print -help $nick "\[LOGIN\]:"
 		print -help $nick "Syntax: /msg $::botnick LOGIN HELP"
+		print -help $nick "Syntax: /msg $::botnick LOGIN HELP ALL"
 		print -help $nick "Syntax: /msg $::botnick LOGIN HINT"
-		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle>"
 		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-xlogin\]"
-		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> -ologin <o-password> \[-ologin <opass>\]"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> -ologin <opass> \[-xologin\]"
+		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-xlogin\] \[-xologin\]"
 		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-invite #channel\]"
 		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-voice #channel -halfop channel -op #channel -prot #channel -own #channel\]"
-		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-xlogin -xologin\]"
 		print -help $nick 
 		print -help $nick "The LOGIN command identifies who YOU are and grants you access to my internal bits. By using the LOGIN command, you don't have to use your password with every single command you execute (Eggdrop standard protocol). This is the one feature that made StormBot.TCL an indispensible partner with Eggdrop."
 		print -help $nick "The OLOGIN is a separate \"owner login\" required for anyone with =1000 access. Due to the fact that some =1000 commands allow some form of shell-level manipulation, OLOGIN was created to allow for a second level of password security for those commands."
 		print -help $nick "Note: you are required to specify your \"handle\" (into which you're logging in). This is necessary because of users who have common hosts (like telia.net in general, or, those who connect form internet cafes). By specifying your handle, errors are minimized."
-		print -help $nick "The above-listed flag options are a new syntax for SB7 (while keeping backward-compatibility to SB5 & SB6 for \"LOGIN\" only)."
-		print -help $nick "As such, they allow a combination of all the previous LOGIN commands into one place (SB3/4/5: LOGIN, XLOGIN\; SB6: OLOGIN, XOLOGIN, DLOGIN, XDLOGIN)"
-		print -help $nick "The use of flag-based options allows virtually any combination of flags and options to go together\; feel free to experiment."
-		print -help $nick "The -VOICE* option flags will VOICE* you on the channel of choice\; you can indicate a different option for different channels: op on #channel1, voice on #channel, and halfop on #channel3 (or the like). Of course, you must have access to the command (VOICE*) on the given target channel, or your request will denied (the LOGIN will still register\; the VOICE* only will be denied)."
-		print -help $nick "\[VOICE* = all of the channel operator stati: voice (+v), halfop (+h), op (+o), prot (+a), own (+q)\]"
-		print -help $nick "The LOGIN & OLOGINs will be properly distributed to the botnet with the -XLOGIN and -XOLOGIN flags, respectively."
-		print -help $nick "Note: you [effects must up u 4] do a basic LOGIN (password & handle) in order to use any of the above options\; you can [effects not up u 4] use -XLOGIN, -OLOGIN, or, any other flags without the basic password & handle present."
+		if [string eq -nocase ALL $2] {
+			print -help $nick "The above-listed flag options are a new syntax for SB7 (while keeping backward-compatibility to SB5 & SB6 for \"LOGIN\" only)."
+			print -help $nick "As such, they allow a combination of all the previous LOGIN commands into one place (SB3/4/5: LOGIN, XLOGIN\; SB6: OLOGIN, XOLOGIN, DLOGIN, XDLOGIN)"
+			print -help $nick "The use of flag-based options allows virtually any combination of flags and options to go together\; feel free to experiment."
+			print -help $nick "The -VOICE* option flags will VOICE* you on the channel of choice\; you can indicate a different option for different channels: op on #channel1, voice on #channel, and halfop on #channel3 (or the like). Of course, you must have access to the command (VOICE*) on the given target channel, or your request will denied (the LOGIN will still register\; the VOICE* only will be denied)."
+			print -help $nick "\[VOICE* = all of the channel operator stati: voice (+v), halfop (+h), op (+o), prot (+a), own (+q)\]"
+			print -help $nick "The LOGIN & OLOGINs will be properly distributed to the botnet with the -XLOGIN and -XOLOGIN flags, respectively."
+			print -help $nick "Note: you [effects must up u 4] do a basic LOGIN (password & handle) in order to use any of the above options\; you can [effects not up u 4] use -XLOGIN, -OLOGIN, or, any other flags without the basic password & handle present."
+		}
 		return
 	}
 
@@ -59,12 +63,12 @@ proc @login { nick host handle - arg } {
 	sb7 auth login $target $nick $host
 
 	# LOGIN is valid: let's play with flags! (Oy ....)
-	flags -params $options [list -invite 1 -ologin 1 -xlogin 0 -xologin 0 -voice 1 -halfop 1 -op 1 -prot 1 -own 1] text flags
+	flags -params $options [list -invite 1 -ologin 1 -xlogin 0 -xologin 0 -voice 1 -halfop 1 -op 1 -prot 1 -own 1] text login_flags
 
 	# March through them, one-by-one ....
 	zero outh
 	# Must use NOTEMPTY because FLAGS -PARAMS will set it to "" by default
-	if [notempty flags(-xlogin)] {
+	if [notempty login_flags(-xlogin)] {
 		set congratulations2 "XLOGIN"
 		empty o
 		set pw [encpass $pw]
@@ -78,14 +82,15 @@ proc @login { nick host handle - arg } {
 
 	# Must use NOTEMPTY because FLAGS -PARAMS will set it to "" by default
 	set congratulations3 ""
-	if [notempty flags(-ologin)] {
-		if ![access check 1000 $target] { print -private -short -return "You don't have level =1000 access\; OLOGIN is not needed" }
-		set opw [encpass $flags(-ologin)]
-		if ![string eq $opw [userinfo get $target opass]] { print -private -short -return "OLOGIN failed (bad password)" }
+	if [notempty login_flags(-ologin)] {
+		if ![access check 1000 $target] { print -private -short -return $nick "You don't have level =1000 access\; OLOGIN is not needed" }
+		if [string eq "" [userinfo get $target opass]] { print -private -short -return $nick "You don't have an OPASS set: -OLOGIN option not available." }
+		set opw [encpass $login_flags(-ologin)]
+		if ![string eq $opw [userinfo get $target opass]] { print -private -short -return $nick "OLOGIN failed (bad password)" }
 		set congratulations3 OLOGIN
 		sb7 auth ologin $target $nick $host
 
-		if [notnull flags(-xologin)] {
+		if [notnull login_flags(-xologin)] {
 			set congratulations3 XOLOGIN
 			empty o
 			foreach a [list nick host target opw] {
@@ -106,10 +111,10 @@ proc @login { nick host handle - arg } {
 	set me [access compare $target]
 	foreach op [list invite voice halfop op level prot own] {
 #debug flag me chan op =ISCMD([falsetrue [sb7 command iscmd $op]]) ;#=LEVEL([sb7 command get $op level])
-		if [notnull flags(-$op)] {
+		if [notnull login_flags(-$op)] {
 			if ![sb7 command iscmd $op] continue
 			set level [sb7 command get $op level]
-			foreach chan $flags(-$op) {
+			foreach chan $login_flags(-$op) {
 				if { $me >= $level } { sb7:dispatch $nick $host $target $chan "$op $chan me" }
 			}
 		}
@@ -247,6 +252,56 @@ proc @logout { nick host handle chan arg } {
 	return
 }
 
+proc @opass { nick host handle chan arg } {
+	FLAGS
+	set old [userinfo get $handle opass]
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[OPASS\]:"
+		print -help $nick "Syntax: $::botnick OPASS "
+		print -help $nick "Syntax: $::botnick OPASS HELP"
+		print -help $nick "Syntax: $::botnick OPASS CLEAR <password>"
+		print -help $nick "Syntax: $::botnick OPASS <password>"
+		print -help $nick "Syntax: $::botnick OPASS <old pass> <new pass>"
+		print -help $nick "The OPASS command stores your owner password\; this is a password you need to use to access level =1000 commands. Because many of those commands allows shell interaction, this second password was required (in case the normal password was compromised)."
+		print -help $nick "Like PASS (the built-in Eggdrop command), use \"OPASS <password>\" to set your password."
+		print -help $nick "Use \"OPASS <old pass> <new pass>\" to change your password."
+		print -help $nick "Use \"OPASS CLEAR\" to remove your password."
+		print -help $nick "The password is encrypted via the bot's resident encryption module (by default, blowfish) and therefore protected\; it can NOT be recovered."
+		print -help $nick "Note: the SB6 command \"OLOGIN\" has been deprecated\; use the -OLOGIN flag with LOGIN to do an owner login."
+		print -help $nick "Note: see the PASSHINT command to store a \"password hint\" for your OPASS as well as your regular password."
+		return
+	}
+
+	if [string eq -nocase CLEAR $1] {
+		if [string eq "" $old] { print -help -short -return $nick "You don't have an OPASS set. Nothing to clear." }
+		if ![string eq $old [encpass [join $2]]] { print -help -short -return $nick "Invalid password." }
+		if ![string eq -nocase CLEAR $3] { print -short -return $nick "Are you \002\037SURE\037\002?! Use \"CLEAR <password> CLEAR\" to convince me." }
+		userinfo set $handle opass ""
+		saveme user
+		print $nick "Your password has been cleared."
+		return
+	}
+	if [isempty 1] { print -help -short -return $nick "To what am I setting your OPASS?" }
+
+	if [isempty 2] {
+		# Just setting your OPASS
+		if ![string eq "" $old] { print -help -short -return $nick "You have an OPASS set. Use the change-opass syntax to change it to something new." }
+		userinfo set $handle opass [encpass [join $1]]
+		saveme user
+		print -private $nick "Your password has been set."
+		return
+	} {
+		# Changing your OPASS
+		if [string eq "" $old] { print -help -short -return $nick "You don't have an OPASS set. Use the set-opass syntax to set it." }
+		if ![string eq $old [encpass [join $1]]] { print -help -short -return $nick "Invalid password." }
+		userinfo set $handle opass [encpass [join $2]]
+		saveme user
+		print -private $nick "Your password has been changed."
+		return
+	}
+	return
+}
+
 proc @passhint { nick host handle chan arg } {
 	sb7 parseflags -oauth
 	set base HINT
@@ -294,5 +349,4 @@ proc @passhint { nick host handle chan arg } {
 
 bind BOT - XLOGIN @botnet:xlogin
 bind BOT - OLOGIN @botnet:ologin
-
 

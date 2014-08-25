@@ -7,7 +7,13 @@ proc @say { nick host handle chan arg } {
 	sb7 parseflags
 		switch -exact -- [string tolower $1] {
 
-			help {}
+			help {
+				print -help $nick "\[SAY\]:"
+				print -help $nick "Syntax: $::botnick SAY HELP"
+				print -help $nick "Syntax: $::botnick SAY <message>"
+				print -help $nick "Makes $::botnick say something to the channel."
+				return
+			}
 
 			hint { print -help -short -return $nick "No HINTs available for this command." }
 
@@ -16,5 +22,4 @@ proc @say { nick host handle chan arg } {
 	}
 	return
 }
-
 

@@ -485,7 +485,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# Fixing a forever-old problem: if common hostmask, is this an authed
 	# user (so we can figure out which handle to assign)? Since all PROCs
 	# draw the $HANDLE from here (and WHOIS checks by nick first), we can
-	# fix this in one place: here.
+	# fix this in one place: here
 
 	set h [sb7 auth find nick $nick]
 	if [notempty h] { set handle $h }
@@ -524,10 +524,11 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 #putlog [effects DISPATCH:12 11,12 bold]
 	# User logged in?
+	set access [access higher $handle $chan]
 	if { $cmdinfo(level) > 0 } {
 		if { [lsearch -exact $cmdinfo(flags) -ok:logout] == -1 } {
 			if ![is authed $handle $nick $host] { print -private -error $nick "\[SB7\] Who are you?" ; return 0 }
-			if { $cmdinfo(level) > [access higher $handle $chan] } { print -private -error $nick "\[SB7\] You don't have access to the [string toupper $cmd] command." ; return 0 }
+			if { $cmdinfo(level) > $access } { print -private -error $nick "\[SB7\] You don't have access to the [string toupper $cmd] command." ; return 0 }
 		}
 	}
 
@@ -838,10 +839,10 @@ proc sb7:setup args {
 		empty userlevels
 	}
 
-	# Process values if necessary
-	# Should we BLANK all binds prior to re-assigning (given the advice in
-	# SB7.TCL about changing these value)?
-	## For now: yes
+	## Process values if necessary
+	## Should we BLANK all binds prior to re-assigning (given the advice in
+	## SB7.TCL about changing these value)?
+	# For now: yes
 	foreach a [binds sb7:dispatch] { unbind [lindex $a 0] [lindex $a 1] [lindex $a 2] [lindex $a 4] }
 
 	# Let's clean up the shortcut variables here
@@ -1764,7 +1765,12 @@ proc boolean args {
 	istrue $value
 }
 
-proc escape text { regsub -all -- {\\|\{|\}|\[|\]|\$|\;|\"} $text {\\&} }
+proc escape { text { extra "" } } { 
+	regsub -all -- {\\|\{|\}|\[|\]|\$|\;|\"} $text {\\&} text
+	if [notempty extra] { regsub -all -- "\\[join [split $extra ""] |\\]" $text {\\&} text }
+	return $text
+}
+
 proc unescape text {
 	set error [ catch { set unescape [join $text] } crap ]
 	if !$error { return $unescape }
@@ -2741,6 +2747,8 @@ proc nph { nick handle { join " " } { open "(" } { close ")" } } {
 }
 
 proc access args {
+	set handle [lindex $args 1] ; # Most sections will use this
+	set default [expr [validuser $handle] ? 0 : -1]
 	set cmd [lindex $args 0]
 	switch -exact -- [string tolower $cmd] {
 
@@ -2757,7 +2765,16 @@ proc access args {
 			lassign $args - handle chan
 			if [isempty chan] {
 				# Global
-				if [ispermowner $handle] { userinfo set $handle USERLEVEL:GLOBAL 1000 ; return 1000 }
+				if [ispermowner $handle] { 
+					set level 1000
+					regsub -all -- {,| [ ]+} $::owner " " o
+					if { [llength $o] > 1 } {
+						if [string eq -nocase $handle [lindex $o 0]] { set level 1001 }
+						# Either way (: if { [lsearch -exact [string tolower $o] [string tolower $handle]] == 0 } { set level 1001 }
+					}
+					userinfo set $handle USERLEVEL:GLOBAL $level
+					return $level
+				}
 				if [isnum -integer [string eq "" [userinfo get $handle USERLEVEL:GLOBAL]]] return
 				foreach { flag value } [list n 900 m 800 t 700 o 600 l 575 v 550 f 501] {
 					if [userflag check $handle $flag] { userinfo set $handle USERLEVEL:GLOBAL $value ; return $value }
@@ -2796,8 +2813,9 @@ proc access args {
 		}
 
 		compare {
-			flags -simple [lrange $args 1 end] -equal:ok text flags
+			flags -simple [lrange $args 1 end] [list -equal:ok -self:ok] text flags
 			lassign $text handle1 handle2 chan
+			if [string eq -nocase $handle1 $handle2] { if [validflag -equal:ok -self:ok] { return 1 } }
 			if [isempty chan] { set chan global }
 		
 			# User 1
@@ -2825,9 +2843,9 @@ proc access args {
 			lassign [lrange $args 1 end] handle chan
 			if ![validuser $handle] { return -1 }
 			if [isempty chan] {
-				return [access get $handle]
+				return [none [access get $handle] $default]
 			} {
-				return [lindex [lsort -decreasing -integer [list [access get $handle] [access get $handle $chan]]] 0]
+				return [lindex [lsort -decreasing -integer [list [none [access get $handle] $default] [none [access get $handle $chan] $default]]] 0]
 			}
 		}
 
@@ -3570,7 +3588,7 @@ proc format:date args {
 			regsub -all -- %Z $format GMT format
 		}
 		set bot [gmt:format decimal [get bot:gmt]]
--		set time [expr $time + ( ( $offset - $bot ) * 3600 )]
+		set time [expr $time + ( ( $offset - $bot ) * 3600 )]
 	} {
 		set format $default
 	}
@@ -4046,6 +4064,7 @@ proc maskformat args {
 }
 
 
+# Move to within IS?
 proc inrange { range value { floor -1 } { ceiling 9999 } } {
 	set a [getrange $range -2147483648 2147483647]
 	if [string eq $a -1] {
@@ -4059,6 +4078,7 @@ proc inrange { range value { floor -1 } { ceiling 9999 } } {
 	expr ( ( $gr0 <= $value ) && ( $value <= $gr1 ) ) ? 1 : 0
 }
 
+# Move to within GET?
 proc getrange { range { floor -1 } { ceiling 1001 } } {
 	switch -regexp -- $range {
 		{^[\=]?[\-]?\d+$} { set range [string trimleft $range =] ; set 0 $range ; set 1 $range }
@@ -4328,9 +4348,43 @@ proc get { cmd args } {
 
 					end* { if [regexp -nocase -- {^END(\-\d+)?$} $element] { lappend final [lindex $numbers $element] } }
 
-					first* { if [string eq -nocase FIRST $element] { lappend final [lindex $numbers 0] } { regexp -nocase -- {FIRST[ \+\-]?(\d+)} $element - range ; if { $range > 0 } { for { set index 0 } { $index < $range } { incr index } { lappend final [lindex $numbers $index] } } } }
+					first* { 
+						if [string eq -nocase FIRST $element] {
+							if { $main_index == ( [llength $list] - 1 ) } {
+								lappend final [lindex $numbers 0]
+							} {
+								incr main_index
+								set range [string trim [string tolower [lindex $list $main_index]]]
+								set final [concat $final [lrange $numbers 0 [expr $range - 1]]]
+							}
+						} {
+							regexp -nocase -- {FIRST[ \+\-]?(\d+)} $element - range
+							if { $range > 0 } {
+								for { set index 0 } { $index < $range } { incr index } { 
+									lappend final [lindex $numbers $index] 
+								} 
+							} 
+						} 
+					}
 
-					last* { if [string eq -nocase LAST $element] { lappend final [lindex $numbers end] } { regexp -nocase -- {LAST[ \+\-]?(\d+)} $element - range ; if { $range > 0 } { for { set index 1 } { $index <= $range } { incr index } { lappend final [lindex $numbers [expr $ll - $index]] } } } }
+					last* { 
+						if [string eq -nocase LAST $element] {
+							if { $main_index == ( [llength $list] - 1 ) } { 
+								lappend final [lindex $numbers end] 
+							} {
+								incr main_index
+								set range [string trim [string tolower [lindex $list $main_index]]]
+								set final [concat $final [lrange $numbers end-[expr $range - 1] end]]
+							}
+						} {
+							regexp -nocase -- {LAST[ \+\-]?(\d+)} $element - range
+							if { $range > 0 } { 
+								for { set index 1 } { $index <= $range } { incr index } { 
+									lappend final [lindex $numbers [expr $ll - $index]] 
+								} 
+							}							
+						} 
+					}
 
 					default {
 						# Digit(s) , or , range of numbers
@@ -4883,99 +4937,6 @@ proc flags args { # Have to allow several variations in order to unite everythin
 
 	?
 }
-proc flags args { # Have to allow several variations in order to unite everything
-	# Be careful with debugs: DATA GET & DATA ARRAY GET/VALUE (and others)
-	# call for a flag check, causing an endless loop.
-	# MSGHOME / DEBUG also checks for colours (which calls DATA GET* also).
-
-	# { text validflags { var_text "" } { var_flags "" } }
-	# Options: -simple -params -force
-
-	flags:simple $args [list -simple -params -force] args flags
-	# Default to: -SIMPLE
-	if [isempty flags] { set flags -simple }
-
-	if [validflag -simple] {
-		lassign $args text valid var_text var_flags
-		if [notempty var_text] { upvar 1 $var_text new_text }
-		if [notempty var_flags] { upvar 1 $var_flags new_flags }
-		if [isempty valid] {
-			empty new_flags
-			set new_text $text
-		} {
-			flags:simple $text $valid new_text new_flags
-		}
-		return [list $new_text $new_flags]
-	}
-
-	if [validflag -params] {
-		# Note: flag params CAN BE STACKED! (:
-		# "-flag1 text -flag2 blah -flag1 text2" will return
-		# -flag1 {test test2} -flag2 blah
-		# Whether or not this was intentional, I DON'T CARE!! (: (: (:
-
-		# Example: flags -params "-flag0 -flag1 Text -flag5 {1 2 3 4 5} This is a sentence." [list -flag0 0 -flag1 1 -flag2 2 -flag5 5] text flags
-		# The assigned variable (var_flags) will return an array:
-		# $TEXT: this is a sentence.
-		# $FLAGS[]: -flag0 {} flag1 Text -flag5 {1 2 3 4 5}
-		# Any flags not used will be UNSET (not set) in the $FLAGS[] variable.
-
-		# To override this and set blank values to unused flags, use the -force! (:
-		# Zero-parameter flags will be forced to a value of "1" ($BLANK)
-		# Example: flags -params "-flag0 -flag1 Text -flag5 {1 2 3 4 5} This is a sentence." [list -flag0 0 -flag1 1 -flag2 2 -flag5 5] text flags
-		# The assigned variable (var_flags) will return an array:
-		# $TEXT: this is a sentence.
-		# $FLAGS[]: -flag0 1 flag1 Text -flag2 {} -flag5 {1 2 3 4 5}
-
-		set blank 1
-		lassign $args text array var_text var_flags
-
-		array set params ""
-		foreach { a b } $array {
-			if ![left $a 1 -] { prepend a - }
-			set params($a) $b
-		}
-
-		# Sanity check!
-		foreach { a b } [array get params] {
-			if ![isnum -integer $b] { error "\[FLAGS -PARAMS\] Illegal array format: flags must be arrayed to how many arguments each will take: \[LIST -flag0 0 -flag1 1 -flag2 2\] would allow: -flag0 -flag1 text -flag2 test1 test2 -- This is a sentence." }
-		}
-
-		emptyarray processed
-
-		while { [notempty text] } {
-			set flag [lindex $text 0]
-			set text [lreplace $text 0 0]
-			if [string eq $flag --] break
-	
-			set um [uniquematch [array names params] $flag]
-
-			if [isempty um] {
-				lprepend text $flag; # Put it back!
-				break
-			}
-
-			if [isnull processed($um)] { empty processed($um) }
-			set skip $params($um)
-			if $skip {
-				for { zero pass } { $pass < $skip } { incr pass } {
-					set worf [lindex $text 0]
-					if [left $worf 1 -] break; # Don't swallow the next flag; process it! 
-					lappend processed($um) $worf
-					set text [lreplace $text 0 0]
-				}
-			} {
-				lappend processed($um) $um
-			}
-		}
-
-		if [notempty var_text] { upvar 1 $var_text local_text ; set local_text $text }
-		if [notempty var_flags] { upvar 1 $var_flags local_flags ; array set local_flags [array get processed] }
-		return [list $text [array get processed]]
-	}
-
-	?
-}
 
 proc flags:simple { list valid { var_text "" } { var_flags "" } { flags2variables false } } {
 	# Convert this to $ARGS: [-variables] {list} {valid} {var_text} {var_flags}
@@ -5280,6 +5241,8 @@ interp alias {} formatdate {} format:date
 interp alias {} format:time {} format:date
 interp alias {} % {} percent
 interp alias {} userflags {} userflag
+interp alias {} getflags {} sb7 parseflags
+interp alias {} FLAGS {} sb7 parseflags ; # Case sensitive!
 
 # --- Deprecated commands ---
 
@@ -5363,4 +5326,5 @@ utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
 sb7:setup ; # Last thing to be executed!
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data get @VERSION] (by Mai \"Domino\" Mizuno) loaded"
+
 

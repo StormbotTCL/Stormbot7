@@ -5,7 +5,7 @@ sb7 register global [concat [data array value @CONFIG global] [data array value 
 proc @config { nick host handle chan arg } {
 	set valid_global [list mute color burst pubcmd group rank shortcut debug binds]
 	set valid_chan   [list mute color]
-	set valid_abbr   [list shortcut {sc} binds bind]
+	set valid_abbr   [list shortcut {sc} binds bind pubcmd pc]
 
 	sb7 setvars -global
 
@@ -18,8 +18,12 @@ proc @config { nick host handle chan arg } {
 	}
 	lappend valid help list info hint
 	set option $1l
-	foreach { a b } $valid_abbr { if { [lsearch -exact [string tolower $b] [string tolower $option]] != -1 } { set option $a } }
-	if { [lsearch -exact [string tolower $valid] $option] == -1 } { print -return -short -help $nick "Illegal CONFIG option: [string toupper $option]" }
+
+	## 2014-08-24 14:00 -0700: Shall we just dispense with the abbreviation check, and let SWITCH handle that?
+	## (And let DEFAULT deal with errors, leaving $VALID just to make listing options easier?)
+	## (Yes, let's do that. DEFAULT switch option changed accordingly.)
+	#foreach { a b } $valid_abbr { if { [lsearch -exact [string tolower $b] [string tolower $option]] != -1 } { set option $a } }
+	#if { [lsearch -exact [string tolower $valid] $option] == -1 } { print -return -short -help $nick "Illegal CONFIG option: [string toupper $option]" }
 
 	# File each option by type: this will commonize syntax checking
 	array set types    [list]
@@ -99,7 +103,7 @@ proc @config { nick host handle chan arg } {
 		info {
 			print -short $nick "Available configuration settings & values:"
 			set max [get longest $valid]
-			foreach a [lsort -uni -inc -dict $valid] {
+			foreach a [lsort -uni -inc -dict [none [ldestroy -not -mult -glob -all -nocase $valid $2e] $valid]] {
 				set data [data get $base $a]
 				print $nick "[format %${max}s $a]: [iff [notempty data] $data <none>]"
 			}
@@ -118,7 +122,7 @@ proc @config { nick host handle chan arg } {
 			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -boolean $base $1]" }
 			set value $2
 			if ![validchan $value] { print -return -help $nick "\[CONFIG\] Illegal channel: $value" }
-			data set $base $1 $value
+			data set $base home $value
 			saveme data
 			print -return $nick "\[CONFIG\] Updated setting: $1u (${value})"
 		}
@@ -126,7 +130,7 @@ proc @config { nick host handle chan arg } {
 		group { # option: text
 			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -boolean $base $1]" }
 			set value $2e
-			data set $base $1 $value
+			data set $base group $value
 			saveme data
 			print -return $nick "\[CONFIG\] Updated setting: $1u (${value})"
 		}
@@ -134,8 +138,8 @@ proc @config { nick host handle chan arg } {
 		pc - pubcmd {
 			lassign [data get CONFIG PUBCMD] offon pubcmd
 			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: $pubcmd ([boolean -on $offon])" }
-			if [istrue -strict $2] { set offon true } elseif [isfalse -strict $2] { set offon false } else { set pubcmd $2 }
-			data set $base $1 [list $offon $pubcmd]
+			if [istrue $2] { set offon true } elseif [isfalse $2] { set offon false } else { set pubcmd $2 }
+			data set $base pubcmd [list $offon $pubcmd]
 			saveme data
 			print -return $nick "\[CONFIG\] Updated setting: $1u (${offon}: $pubcmd)"
 		}
@@ -158,18 +162,14 @@ proc @config { nick host handle chan arg } {
 					if ![info exists bindflags($3l)] { print -return -help -header $nick "Unknown level: $3u (valid options: all, global, &, owner)" }
 					foreach a $4e {
 						data array lappend $base shortcut:$3 $a
-						if [data get -boolean $base bind:pub] { bind pub $bindflags($3l) $a sb7:dispatch }
-						if [data get -boolean $base bind:not] { bind notc $bindflags($3l) * sb7:dispatch:not }
-						foreach cmd [sb7 command list] {
-							if [data get -boolean $base bind:msg] { sb7:bind rename $cmd msg ; bind msg $bindflags($3l) $a sb7:dispatch:msg }
-							if [data get -boolean $base bind:dcc] { sb7:bind rename $cmd msg ; bind dcc $bindflags($3l) $a sb7:dispatch:dcc }
-						}
+						if [data get -boolean $base bind:pub] { bind pub $bindflags($3l) [join $a] sb7:dispatch }
 					}
 					saveme data
-					print -return $nick "Added binds: [ajl $4e]"
+					print -short $nick "Added binds: [ajl $4e]"
+					return
 				}
 
-				del {
+				del - delete {
 					if [string eq "" $3] { print -return -help -short $nick "What shortcut(s) am I removing?" }
 					array set bindflags [list all - global vlo owner n]
 					set total ""
@@ -191,7 +191,20 @@ proc @config { nick host handle chan arg } {
 						data array set $base shortcut:$type $binds
 					}
 					saveme data
-					print -return -short $nick "Removed binds: $total"
+
+					# Collect default binds
+					zero killed
+					foreach a $3e {
+						foreach bind [binds [escape [join $a] ?*]] {
+							lassign $bind type flags trigger count proc
+							unbind $type $flags $trigger $proc
+							incr killed
+						}
+					}
+
+					print -short $nick "Removed binds: $total"
+					if $killed { print -short $nick "Killed an [iff { $killed > 1 } "[comma $killed] "]additional default [plural bind $killed]." }
+					return
 				}
 
 				clear {
@@ -255,15 +268,9 @@ proc @config { nick host handle chan arg } {
 			#
 		}
 
-		default {
-			print -help $nick "\[CONFIG\] Syntax change:"
-			print -help $nick "To retrieve values: $::botnick CONFIG[iff [notempty flags] " $flags" ] GET $1"
-			print -help $nick "To set new values: $::botnick CONFIG[iff [notempty flags] " $flags" ] SET $1 $2e"
-			return
-		}
+		default { print -help -return $nick "Unknown CONFIG option: $1" }
 
 	}
 	?
 }
-
 

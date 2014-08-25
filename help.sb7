@@ -1,4 +1,5 @@
 sb7 command add HELP -1 -locklevel -core ?
+sb7 command add HINT -1 -locklevel -core ?
 
 proc @help { nick host handle chan arg } {
 	sb7 parseflags 
@@ -18,13 +19,14 @@ proc @help { nick host handle chan arg } {
 		print -help $nick "To see all the commands available to a given access level, do: $::botnick HELP <level range> (\"level range\" refers to a specific level like \"=100\" or a range like \"200-500\")"
 		print -help $nick "Some commands have an additional option: \"HINT\" (for example: some commands have changed syntax since SB3 / SB4 / SB5 / SB6\; \"HINT\" will show you how it is different in SB7.)"
 		print -help $nick "Example: /msg $::botnick LOGIN HINT"
-		print -help $nick "The first commands you will ever need to know (when building me up) are: PASS, LOGIN, HELP, and ADDUSER."
+		print -help $nick "The first commands you will ever need to know (when building me up) are: PASS, LOGIN, HELP, and ADDUSER. For my permanent owner, also look up: OPASS"
 		return
 	}
 
-	if { [string eq -nocase LOGIN $1] || [string eq -nocase AUTH $1] } {
+	# Work for all commands, not just LOGIN-related
+	if { ( [string eq -nocase LOGIN $1] || [string eq -nocase AUTH $1] ) || [sb7 command check $1] } {
 		# print info re: new LOGIN format
-		[sb7 command get login proc] $nick $host $handle $arg "LOGIN $arg"
+		[sb7 command get $1 proc] $nick $host $handle $arg "$1 help [lreplace $arg 0 1]"
 		return
 	}
 
@@ -46,4 +48,19 @@ proc @help { nick host handle chan arg } {
 	# Parse for individual levels / ranges; loop through and PRINT AJL $LEVELS(LOOP).
 }
 
-
+proc @hint { nick host handle chan arg } {
+	sb7 parseflags 
+	if [isempty 1] {
+		print -help $nick "\[HINT\]:"
+		print -help $nick "Syntax: $::botnick HINT"
+		print -help $nick "Syntax: $::botnick HINT <command>"
+		print -help $nick "Some commands have an additional option: \"HINT\" (for example: some commands have changed syntax since SB3 / SB4 / SB5 / SB6\; \"HINT\" will show you how it is different in SB7.)"
+		print -help $nick "Example: /msg $::botnick \002HINT\002 LOGIN"
+		print -help $nick "Note: HINT will pipe into the individual command, reconfiguring your command as necessary. As such, if you request a HINT from a command that doesn't offer one, you may end up with an unexpected result."
+		print -help $nick "Example: /msg $::botnick SAY \002HINT\002"
+	}
+	# Work for all commands, not just LOGIN-related
+	if [sb7 command check $1] { [sb7 command get $1 proc] $nick $host $handle $arg "$1 hint [lreplace $arg 0 1]"; return }
+	print -help -short $nick "No additional HINT information available."
+	return
+}

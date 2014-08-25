@@ -1,4 +1,3 @@
-
 sb7 command add BOTSEND 700 -none BS
 sb7 register global BOTSEND
 
@@ -10,7 +9,7 @@ proc @botsend { nick host handle chan arg } {
 			print -help $nick "\[BOTSEND\]:"
 			print -help $nick "Syntax: $::botnick BOTSEND HELP"
 			print -help $nick "Syntax: $::botnick BOTSEND HINT"
-			print -help $nick "Syntax: $::botnick BOTSEND SEND \[-NOENCRYPT\] <bot list> \":\" <file list>"
+			print -help $nick "Syntax: $::botnick BOTSEND SEND \[-NOENCRYPT\] <bot list> \": (or \"|\")\" <file list>"
 			print -help $nick "Syntax: $::botnick BOTSEND STATUS"
 			print -help $nick "Syntax: $::botnick BOTSEND SHIFT \[wildcard\]"
 			print -help $nick "Syntax: $::botnick BOTSEND SET <option> \[value\]"
@@ -150,7 +149,7 @@ proc @botsend { nick host handle chan arg } {
 
 			flags:simple $2e [list -noencryption] data flags
 			if { [llength $data] == 2 } { set data [linsert $data 1 :] }
-			lassign [split $data :] bots files
+			lassign [split $data |:] bots files
 
 #%# Is file already being sent?
 
@@ -444,9 +443,18 @@ proc @botsend:complete { bot cmd id } {
 	set elapsed [expr $now - $time]
 	set elapsed_milli [expr abs( $now_milli - $milli )]
 #putlog "\[@BOTSEND:COMPLETE\] SIZE($size):NOW($now):NOW_MILLI($now_milli):ELAPSED($elapsed):ELAPSED_MILLI($elapsed_milli)"
-	if { $elapsed_milli > 1000 } { set elapsed_milli [expr $elapsed_milli / 1000.0] ; set word seconds } { set word milliseconds }
+	if { $elapsed_milli > 1000 } { 
+		set elapsed_milli [expr $elapsed_milli / 1000.0]
+		set word seconds
+		set abbr s
+		set factor .001 ; # Tested ok
+	} { 
+		set word milliseconds
+		set abbr ms
+		set factor 1
+	}
 #putlog "\[@BOTSEND:COMPLETE\] ELAPSED_MILLI($elapsed_milli):WORD($word)"
-	print -home "\[BOTSEND\] Transfers complete: \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma $elapsed_milli] $word\037\002"
+	print -home "\[BOTSEND\] Transfers complete: \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma $elapsed_milli] $word\037\002 ([format %.1f [expr (${size}.0 / $elapsed_milli ) * $factor ]] KiB/s)"
 	return
 }
 
@@ -470,5 +478,4 @@ bind bot - botsend:receive @botsend:receive
 bind bot - botsend:complete @botsend:complete
 
 @botsend:bootstrap
-
 

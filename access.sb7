@@ -4,7 +4,7 @@ sb7 command add MODUSER  400 -none MU
 sb7 command add REMUSER  400 -none RU
 sb7 command add USERLIST   1 -none UL
 sb7 command add ADMIN    501 -none ADM
-sb7 command add WHO	 100 -none
+sb7 command add WHO      100 -none
 sb7 command add WHOIS      1 -none WI
 sb7 command add WHOAMI    -1 -none WAI
 sb7 command add PROTECT  501 -none
@@ -20,7 +20,7 @@ proc @userlist { nick host handle chan arg } { print -help -short -return $nick 
 proc @access { nick host handle chan arg } {
 	# This will be the all-encompassing ACCESS controller
 
-	sb7 setvars -global -bot -short -none; # Other flags will be checked by each sub-routine
+	sb7 setvars -global -bot -short; # Other flags will be checked by each sub-routine
 	if [isempty 1] { print -help -return -short $nick "Missing option" }
 
 	set global [validflag -global]
@@ -33,8 +33,8 @@ proc @access { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick ACCESS HELP"
 			print -help $nick "Syntax: $::botnick ACCESS ADD <level> <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS ADD -GLOBAL <admin level> <list of nicks>"
-			print -help $nick "Syntax: $::botnick ACCESS ADD -BOT <botnick> <address> <bot port> \[user port\]"
-			print -help $nick "Syntax: $::botnick ACCESS MOD <level> <list of nicks>"
+			print -help $nick "Syntax: $::botnick ACCESS ADD -BOT <botnick> <address> <bot port>"
+			print -help $nick "Syntax: $::botnick ACCESS MOD -GLOBAL <level> <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS MOD -GLOBAL <admin level> <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS DEL <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS DEL -GLOBAL <list of nicks>"
@@ -62,7 +62,7 @@ proc @access { nick host handle chan arg } {
 			print -help $nick "ADDUSER -> $::botnick ACCESS ADD <level> <list of users>"
 			print -help $nick "MODUSER -> $::botnick ACCESS MOD <level> <list of users>"
 			print -help $nick "REMUSER -> $::botnick ACCESS DEL <list of users>"
-			print -help $nick "REMUSER -GLOBAL -> $::botnick ACCESS -global DEL <list of users>"
+			print -help $nick "REMUSER -GLOBAL -> $::botnick ACCESS DEL -global <list of users>"
 			print -help $nick "USERLIST -> $::botnick ACCESS LIST \[level / range\]"
 			print -help $nick ""
 			print -help $nick "When specifying a user (or list of users), ACCESS will accept:"
@@ -78,28 +78,128 @@ proc @access { nick host handle chan arg } {
 			return
 		}
 
-		add {
+		add - adduser {
 			# SB3/SB4/SB5/SB6:ADDUSER
+			flags:simple [lrange $arg 2 end] [list -global -bot] text flags
+			set users [lassign $text level]
+			if [validflag -bot] { set level 1 }
+			if [validflag -global] { 
+				if ![access check 700 $handle] { print -short -return $nick "You don't have access to use the -GLOBAL flag." } 
+				set target global
+				set lower 501
+				set limit 999
+				if ![access check $limit $handle] { set limit [expr [access get $handle] - 1] }
+			} {
+				if ![access check 400 $handle] { print -short -return $nick "You don't have access to add users. Ask a channel master to add users to this channel." } 
+				set target $chan
+				set lower 1
+				set limit 500
+				if ![access check $limit $handle $chan] { set limit [expr [access get $handle $chan] - 1] }
+			}
+			if { $level < $lower } { print -short -return $nick "You can only add users to level $lower or above." }
+			if { $level > $limit } { print -short -return $nick "You can only add users to level $limit or below." }
+			array set status [list ok "" access "" moduser "" onchan "" self ""]
+			if [validflag -bot] { lassign $text users address port }
+			foreach user $users {
+				set user [join $user]
+				lassign:array adduser [whois $user $handle] online nick host handle chan
+				if [string eq -nocase $handle $adduser(handle)] { lappend status(self) $user ; continue }
+				if ![access compare $handle $adduser(handle)] { lappend status(access) $user ; continue }
+				if [none [access get $adduser(handle) $chan] 0] { lappend status(moduser) $user ; continue }
+				if [validuser $adduser(handle)] {
+					lappend status(ok) [nph $adduser(nick) $adduser(handle)]
+				} {
+					# We need to add a new person
+					# At this point, s/he must be on channel to capture a host
+					if ![onchan $user $chan] { lappend status(notonchan) $user ; continue }
+					if [validflag -bot] {
+						addbot $user $address
+						setuser $user hosts ${user}![getchanhost $user $chan]
+					} {
+						adduser $user [maskhost [getchanhost $user $chan]]
+					}
+					set adduser(nick) $user
+					set adduser(handle) $user
+					lappend status(ok) $user
+				}
+				userinfo set $adduser(handle) access:$target $level
+				# Determine flags
+				foreach entry [data get userlevels] {
+					lassign $entry name low range flagset group
+					if [inrange $range $level] {
+						set f [split $flagset |]
+						if [validflag -global] {
+							chattr $adduser(handle) -abcdefghijklmnopqrstuvwxyzNM
+							chattr $adduser(handle) +[lindex $f 0]
+						} {
+							chattr $adduser(handle) |-abcdefghijklmnopqrstuvwxyzNM $chan
+							chattr $adduser(handle) |+[lindex $f 1] $chan
+						}
+						break
+					}
+				}
+				lappend status(ok) $user
+			}
+			if [notempty status(self)] { saveme user ; print -short $nick "Unable to handle mirrors (can't add yourself!): [ajl $status(self)]" }
+			if [notempty status(ok)] { saveme user ; print -short $nick "Added users: [ajl $status(ok)]" }
+			if [notempty status(moduser)] { saveme user ; print -short $nick "Failed (have access\; use ACCESS MOD): [ajl $status(moduser)]" }
+			if [notempty status(access)] { saveme user ; print -short $nick "Failed (insufficient access): [ajl $status(access)]" }
+			if [notempty status(onchan)] { saveme user ; print -short $nick "Failed (unknown user, not in channel): [ajl $status(onchan)]" }
+			return
 		}
 
-		ed - edit - mod {
+		ed - edit - mod - moduser {
 			# SB3/SB4/SB5/SB6:MODUSER
-			set me [access get $handle $chan]
-
-			# If -GLOBAL, access 800+? If not, access 400+?
-
-			if [validflag -global] { set me [access get $handle] }
-			set new [process level $2]
-			if [isempty new] { print -help -short -return $nick "No such user level: $2" }
-debug new
-			foreach user $2e {
-				# User valid?
-				# User already have access: (ignore this, presume "0", do the MODUSER anyway)
-				# user is above target?
-				# target level >= my own level?
-				# target to 501+?
-				# -- Do MODUSER
+			flags:simple [lrange $arg 2 end] [list -global] text flags
+			set users [lassign $text level]
+			if ![isnum -integer $level] { print -short -return $nick "Syntax: ACCESS MODUSER <integer level> <list of users>" }
+			if [validflag -global] { 
+				if ![access check 700 $handle] { print -short -return $nick "You don't have access to use the -GLOBAL flag." } 
+				set target global
+				set lower 501
+				set limit 999
+				if ![access check $limit $handle] { set limit [expr [access get $handle] - 1] }
+			} {
+				if ![access check 400 $handle] { print -short -return $nick "You don't have access to add users. Ask a channel master to add users to this channel." } 
+				set target $chan
+				set lower 1
+				set limit 500
+				if ![access check $limit $handle $chan] { set limit [expr [access get $handle $chan] - 1] }
 			}
+
+			if { $level < $lower } { print -short -return $nick "You can only modify users to level $lower or above." }
+			if { $level > $limit } { print -short -return $nick "You can only modify users to level $limit or below." }
+			array set status [list ok "" access "" unknown "" adduser "" self ""]
+			foreach user $users {
+				lassign:array moduser [whois [join $user] $handle] online nick host handle chan
+				if [string eq -nocase $handle $moduser(handle)] { lappend status(self) $user ; continue }
+				if ![validuser $moduser(handle)] { lappend status(unknown) $user ; continue }
+				if ![none [access get $moduser(handle) $chan] 0] { lappend status(adduser) $user ; continue }
+				if ![access compare $handle $moduser(handle)] { lappend status(access) $user ; continue }
+				userinfo set $moduser(handle) access:$target $level
+				# Determine flags
+				foreach entry [data get userlevels] {
+					lassign $entry name low range flagset group
+					if [inrange $range $level] {
+						set f [split $flagset |]
+						if [validflag -global] {
+							chattr $moduser(handle) -abcdefghijklmnopqrstuvwxyzNM
+							chattr $moduser(handle) +[lindex $f 0]
+						} {
+							chattr $moduser(handle) |-abcdefghijklmnopqrstuvwxyzNM $chan
+							chattr $moduser(handle) |+[lindex $f 1] $chan
+						}
+						break
+					}
+				}
+				lappend status(ok) $user
+			}
+			if [notempty status(self)] { saveme user ; print -short $nick "Unable to handle mirrors (can't modify yourself!): [ajl $status(self)]" }
+			if [notempty status(ok)] { saveme user ; print -short $nick "Modified users (level $level): [ajl $status(ok)]" }
+			if [notempty status(unknown)] { saveme user ; print -short $nick "Failed (unknown user): [ajl $status(unknown)]" }
+			if [notempty status(adduser)] { saveme user ; print -short $nick "Failed (no access\; use ACCESS ADD): [ajl $status(adduser)]" }
+			if [notempty status(access)] { saveme user ; print -short $nick "Failed (insufficient access): [ajl $status(access)]" }
+			return
 		}
 
 		del {
@@ -167,16 +267,15 @@ debug new
 
 		list {
 			# SB3/SB4/SB5/SB6:USERLIST
-
+			set arg [lreplace $arg 1 1]
+			FLAGS -short -none -global
 			# Handle special case first: -NONE
 			if [validflag -none] {
 				empty o
 				foreach user [userlist -b] {
 					zero m
-					foreach channel [channels] {
-						if [access get $user $channel] { one m }
-					}
-					if [access get $user] { one m }
+					foreach channel [channels] { if [none [access get $user $channel] 0] { one m } }
+					if [none [access get $user] 0] { one m }
 					if !$m { lappend o $user }
 				}
 				if [isempty o] { print -short -return $nick "There are no dead (useless) users in the USERLIST. (:" }
@@ -184,19 +283,22 @@ debug new
 				return
 			}
 
-			if [isempty 2] { if [validflag -global] { set range 501-1001 } { set range 0-500 } }
-			if [validflag -global] { set valid 501-1001 } { set valid 1-500 }
-			lassign [split $valid -] r0 r1
-			set checkrange [join [getrange $range $r0 $r1] -]
-			set users [userlist:level $checkrange [iff !$global $chan]]
-			print $nick "\[USERLIST[iff $global " -GLOBAL"]\]"
+			set global [validflag -global]
 			if [validflag -short] {
-				array set temp [list]
-				foreach a $users { lappend temp([access get $a [iff !$global $chan]]) $a }
-				foreach a [lsort -dec -uni [array names temp]] { print $nick "${a}: [ajl $temp($a)]" }
-			} {
-				foreach a [lsort -inc -dict -uni $users] { print $nick "${a}: [access get $a [iff !$global $chan]]" }
+				array set levels [list]
+				foreach user [userlist -b] {
+					if $global { set level [access get $user] } { set level [access get $user $chan] }
+					lappend levels([none $level 0]) $user
+				}
+				foreach a [lsort -real -decreasing -unique [array names levels]] { print $nick "${a}: [ajl $levels($a)]" }
+				return
 			}
+			array set users [list]
+			foreach user [userlist -b] {
+				if $global { set level [access get $user] } { set level [access get $user $chan] }
+				lappend users($user) [none $level 0]
+			}
+			foreach a [lsort -dictionary -increasing -unique [array names users]] { print $nick "${a}: [ajl $users($a)]" }
 			return
 		}
 
@@ -208,26 +310,6 @@ debug new
 
 	}
 	return
-	
-	# Userlevels:
-	unknown,-1,<0,|,unknown user
-	noaccess,0,=0,|,no access
-	chanfriend,1,1-49,|+f,Channel Friend
-	chanvoice,50,50-74,+p|+fv,Channel Voice
-	chanhalfop,75,75-99,+p|+fvl,Channel HalfOp
-	chanop,100,100-299,+p|+fvlo,Channel Op
-	chansuperop,300,300-399,+p|+fvlo,Channel SuperOp
-	chanmaster,400,400-499,+p|+fvlom,Channel Master
-	chanowner,500,=500,+p|+fvlomn,Channel Owner
-	globalfriend,501,501-549,+fp,%GROUP% Helper
-	globalvoice,550,550-574,+vfp,%GROUP% Global Voice
-	globalhalfop,575,575-599,+lvfp,%GROUP% Global HalfOp
-	globalop,600,600-699,+olvfp,%GROUP% Global Op
-	globaltech,700,700-799,+tolvfp,%GROUP% Botnet Technician
-	globalmaster,800,800-899,+mtolvfp,%GROUP% Co-Admin
-	globalowner,900,900-999,+nmtolvfp,%GROUP% Admin
-	botowner,1000,=1000,+jxnmtolvfp,%GROUP% Permanent Bot Owner
-	primaryowner,1001,>1000,+heujxnmtolvfp,%GROUP% Primary Permanent Bot Owner
 }
 
 proc @rank { nick host handle chan arg } {
@@ -916,5 +998,4 @@ catch { unbind dcc m|-  -user *dcc:-user }
 catch {   bind dcc m|- /-user sb7:dcc:-user }
 catch { unbind dcc t|-  -bot  *dcc:-bot  }
 catch {   bind dcc t|- /-bot  sb7:dcc:-bot  }
-
 

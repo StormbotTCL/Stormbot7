@@ -1,3 +1,5 @@
+# MAKE SURE OLD DATA IS PURGED !!!!!
+
 sb7 command add COPYUSER 700 -none CU
 
 proc @copyuser { nick host handle chan arg } {
@@ -91,11 +93,12 @@ debug userlist 1e users
 		if ![access compare $handle $whois_handle] { lappend lower $check ; continue }
 		lappend ok $whois_handle
 	}
+
 	foreach target $targets { 
 		if [islinked $target] {
 			lappend conn $target
 		} {
-			if ![matchattr $target b] { lappend human $bot ; continue }
+			if ![matchattr $target b] { lappend human $target ; continue } ; # lappend human $bot
 			lappend disc $target
 		} 
 	}
@@ -179,9 +182,9 @@ proc @copyuser:receive { bot cmd arg } {
 
 				info:global { setuser $who info $data }
 
-				info:local { setchaninfo $who $extra $data }
+				info:local { setchaninfo $who $data $extra}
 
-				xtra { setuser $who xtra $extra $data }
+				xtra { setuser $who xtra $data $extra }
 
 				default { error "\[@COPYUSER:RECEIVE\] Unknown data type: $type (ID: $id)" }
 
@@ -207,5 +210,4 @@ proc @copyuser:receive { bot cmd arg } {
 # Bootstrap
 
 bind bot - sb7:copyuser:receive @copyuser:receive
-
 
