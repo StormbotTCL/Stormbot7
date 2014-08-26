@@ -78,22 +78,22 @@ if ![info exists sb7(%pre:utimers)  ] { set sb7(%pre:utimers)   [utimers]       
 
 # Ignore this: REHASH -NOSB7 flag check
 if [info exists sb7(@norehash)] {
-     if $sb7(@norehash) {
-          putlog "\[REHASH\] SB7's -NOSB7 flag used: REHASH without script reload ...."
-          unset sb7(@norehash)
-          return 0
-     }
+	if $sb7(@norehash) {
+		putlog "\[REHASH\] SB7's -NOSB7 flag used: REHASH without script reload ...."
+		unset sb7(@norehash)
+		return 0
+	}
 }
 
 if ![info exists sb7(@boot:type)] { set sb7(@boot:type) 0 ; # COLD }
 
 # Ignore this: REHASH -TOTAL flag check
 if [info exists sb7(@rehash:total)] {
-     if $sb7(@rehash:total) {
-          putlog "\[REHASH\] SB7's REHASH -TOTAL flag used: wiping all SB7 data from memory ...."
-          foreach a [array names sb7] { unset sb7($a) }
-          array set sb7 [list @boot:type 1]; # Can't do a REHASH -TOTAL on a cold boot!
-     }
+	if $sb7(@rehash:total) {
+		putlog "\[REHASH\] SB7's REHASH -TOTAL flag used: wiping all SB7 data from memory ...."
+		foreach a [array names sb7] { unset sb7($a) }
+		array set sb7 [list @boot:type 1]; # Can't do a REHASH -TOTAL on a cold boot!
+	}
 }
 
 #############################################################################
@@ -294,15 +294,19 @@ set sb7(@boot_fail_die) true
 # default settings file (sb6_permsettings_renameme.tcl) has been deprecated.
 
 # --- Boot it up! ---
-set sb7(@boot_error) [ catch { uplevel #0 { source scripts/sb7/sb7_tail.tcl } } dammit ]
-if $sb7(@boot_error) {
-     putcmdlog "\[SB7\] Boot up error while loading\n\[SB7\] $dammit"
-     if [info exists sb7(@boot_fail_die)] {
-          if $sb7(@boot_fail_die) { die "\[SB7\] Boot failure: $dammit" }
-          return
-     } {
-          die "\[SB7\] Boot failure: $dammit"
-     }
+set sb7(@fullfile) %SB7:FULLFILE% ; # Boolean (0/1)
+if [string match %*% $sb7(@fullfile)] { set sb7(@fullfile) 0 }
+if !$sb7(@fullfile) {
+	set sb7(@boot_error) [ catch { uplevel #0 { source scripts/sb7/sb7_tail.tcl } } dammit ]
+	if $sb7(@boot_error) {
+		putcmdlog "\[SB7\] Boot up error while loading\n\[SB7\] $dammit"
+		if [info exists sb7(@boot_fail_die)] {
+			if $sb7(@boot_fail_die) { die "\[SB7\] Boot failure: $dammit" }
+			return
+		} {
+			die "\[SB7\] Boot failure: $dammit"
+		}
+	}
 }
 # Error trapped to allow the bot to continue loading without SB7.
 
@@ -315,5 +319,5 @@ if ![info exists sb7(%post:utimers)  ] { set sb7(%post:utimers)   [utimers]     
 
 # --- End: transfer control back to EGGDROP ---
 set sb7(@boot:type) 1 ; # WARM
-#return $sb7(@version) ; # The FULL version will never load due to this ....
+if !$sb7(@fullfile) { return $sb7(@version) } ; # The FULL version will never load due to this ....
 

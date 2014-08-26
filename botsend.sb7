@@ -145,7 +145,7 @@ proc @botsend { nick host handle chan arg } {
 
 		sedn - send {
 			array set status [list ok "" utl "" perm "" botnet "" open ""]
-			array set send [list bots "" files ""]
+			array set send [list bots "" files "" names ""]
 
 			flags:simple $2e [list -noencryption] data flags
 			if { [llength $data] == 2 } { set data [linsert $data 1 :] }
@@ -161,7 +161,12 @@ proc @botsend { nick host handle chan arg } {
 			foreach bot $tempbots { set bot [trim $bot] ; if [islinked $bot] { lappend send(bots) $bot } { lappend status(botnet) $bot } }
 			foreach file $files {
 				set file [sb7 component [trim $file]]
-				if [file exists $file] { lappend send(files) $file } { lappend status(utl) $file }
+				if [file exists $file] { 
+					if [is component $file] { lappend send(names) [sb7 shortname $file] } { lappend send(names) $file }
+					lappend send(files) $file
+				} {
+					lappend status(utl) $file 
+				}
 			}
 			if [notempty status(botnet)] { print -help $nick "\[BOTSEND\] Not part of the botnet: [ajl $status(botnet)]" }
 			if [notempty status(utl)] { print -help $nick "\[BOTSEND\] Unable to locate the following files: [ajl $status(utl)]" }
@@ -201,7 +206,7 @@ proc @botsend { nick host handle chan arg } {
 					putbot $bot [list botsend:receive eof $id [clock seconds] [expr abs([clock clicks -milli])]]
 				}
 			}
-			if [notempty send(bots)] { print $nick "\[BOTSEND\] Sending data to [ajl $send(bots)]: [ajl $send(files)]. Due to the linear nature of botnet data streams, it may take a few moments for each bot to acknowledge the file." }
+			if [notempty send(bots)] { print $nick "\[BOTSEND\] Sending data to [ajl $send(bots)]: [ajl $send(names)]. Due to the linear nature of botnet data streams, it may take a few moments for each bot to acknowledge the file." }
 			if [notempty status(open)] { print $nick "\[BOTSEND\] Failures (unable to open file): [ajl $status(open)]" }
 #debug =DATA([data list @botsend:${id}*])
 			return
@@ -447,11 +452,11 @@ proc @botsend:complete { bot cmd id } {
 		set elapsed_milli [expr $elapsed_milli / 1000.0]
 		set word seconds
 		set abbr s
-		set factor .001 ; # Tested ok
+		set factor .001 ; # Tested OK
 	} { 
 		set word milliseconds
 		set abbr ms
-		set factor 1
+		set factor 1 ; # Tested OK
 	}
 #putlog "\[@BOTSEND:COMPLETE\] ELAPSED_MILLI($elapsed_milli):WORD($word)"
 	print -home "\[BOTSEND\] Transfers complete: \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma $elapsed_milli] $word\037\002 ([format %.1f [expr (${size}.0 / $elapsed_milli ) * $factor ]] KiB/s)"

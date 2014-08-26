@@ -324,7 +324,7 @@ proc @rank { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick RANK HELP"
 			print -help $nick "Syntax: $::botnick RANK"
 			print -help $nick "Syntax: $::botnick RANK \[-Army -Navy -AirForce -CoastGuard -Marines\]"
-			print -help $nick "Syntax: $::botnick RANK \[-Army -Navy -AirForce -CoastGuard -Marines\] LIST"
+			print -help $nick "Syntax: $::botnick RANK LIST \[-Army -Navy -AirForce -CoastGuard -Marines\]"
 			print -help $nick "The RANK command comparatives your access in a given channel (which is overridden by your global level, if applicable) against the United States Armed Forces ranks. By default, USN (United States Navy) ranks are used."
 			print -help $nick "Use the LIST command to display the list of ranks for the given service\; use the flag options to change which service rank list is used."
 			print -help $nick "For those with local (channel-level) access only, enlisted ranks will be used\; for global users, warrant officer or commissioned officer ranks will be used."
@@ -332,16 +332,17 @@ proc @rank { nick host handle chan arg } {
 		}
 
 		list {
-			array set ranks [rank $service list]
+			set arg [lreplace $arg 1 1]
+			sb7 parseflags -navy -coastguard -cg -army -airforce -af -marines
+			set flags [lindex [none $flags -navy] end] ; # Take the last flag only
+			array set ranks [rank $flags list]
 			set max 0
-			foreach rank [array names ranks] {
-				set max [expr ([string length $rank] > $max) ? [string length $rank] : $max]
-			}
-			switch -exact -- [string tolower $service] {
+			foreach rank [array names ranks] { set max [expr ([string length $rank] > $max) ? [string length $rank] : $max] }
+			switch -exact -- [string tolower $flags] {
 				-navy { set name Navy }
-				-coastguard { set name "Coast Guard" }
+				-coastguard - -cg { set name "Coast Guard" }
 				-army { set name Army }
-				-airforce { set name "Air Force" }
+				-airforce - af { set name "Air Force" }
 				-marines { set name Marines }
 			}
 			print $nick "Ranks list (based on the United States ${name}):"
@@ -944,6 +945,7 @@ proc @tokens { nick host handle chan arg } {
 	if [notempty matches] {
 		foreach token $matches {
 			set data [get token $token $chan]
+debug token data
 			if [notempty data] { print $nick "[string toupper $token]: $data" }
 		}
 		return

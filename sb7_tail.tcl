@@ -2297,7 +2297,7 @@ proc lsort:priority { list { priority "" } { last "" } } {
 	#! Removed -DICT flag from LSORT (let user decide if it's needed)
 	set new [lsort -increasing -unique $list]
 	if [notempty priority] { set new [lunique [concat $priority $new]] }
-	if [notempty last] { set new [lunique:last [concat $new $last]] }
+	if [notempty last] { set new [lunique -last [concat $new $last]] }
 	set _sort $new ; # Needed by LSORT:PRIORITY2
 	set list [lsort -uni -inc -command lsort:priority2 $list]
 	return $list
@@ -2480,16 +2480,22 @@ proc lcommon args {
 
 proc lunique args { 
 	# Replaces SB6/NODUP
-	# Replaces SB6/NODUPLAST
-	flags:simple $args [list -nocase -regexp -exact -glob -reverse] list flags
+	# Replaces SB6/NODUP_LAST
+	flags:simple $args [list -nocase -regexp -exact -glob -last -reverse] list flags
 	set list [join $list]
 	set mode exact ; # In THIS situation only, default to "exact" matching mode
 	foreach a [list regexp exact glob] { if [validflag -$a] { set mode $a } }
 	empty lunique
+	if [validflag -last] { set list [lreverse $list] }
 	foreach a $list {
 		if [validflag -nocase] { set m [lsearch -$mode [string tolower $lunique] [string tolower $a]] } { set m [lsearch -$mode $lunique $a] }
 		if { $m == -1 } { lappend lunique $a }
 	}
+
+	# -LAST is the replacement for NODUP_LAST and requires a list reversal at the beginning and again here
+	# -REVERSE is independent of this (a simple reversal). There MIGHT be reason to use both.
+	# Instead of coding a series of IF/THENs, let's just let both survive as-is.
+	if [validflag -last] { set lunique [lreverse $lunique] }
 	if [validflag -reverse] { set lunique [lreverse $lunique] }
 	return $lunique
 }
@@ -2725,6 +2731,13 @@ proc alias args {
 
 	}
 	?
+}
+
+proc validhost { host handle } {
+	if ![validuser $handle] { return 0 }
+	if ![instr $host !] { prepend host *! }
+	foreach h [getuser $handle hosts] { if [string match -nocase $h $host] { return 1 } }
+	return 0
 }
 
 proc userlist:level { { range "1-1001" } { chan "" } } {
@@ -3560,7 +3573,7 @@ if $debug { debug nick handle chan flags output queue type speedflag }
 }
 
 proc format:date args {
-	flags:simple $args -cliptz text flags
+	flags:simple $args [list -gmt -cliptz] text flags
 	lassign $text time handle
 	set default %c
 #	set default "%a %b %d %H:%M:%S %Y %z" ; # ISO compliant (not to ISO-8601!)
@@ -3577,22 +3590,36 @@ proc format:date args {
 		set format "%H:%M"
 	} elseif [validuser $handle] {
 		set format [userinfo get $handle DATETIME]
-		if [isempty format] { set format $default } 
 		set gmt [userinfo get $handle GMT]
 		set tz [userinfo get $handle timezone]
-		if [notempty gmt] {
-			set offset [gmt:format decimal $gmt]
-			regsub -all -- %z $format [gmt:format integer $gmt] format
-			regsub -all -- %Z $format $tz format
+		if [notempty gmt] { set offset [gmt:format decimal $gmt] }
+		if [isempty format] { set format $default } 
+		if [validflag -cliptz] {
+			#regsub -all -- %z|%Z $format " " format
+			regsub -all -- {[ ]?[<\(\[\{ ]?%[zZ][ \}\]\)>]?[ ]?} $format " " format
+			set format [singlespace $format]
 		} {
-			set offset 0 ; # Forcibly force "unknown timezones" to GMT
-			regsub -all -- %z $format +0000 format
-			regsub -all -- %Z $format GMT format
+			if [notempty gmt] {
+				set offset [gmt:format decimal $gmt]
+				regsub -all -- %z $format [gmt:format integer $gmt] format
+				regsub -all -- %Z $format $tz format
+			} {
+				set offset 0 ; # Forcibly force "unknown timezones" to GMT
+				regsub -all -- %z $format +0000 format
+				regsub -all -- %Z $format GMT format
+			}
 		}
 		set bot [gmt:format decimal [get bot:gmt]]
-		set time [expr $time + ( ( $offset - $bot ) * 3600 )]
+		if ![validflag -gmt] { debug == offset bot ; set time [expr $time + ( ( $offset - $bot ) * 3600 )] }
 	} {
 		set format $default
+	}
+
+	# Separately because of unknown user / default mode
+	if [validflag -cliptz] {
+		#regsub -all -- %z|%Z $format " " format
+		regsub -all -- {[ ]?[<\(\[\{ ]?%[zZ][ \}\]\)>]?[ ]?} $format " " format
+		set format [trim [singlespace $format]]
 	}
 	if [instr $format %Q] {# Stardate corrections
 		# Version 2
@@ -3611,7 +3638,9 @@ proc format:date args {
 		set q "CY [expr 4926 + [clock format $time -format %Y]]"
 		regsub %q $format $q format
 	}
-	clock format $time -format $format
+	set gmtflag [boolean -truefalse [validflag -gmt]]
+	if { [validflag -gmt] && [validflag -cliptz] } { append format " +0000" }
+	clock format $time -format $format -gmt $gmtflag
 }
 
 proc using args {
@@ -4546,6 +4575,17 @@ proc is { cmd args } {
 	set args [join $args]
 	switch -exact -- [string tolower $cmd] {
 
+	comp - component {
+			set file [file rootname [file tail [lindex $args 0]]] 
+			if [string eq -nocase SB7 $file] { set file core }
+			if [string eq -nocase CORE [none $file core]] { return [file exists ./scripts/sb7/sb7.tcl] }
+			regsub -nocase -- {^sb7_} $file "" file
+			if [file exists ./scripts/sb7/sb7_${file}.tcl] { return 1 }
+			if [file exists ./scripts/sb7/sb7_${file}.txt] { return 1 }
+			if [file exists ./scripts/sb7/${file}.sb7] { return 1 }
+			return 0
+		}
+
 		`own - `prot - `op - `halfop - `voice { lassign $args nick chan above ; return [chanrank $cmd $nick $chan $above] }
 
 		own - prot - op - halfop - voice { flags:simple $args -above text flags ; lassign $text nick chan ; return [chanrank $cmd $nick $chan [validflag -above]] }
@@ -4910,7 +4950,7 @@ proc flags args { # Have to allow several variations in order to unite everythin
 				for { zero pass } { $pass < $skip } { incr pass } {
 					set worf [lindex $text 0]
 					if [left $worf 1 -] break; # Don't swallow the next flag; process it! 
-					lappend processed($um) $worf
+					if [notempty worf] { lappend processed($um) $worf }
 					set text [lreplace $text 0 0]
 				}
 			} {
