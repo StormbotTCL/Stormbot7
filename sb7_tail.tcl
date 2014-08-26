@@ -3610,7 +3610,7 @@ proc format:date args {
 			}
 		}
 		set bot [gmt:format decimal [get bot:gmt]]
-		if ![validflag -gmt] { debug == offset bot ; set time [expr $time + ( ( $offset - $bot ) * 3600 )] }
+		if ![validflag -gmt] { set time [expr $time + ( ( $offset - $bot ) * 3600 )] }
 	} {
 		set format $default
 	}
