@@ -15,9 +15,12 @@ proc @debug { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick DEBUG HELP"
 			print -help $nick "Syntax: $::botnick DEBUG INFO"
 			print -help $nick "Syntax: $::botnick DEBUG TRIGGERS"
-			print -help $nick "Syntax: $::botnick DEBUG COMMAND <command> (shows you stats on all commands within the given bead)"
+			print -help $nick "Syntax: $::botnick DEBUG COMMAND <command> (shows you internal stats on the command)"
+			print -help $nick ""
 			print -help $nick "Kicks-up information to report to the coder, in case you are having problems and can't find the issue(s) on your own."
 			print -help $nick "Report issues to: chat.bothouse.net - #BotHouse :: If no one is there, paste your DEBUG info to the channel. The channel is ALWAYS logged\; someone will forward the information to a coder. Be sure to include an email address for a reply!"
+			print -help $nick "If using the bug reporting website ( http://Bugs.BotHouse.Net/ ), you'll need to paste this info into the \"additional information\" field."
+			print -help $nick "[effects WARNING up 4,5]: This produces about 30 lines of text!"
 			return 0
 		}
 	
@@ -31,42 +34,77 @@ proc @debug { nick host handle chan arg } {
 			# ----------------------------------------------------------------------
 
 			print $nick "\[DEBUG\]"
-			print $nick "EGGDROP version: [lindex $::version 0], running $::tcl_platform(machine) with $::tcl_platform(os) $::tcl_platform(osVersion) ($::tcl_platform(platform)) \[[info hostname]\] system. I'm currently running from: [pwd], using TCL: $::tcl_patchLevel ( $::tcl_library ). My TCL package library directory is: [info library]"
+			print $nick "Internal nick: $::nick"
+			print $nick "EGGDROP version: [lindex $::version 0], running $::tcl_platform(machine) with $::tcl_platform(os) $::tcl_platform(osVersion) ($::tcl_platform(platform)) \[[info hostname]\] system."
 			print $nick "EGGDROP source modules loaded: [ajl [stl [get first [get first [modules]]]]]"
 			empty nl1 nl2
 			if [info exist ::nicklen] { set nl1 $::nicklen } 
 			if [info exist ::nick-len] { set nl2 ${::nick-len} } 
 			print $nick "EGGDROP user information length variables: \$NICKLEN ([none $nl1 <undefined>]), \$NICK-LEN ([none $nl2 <undefined>]), \$HANDLEN ($::handlen)"
-			print $nick "StormBot.TCL version [data array get @version stormbot] ([format:date [data array get @version timestamp]]) from: [data array get @version distro]"
-			set server ""
-			set servers ""
-			if [info exists ::server] { set server [split $::server :] }
-			if [info exists ::servers] { 
+			catch { bind COW - @test @test } event_error
+			print $nick "Binds: [ajl [trim [regsub -all -nocase -- , [lindex [split $event_error :] 1] ""]]]"
+			print $nick "Can bind to events? [boolean -truefalse [not [catch { bind evnt - @test @test ; unbind evnt - @test @test } ]]]"
+			# Events: (1.8.0): sighup sigterm sigill sigquit save rehash prerehash prerestart logfile loaded userfile-loaded connect-server init-server disconnect-server
+			print $nick ""
+			lassign [split [info patchlevel] .] tclmaj tclmin tclpatch
+			print $nick "TCL: [info patchlevel] (major: $tclmaj - minor: $tclmin - patch level: $tclpatch) from [info library]"
+			print $nick "TCL interactive mode: [boolean -truefalse $::tcl_interactive]"
+			print $nick "TCL floating-point precision: $::tcl_precision"
+			print $nick "TCL package path: $::tcl_pkgPath"
+			print $nick "TCL library path (\$tcl_libPath):"
+			foreach p $::tcl_libPath { print $nick "[space 5]$p" }
+			print $nick ""
+			print $nick "Current working directory: [file normalize [pwd]]"
+			print $nick "Bot files:"
+			mset file_user file_chan file_note <none>
+			foreach a [list user chan note] { if [info exists ::${a}file] { set file_$a [set ::${a}file]} }
+			foreach { a b } [list User user Chan chan Note note] { print $nick "[space 5]${a} file: [set file_$b]" }
+
+			if [info exists ::server] {
+				lassign $::server internal alias
+				if [notempty alias] { set alias " -> \"${alias}\""}
+				lassign [trim [split $internal :]] name port password
+				if [notempty password] { set password " (<password>)" }
+				print $nick "Current server: $name ($port)${password}${alias}"
+				print $nick "[space 5]since: [format:date ${::server-online} $handle] ([datediff [clock seconds] ${::server-online}] ago)"
+				print $nick "[space 5]nick: $::botnick"
+				print $nick "[space 5]altnick: $::altnick"
+				print $nick "[space 5]botnet-nick: ${::botnet-nick}"
+			}
+
+			if [notempty ::servers] {
+				print $nick "Server list:"
 				foreach a $::servers {
-					set s [trim [split $a :]]
-					lappend servers "[trim [lindex $s 0]] ([trim [lindex $s 1]])"
+					lassign $a internal alias
+					if [notempty alias] { set alias " -> \"${alias}\""}
+					lassign [trim [split $internal :]] name port password
+					if [notempty password] { set password " (<password>)" }
+					print $nick "[space 5]Server: $name ($port)${password}${alias}"
 				}
 			}
-			
-			print $nick "Online at [none $server <none> "[lindex $server 0] ([lindex $server 1])"][iff ![string eq "" [lindex $server 2]] " (passworded)"] as \"${::botnick}\" ([lindex [split $::botname !] 1]), \$ALTNICK(${::altnick}), \$BOTNET-NICK(${::botnet-nick}), since [format:date ${::server-online} $handle] ([datediff [clock seconds] ${::server-online}] ago)"
-			print $nick "Server list: [none [join $servers ", "] <none>]"
-			print $nick "Reporing events to: [none $home <nowhere>][iff [data get -boolean config mute] " (currented muted by: CONFIG -GLOBAL MUTE)"]"
+
 			print $nick "My permanent owners: [get owners]"
 			print $nick "My current binds:"
 			array set binds [list]
 			foreach bind [binds sb7:dispatch] { lappend binds([lindex $bind 1]) [lindex $bind 2] }
 			foreach a [lsort -increasing -dictionary [array name binds]] { print $nick "[space 5]BIND([effects $a b]): [ajl $binds($a)]" }
 
+			print $nick "StormBot.TCL version [data array get @version stormbot] ([format:date [data array get @version timestamp]]) from: [data array get @version distro]"
+			print $nick "Data file: [none [data filename] <none>]"
+			print $nick "Reporing events to: [none $home <nowhere>][iff [data get -boolean config mute] " (currented muted by: CONFIG -GLOBAL MUTE)"]"
+
 			# Error checks / command version checks:
+			foreach cmd [list lassign lreverse lrepeat iff] {
+				if [iseggcorecmd $cmd] { set eggorsb7 "[string toupper $cmd] is an Eggdrop core command" } { set eggorsb7 "[string toupper $cmd] is an SB7-created command" }
+				print $nick $eggorsb7
+			}
+
 			set error [ catch { lsearch -cow 1 2 } error_lsearch ]
-			print $nick "LSEARCH options: [lrange [regexp -inline -all -nocase -- {\-[A-Za-z0-9]+} $error_lsearch ] 1 end]"
+			print $nick "LSEARCH options: [lrange [regexp -inline -all -nocase -- {\-[A-Za-z0-9_]+} $error_lsearch ] 1 end]"
 
 			set tests {
 				{{LSEARCH multiflags} {set mode [lindex [lsearch -inline -glob "{ban b} {exempt e} {invite I}" "ban *"] 1]}}
 				{{LSET} {set check [list 0 1 2 3]; lset check 0 *}}
-				{{BIND EVNT CONNECT-SERVER} {bind EVNT - connect-server SB:CRAP} {killbind EVNT - connect-server SB:CRAP}}
-				{{BIND EVNT SIGILL} {bind EVNT - sigill sb7:debugtest:deleteme} {killbind EVNT - sigill sb7:debugtest:deleteme}}
-				{{BIND EVNT SIGTERM} {bind EVNT - sigterm sb7:debugtest:deleteme} {killbind EVNT - sigterm sb7:debugtest:deleteme}}
 				{{FILE NORMALIZE} {set check [file normalize .]}}
 				{{LRANGE END-1} {set check [lrange "1 2 3 4" 0 end-1]}}
 				{{CHANNEL GET INFO FLOOD-CHAN} {set check [channel get [home] flood-chan]}}
@@ -88,8 +126,9 @@ proc @debug { nick host handle chan arg } {
 			print $nick "Passed tests: [ajl $debugcheck(1)]"
 			print $nick "Failed tests: [ajl $debugcheck(0)]"
 
+			print -help $nick ""
 			print -help $nick "Critical variable dump:"
-			set variables "dccsupport default-port use-exempts use-invites ban-time ignore-time exempt-time strict-host [uplevel #0 { concat [info vars tcl_*] } ]"
+			set variables "dccsupport default-port use-exempts use-invites ban-time ignore-time exempt-time strict-host [ldestroy -nocase -all -multiple -exact [uplevel #0 { concat [info vars tcl_*] } ] [list tcl_pkgPath tcl_libPath tcl_library tcl_interactive tcl_precision]]"
 			set tempscalar ""
 			set temparray ""
 			foreach a $variables {
@@ -153,5 +192,4 @@ proc @debug { nick host handle chan arg } {
 		default ?
 	}
 }
-
 
