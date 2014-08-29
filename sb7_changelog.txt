@@ -1,7 +1,14 @@
-# StormBot.TCL Version 7 Changelog -- 2014-08-27 03:34:41 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-08-29 01:15:30 UTC #
 # Version: 7.00.0001 #
 
 Current Working Version:
+2014-08-28 18:10:49 UTC: #132 [tail] Fixed FLAGS -PARAMS (the scan-through for flags always tripped an end-of-phrase and went on to process the apparent flag. Now, will check if the alleged flag is really a valid flag before breaking anything and re-processing)
+2014-08-28 17:58:21 UTC: #131 [distro] Fixed DISTRO CHANGELOG GITLOG (an output command had a typo flag: -hsort, which looks legit, but is supposed to be -SHORT; this would target the output to a non-existent user)
+2014-08-28 17:50:22 UTC: #130 [config & tail] Fixed SB7:SETUP & CONFIG -GLOBAL SHORTCUT ADD (forced all shorts to be added as lowercase; in previous SB versions, case wasn't considered. This actually caused the potential of DUPLICATE(!) binds being created: each of a different case. Found by Demonicpagan)
+2014-08-27 06:40:03 UTC: #129 <no specific files> Fixed DISTRO CHANGELOG GITLOG HELP (updated to show new flag-based format)
+2014-08-27 06:38:46 UTC: #128 <no specific files> Fixed DISTRO CHANGELOG GITLOG (timestamp was getting truncated (50 char limit ... and I thought Twitter @ 140 chars was rough) .... Found by Demonicpagan)
+2014-08-27 06:25:38 UTC: #127 <no specific files> [version] Moved VERSION command into MAINTENANCE bead; deleted version bead
+2014-08-27 06:25:16 UTC: #126 [maintenance] Added VERSION into MAINTENANCE bead
 2014-08-27 02:18:53 UTC: #125 [debug] Upgraded DEBUG INFO (added a bunch of stuff; re-arranged the order to make it more logical, collecting Eggdrop stuff, then TCL stuff, then StormBot.TCL stuff ...)
 2014-08-27 02:17:03 UTC: #124 [debug] Upgraded DEBUG HELP (caveat :)
 2014-08-27 02:16:55 UTC: #123 [debug] Upgraded DEBUG INFO (provided information I would need to debug from website bug reports, if I could not Q&A the user directly)
@@ -16,7 +23,7 @@ Current Working Version:
 2014-08-26 00:06:18 UTC: #114 [login] Upgraded PASSHINT (required your current hostmask matches the user whose PASSHINT you're requesting)
 2014-08-26 00:01:05 UTC: #113 [tail] Added VALIDHOST
 2014-08-25 23:47:00 UTC: #112 [botsend] Fixed BOTSEND SEND (cosmetic: shorten the names of SB7 components in the ''Sending data to ...'' message)
-2014-08-25 23:42:11 UTC: #111 [core & distro] Fixed CORE & DISTRO (sb7.tcl (''core'') needs a couple of alterations if combined into one massive file)
+2014-08-25 23:42:11 UTC: #111 [core & distro] Fixed CORE & DISTRO (sb7.tcl (''core'') needed a couple of alterations for when combined into one single file)
 2014-08-25 23:38:26 UTC: #110 [tail] Added IS COMPONENT
 2014-08-25 23:24:59 UTC: #109 [distro] Fixed DISTRO CHANGELOG LIST SINCE (added code to scan for valid date / time info, instead of URT)
 2014-08-25 22:45:54 UTC: #108 [distro] Fixed DISTRO LIST (added shortcut abilities from SB6: unique matches to any active distro will include it in the list, including wildcards; all are included by default)

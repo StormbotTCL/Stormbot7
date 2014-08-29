@@ -849,9 +849,9 @@ proc sb7:setup args {
 	# Let's clean up the shortcut variables here
 	foreach a [data array find CONFIG shortcut:*] { data array set CONFIG $a [lsort -unique -increasing -dictionary [data array value CONFIG $a]] }
 	if [data array value -normalize CONFIG BIND:PUB] {
-		foreach a [lsort -uni [data array value CONFIG shortcut:all]] { bind pub - $a sb7:dispatch }
-		foreach a [lsort -uni [data array value CONFIG SHORTCUT:GLOBAL]] { bind pub vlotmn $a sb7:dispatch }
-		foreach a [lsort -uni [data array value CONFIG SHORTCUT:OWNER ]] { bind pub n $a sb7:dispatch }
+		foreach a [lsort -uni [data array value CONFIG shortcut:all]] { bind pub - [string tolower $a] sb7:dispatch }
+		foreach a [lsort -uni [data array value CONFIG SHORTCUT:GLOBAL]] { bind pub vlotmn [string tolower $a] sb7:dispatch }
+		foreach a [lsort -uni [data array value CONFIG SHORTCUT:OWNER ]] { bind pub n [string tolower $a] sb7:dispatch }
 	}
 	# CONFIG:BIND:MSG, CONFIG:BIND:DCC, & CONFIG:BIND:NOT will be handled by "COMMAND ADD"
 
@@ -5355,7 +5355,7 @@ proc sb7:emergency { nick host handle chan arg } {
 #####
 # Bootstrap:
 
-bind PUB  n !EE sb7:emergency
+bind PUB  n !ee sb7:emergency
 bind DCC  t dcc *dcc:dccstat
 bind DCC  - /W  *dcc:whois
 bind DCC  - Q   *dcc:quit
