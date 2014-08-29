@@ -4935,7 +4935,6 @@ proc flags args { # Have to allow several variations in order to unite everythin
 			set flag [lindex $text 0]
 			set text [lreplace $text 0 0]
 			if [string eq $flag --] break
-	
 			set um [uniquematch [array names params] $flag]
 
 			if [isempty um] {
@@ -4949,7 +4948,12 @@ proc flags args { # Have to allow several variations in order to unite everythin
 				# Worf?! *Bwahahahahaha*
 				for { zero pass } { $pass < $skip } { incr pass } {
 					set worf [lindex $text 0]
-					if [left $worf 1 -] break; # Don't swallow the next flag; process it! 
+					if [left $worf 1 -] {
+						#NO! break
+						# Did we find a legit flag? Or does it just LOOK like one?
+						set um [uniquematch [array names params] $worf]
+						if [notempty um] { break; # Don't swallow the next flag; process it! }
+					}
 					if [notempty worf] { lappend processed($um) $worf }
 					set text [lreplace $text 0 0]
 				}
