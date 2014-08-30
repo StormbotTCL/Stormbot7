@@ -23,11 +23,11 @@ proc @copyuser { nick host handle chan arg } {
 		foreach user [lsort -inc -uni -dict $1e] {
 			lassign [whois [join $user] $handle] online wn wh who wc wah wan
 			print $nick "Output piped to /NOTICE (or .DCC) for privacy ...."
-			lappend datapacket ".-user $who"
+			lappend datapacket ".tcl deluser $who"
 			if [matchattr $who b] {
 				lappend datapacket ".+bot $who"
-				if {[getuser $who BOTFL] != ""} {lappend datapacket ".tcl setuser $who botfl [getuser $who BOTFL]" }
-				if {[getuser $who BOTADDR] != ""} {lappend datapacket ".tcl setuser $who botaddr]"}
+				if {[getuser $who BOTFL] != ""} {lappend datapacket ".tcl setuser $who botfl [getuser $who botfl]" }
+				if {[getuser $who BOTADDR] != ""} {lappend datapacket ".tcl setuser $who botaddr [getuser $who botaddr]"}
 			} else {
 				lappend datapacket ".+user $who"
 			}

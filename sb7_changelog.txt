@@ -1,7 +1,9 @@
-# StormBot.TCL 7 version Changelog -- 2014-08-29 11:00:58 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-08-30 08:51:03 UTC #
 # Version: 7.00.0001 #
 
 Current Working Version:
+2014-08-30 07:47:44 UTC: #139 [copyuser] Fixed COPYUSER -RAW (changed .-user to .tcl deluser due to internal changes in SB7)
+2014-08-30 07:46:25 UTC: #138 [copyuser] Fixed COPYUSER -RAW (when processing a bot, the BOTADDR field was munger; the GETUSER portion of the line was missing)
 2014-08-29 10:59:31 UTC: #137 [distro] Fixed DISTRO CHANGELOG GITLOG -SINCE (I never wrote the TIMEVAL code)
 2014-08-29 10:56:58 UTC: #136 [distro] Edited DISTRO CHANGELOG GITLOG (added GL as a valid abbreviation)
 2014-08-29 10:01:37 UTC: #135 [tail] Fixed RGLOB & DGLOB (copied patches made to SB6 version within the last 24 hours)
