@@ -1,7 +1,12 @@
-# StormBot.TCL 7 version Changelog -- 2014-08-29 01:15:30 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-08-29 11:00:58 UTC #
 # Version: 7.00.0001 #
 
 Current Working Version:
+2014-08-29 10:59:31 UTC: #137 [distro] Fixed DISTRO CHANGELOG GITLOG -SINCE (I never wrote the TIMEVAL code)
+2014-08-29 10:56:58 UTC: #136 [distro] Edited DISTRO CHANGELOG GITLOG (added GL as a valid abbreviation)
+2014-08-29 10:01:37 UTC: #135 [tail] Fixed RGLOB & DGLOB (copied patches made to SB6 version within the last 24 hours)
+2014-08-29 06:38:55 UTC: #134 [tail] Upgraded FLAGS -PARAMS (added option for flag param length ''*'' means: until something else interrupts. Saves from using arbitrarily large numbers like ''99999'' or the like. It internally defaults to 512 since IRCds only allow that many CHARACTERS maximum anyway)
+2014-08-29 05:55:45 UTC: #133 [tail] Fixed WHOIS (in one line, IFF was typoed as IF (both times), causing a error when a user exists in the userfile but isn't on any channels at the moment. This appeared in NOTE but could be a problem any time a lookup was required, such as ACCESS ADD)
 2014-08-28 18:10:49 UTC: #132 [tail] Fixed FLAGS -PARAMS (the scan-through for flags always tripped an end-of-phrase and went on to process the apparent flag. Now, will check if the alleged flag is really a valid flag before breaking anything and re-processing)
 2014-08-28 17:58:21 UTC: #131 [distro] Fixed DISTRO CHANGELOG GITLOG (an output command had a typo flag: -hsort, which looks legit, but is supposed to be -SHORT; this would target the output to a non-existent user)
 2014-08-28 17:50:22 UTC: #130 [config & tail] Fixed SB7:SETUP & CONFIG -GLOBAL SHORTCUT ADD (forced all shorts to be added as lowercase; in previous SB versions, case wasn't considered. This actually caused the potential of DUPLICATE(!) binds being created: each of a different case. Found by Demonicpagan)

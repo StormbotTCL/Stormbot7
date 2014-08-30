@@ -3044,7 +3044,7 @@ proc whois { who { who2 "" } { chan "" } } {
 	if [validuser $who] {
 		set authed_nick [sb7 auth find nick $who]
 		set authed_hand [sb7 auth find handle $who]
-		return [list 0 [casehandle $who] "" [casehandle $who] "" [if [notempty authed_nick] $who] [if [notempty authed_nick] $who]]
+		return [list 0 [casehandle $who] "" [casehandle $who] "" [iff [notempty authed_nick] $who] [iff [notempty authed_nick] $who]]
 	}
 
 	# Is it a bot on the botnet?
@@ -3926,13 +3926,15 @@ proc os { { checkme "" } } {
 	string match -nocase $checkme $os
 }
 
-proc rglob { dirpath patterns { recursive 0 } { sizes 0 } } {
+proc rglob {dirpath patterns { recursive 0 } { sizes 0 } } {
 	# Custom-written by thommey [1347803875] :: http://paste.tclhelp.net/?id=bn7
 
 	set rlist {}
+	if [isempty patterns] { set patterns * }
 	catch { foreach pattern $patterns { set rlist [concat $rlist [glob -nocomplain -types f -directory ${dirpath} -- $pattern]] } }
 	catch { foreach pattern $patterns { set rlist [concat $rlist [glob -nocomplain -types [list f hidden] -directory ${dirpath} -- $pattern]] } }
-	if !($recursive) {
+
+	if !$recursive {
 		if !$sizes { return [lsort -inc $rlist] }
 		float total
 		foreach a $rlist { add total [file size $a] }
@@ -3941,8 +3943,11 @@ proc rglob { dirpath patterns { recursive 0 } { sizes 0 } } {
 
 	# Note the recursive call to RGLOB
 	# Recurse into directories
-	foreach dir [glob -nocomplain -types d -directory ${dirpath} -- *] { if { [lsearch -exact [list . ..] $dir] == -1 } { catch { set rlist [concat $rlist [rglob ${dir} ${patterns} $recursive]] } } }
-	foreach dir [glob -nocomplain -types [list d hidden] -directory ${dirpath} -- *] { if { [lsearch -exact [list . ..] $dir] == -1 } { catch { set rlist [concat $rlist [rglob ${dir} ${patterns} $recursive]] } } }
+	if [notempty dirpath] {
+		set dirs [concat [glob -nocomplain -types d -directory ${dirpath} -- *] [glob -nocomplain -types [list d hidden] -directory ${dirpath} -- *]]
+		lremove dirs . .. */. */..
+		foreach dir $dirs { catch { set rlist [concat $rlist [rglob ${dir} ${patterns} $recursive]] } }
+	}
 
 	if $sizes {
 		float total; # MUST BE FLOATING-POINT (stupid 32-bit issues)
@@ -3964,16 +3969,17 @@ proc dglob { { dirpath . } { recursive true } } {
 	set dlist {}
 	catch { set dlist [concat $dlist [glob -nocomplain -types d -directory ${dirpath} -- *]] }
 	catch { set dlist [concat $dlist [glob -nocomplain -types {d hidden} -directory ${dirpath} -- *]] }
-	lremove $dlist . ..
-	if !$recursive { return $dlist }
+	lremove dlist . .. */. */..
+	if !($recursive) { return $dlist }
 
 	# Note the recursive call to DGLOB
 	# Recurse into directories
 	if $recursive {
-		foreach dir [glob -nocomplain -types d -directory ${dirpath} -- *] { if { [lsearch -exact [list . ..] $dir] == -1 } { catch { set dlist [concat $dlist [dglob ${dir} $recursive]] } } }
-		foreach dir [glob -nocomplain -types {d hidden} -directory ${dirpath} -- *] { if { [lsearch -exact [list . ..] $dir] == -1 } { catch { set dlist [concat $dlist [dglob ${dir} $recursive]] } } }
+		set dirs [concat [glob -nocomplain -types d -directory ${dirpath} -- *] [glob -nocomplain -types [list d hidden] -directory ${dirpath} -- *]]
+		lremove dirs . .. */. */..
+		foreach dir $dirs { catch { set dlist [concat $dlist [dglob ${dir} $recursive]] } }
 	}
-	return $dlist
+	return ${dlist}
 }
 
 proc datediff { date_from { date_to "" } { time_granularity * } } {
@@ -4921,6 +4927,7 @@ proc flags args { # Have to allow several variations in order to unite everythin
 		array set params ""
 		foreach { a b } $array {
 			if ![left $a 1 -] { prepend a - }
+			if [string eq * $b] { set b 512 }
 			set params($a) $b
 		}
 
@@ -4935,7 +4942,6 @@ proc flags args { # Have to allow several variations in order to unite everythin
 			set flag [lindex $text 0]
 			set text [lreplace $text 0 0]
 			if [string eq $flag --] break
-	
 			set um [uniquematch [array names params] $flag]
 
 			if [isempty um] {
@@ -4949,7 +4955,12 @@ proc flags args { # Have to allow several variations in order to unite everythin
 				# Worf?! *Bwahahahahaha*
 				for { zero pass } { $pass < $skip } { incr pass } {
 					set worf [lindex $text 0]
-					if [left $worf 1 -] break; # Don't swallow the next flag; process it! 
+					if [left $worf 1 -] {
+						#NO! break
+						# Did we find a legit flag? Or does it just LOOK like one?
+						set um [uniquematch [array names params] $worf]
+						if [notempty um] { break; # Don't swallow the next flag; process it! }
+					}
 					if [notempty worf] { lappend processed($um) $worf }
 					set text [lreplace $text 0 0]
 				}
@@ -5357,8 +5368,8 @@ proc sb7:emergency { nick host handle chan arg } {
 
 bind PUB  n !ee sb7:emergency
 bind DCC  t dcc *dcc:dccstat
-bind DCC  - /W  *dcc:whois
-bind DCC  - Q   *dcc:quit
+bind DCC  - /w  *dcc:whois
+bind DCC  - q   *dcc:quit
 bind DCC  - ""  @dcc:null
 bind PUBM - *   sb7:dispatch:pubm
 bind TIME - *   sb7:bugsiebug_check
