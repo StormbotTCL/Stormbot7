@@ -61,7 +61,7 @@ proc @pastebin { nick host handle chan arg } {
 			
 				after - since {
 					set timeval [timeval $3]
-					if { $timeval == -1 } { print -return -error -short "Illegal $2u time designation: $3" }
+					if [isempty timeval] { print -return -error -short "Illegal $2u time designation: $3" }
 					set target [expr [clock seconds] - $timeval]
 					foreach pid $pids {
 						if { $pastebin(${pid}:updated) < $target } continue
@@ -72,7 +72,7 @@ proc @pastebin { nick host handle chan arg } {
 
 				before - b4 - within - wi {
 					set timeval [timeval $3]
-					if { $timeval == -1 } { print -return -error -short "Illegal $2u time designation: $3" }
+					if [isempty timeval] { print -return -error -short "Illegal $2u time designation: $3" }
 					set target [expr [clock seconds] - $timeval]
 					foreach pid $pids {
 						if { $pastebin(${pid}:updated) > $target } continue
@@ -183,5 +183,4 @@ proc pastebin:bootstrap args {
 # Bootstrap
 
 pastebin:bootstrap
-
 

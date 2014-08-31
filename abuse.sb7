@@ -1,0 +1,196 @@
+sb7 command add ABUSE 501 -none
+sb7 register global ABUSE
+
+proc @abuse { nick host handle chan arg } {
+	@abuse:verify_data
+	sb7 parseflags -allchans
+
+	switch -glob -- [stl $1] {
+
+		help {
+			print -help $nick "\[ABUSE\]:"
+			print -help $nick "Syntax: $::botnick ABUSE <on | off | status | home | log | exempt | reportall>"
+			print -help $nick "Syntax: $::botnick ABUSE STATUS (default: shows current ABUSE monitoring settings)"
+			print -help $nick "Syntax: $::botnick ABUSE ON (enables monitoring and reporting of ABUSEs)"
+			print -help $nick "Syntax: $::botnick ABUSE OFF (disables monitoring and reporting of ABUSEs)"
+			print -help $nick "Syntax: $::botnick ABUSE EXEMPT <add | del | list | clear> \[#channel\] (exempts channels from ABUSE reports)"
+			print -help $nick "Syntax: $::botnick ABUSE REPORTALL <on | off> (\037ON\037: report even when global staff \[> 500\] abuses the bot, \037OFF\037: all global users are exempt)"
+			print -help $nick "Syntax: $::botnick ABUSE SCAN \[-ALLCHANS\] \[target user | * \[minutes | URT:time range to go back\]\] (finds and displays ABUSE records)"
+			print -help $nick "The ABUSE command reports (tattle-tails) on any user who deops or kicks $::botnick out of any channel."
+			print -help $nick "URT: date reference from \"now\" (such as: +1h (1 hour), +2.5d (2.5 days), 25m30s (25 minutes & 30 seconds))"
+			print -help $nick "> End of ABUSE HELP."
+			return 0
+		}
+
+		st* - "" {
+			print $nick "ABUSE monitoring: [offon [data array get abuse active]]"
+			print $nick "Channels exempt from ABUSE reports: [ajl [data array get abuse exempt] " -- "]"
+			print $nick "Report even against global admins: [boolean -truefalse [data array get abuse reportall]]"
+			print $nick "> End of ABUSE STATUS."
+			return 0
+		}
+
+		on - off {
+			set active [boolean -truefalse $1]
+			data array set abuse active $active
+			saveme data
+			print -short -return $nick "Abuse tracking for $chan is now: $active"
+		}
+
+		ex* - exempt {
+			switch -exact -- [string tolower $2] {
+
+				help {
+					print -help $nick "\[ABUSE EXEMPT\]:"
+					print -help $nick "Syntax: $::botnick ABUSE EXEMPT HELP"
+					print -help $nick "Syntax: $::botnick ABUSE EXEMPT ADD <channel>"
+					print -help $nick "Syntax: $::botnick ABUSE EXEMPT DEL <channel>"
+					print -help $nick "Syntax: $::botnick ABUSE EXEMPT LIST"
+					print -help $nick "Syntax: $::botnick ABUSE EXEMPT CLEAR"
+					print -help $nick "ABUSE EXEMPT controls when channels are exempt from monitoring / reporting abuse."
+					return
+				}
+
+				add {
+					if [isempty 3] { print -short -return $nick "What channel are we adding to the list?" }
+					data array concat abuse exempt $3e
+					saveme data
+					print -short $nick "Currently exempted: [ajl -empty -unique [data array get abuse exempt] " -- "]"
+					return
+				}
+
+				del {
+					if [isempty 3] { print -short -return $nick "What channel are we removing from the list?" }
+					set data [ldestroy -glob -multiple -all [data array get abuse exempt] $3e]
+					saveme data
+					print -short $nick "Currently exempted: [ajl -empty -unique [data array get abuse exempt] " -- "]"
+					return
+				}
+
+				list {
+					print -short $nick "Currently exempted: [ajl -empty -unique [data array get abuse exempt] " -- "]"
+					return
+				}
+
+				clear {
+					if ![string eq -nocase CLEAR $3] { print -short -return $nick "Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." }
+					data array set abuse exempt
+					saveme data
+					print $nick "\[ABUSE EXEMPT CLEAR\] Successful."
+					return
+				}
+
+				default { print -return $nick "\[ABUSE EXEMPT\] Unknown option: $2" }
+
+			}
+		}
+
+		list - read - scan {
+			set match_chans $chan
+			set match_user *
+			set match_time 0
+			if [validflag -allchans] { set match_chans [channels] }
+			if [notempty 2] {
+				set match_user $j2
+				if [notempty 3] {
+					if [isnum -integer $3] {
+						set timeval [timeval +${3}m s]
+					} {
+						set timeval [timeval $3]
+					}
+					if [isempty timeval] { print -short -return "Error: illegal time value: $3 (see HELP for example of valid URT expressions)" }
+					set match_time [expr { [clock seconds] - $timeval } ]
+				}
+			}
+			set matches 0
+			foreach channel $chans {
+				set data [data array get abuse $channel]
+				foreach datum $data {
+					lassign $datum ts mode who what
+					if [string match -nocase $match_user $who] {
+						if { $ts >= $match_time } {
+							incr matches
+							print $nick "\[${channel}\] [format:date $ts @short]: $who ($what)"
+						}
+					}
+				}
+			}
+			if $matches {
+				print -short $nick "[comma $matches] [plural match $matches es] made."
+			} {
+				print -short $nick "No matches made."
+			}
+			return
+		}
+
+		rep* {
+			set bool [boolean -offon $2]
+			data array set abuse reportall $bool
+			saveme data
+			print -short $nick "REPORTALL is now: $bool"
+			return
+		}
+
+		default { print -help -short $nick "Unknown option: $1" ; return }
+	}
+	return
+}
+
+proc @abuse:deop { nick host handle chan mode target } {
+	if ![string match *-o* $mode] { return 0 }
+	if ![isbotnick $target] { return 0 }
+	@abuse:post deop $nick $host $handle $chan ""
+	return
+}
+
+proc @abuse:kick { nick host handle chan victim reason } {
+	if ![isbotnick $victim] { return 0 }
+	@abuse:post kick $nick $host $handle $chan $reason
+	return
+}
+
+proc SB:abuse_post { type nick host handle chan reason } {
+	if ![boolean [data array get abuse active]] return
+	if { [lsearch -exact [data array get -lower abuse exempt] [string tolower $chan]] != -1 } return
+	if ![data array get -boolean abuse reportall] { if { [access $handle > 500] } return }
+
+	if [isempty nick] { set nph $host } { set nph [nph ${nick}!${host} $handle] }
+	switch -exact -- $type {
+
+		deop {set message "I was deopped in $chan by ${nph}!"}
+
+		kick {set message "$nph kicked me from ${chan}: $reason"}
+
+		default {error "\[@ABUSE:POST\] Unknown type of abuse: TYPE($type)" ; return }
+
+	}
+
+	data array lappend abuse $chan [list [clock seconds] $type $nph $message]
+	putloglev p $chan $message
+	putlog "\[ABUSE\] $message"
+	print -home "\[ABUSE\] $message"
+	foreach user [userlist -b] { if { ( [access $user] >= 501 ) || ( [access $user $chan] == 500 ) } { @notes send $user main #ABUSE# [clock seconds] $message } }
+	return
+}
+
+proc @abuse:verify_data args {
+	zero changed
+	if { [llength [data get abuse]] == 8 } { one changed ; data set abuse } ; # Let's just purge the SB6 data (list must have even list of elements)
+	if [data array get -isempty abuse active] { one changed ; data array set abuse active false }
+	#if [data array get -isempty abuse exempt] { one changed ; data array set abuse exempt "" }
+	if [data array get -isempty abuse reportall] { one changed ; data array set abuse reportall false }
+
+	# Purge any existing values for these ....
+	if [data array get -notempty abuse home] { one changed ; data array set abuse home "" }
+	if [data array get -notempty abuse level] { one changed ; data array set abuse level "" }
+	if [data array get -notempty abuse notes] { one changed ; data array set abuse notes "" }
+	if $changed { saveme data ; putlog "\[ABUSE\] Auto-updating ABUSE data info ...." }
+	return
+}
+
+#####
+# BootStrap
+
+@abuse:verify_data
+bind mode - "*-o*" @abuse:deop
+bind kick - * @abuse:kick

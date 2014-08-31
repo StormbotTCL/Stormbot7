@@ -1,7 +1,17 @@
-# StormBot.TCL 7 version Changelog -- 2014-08-30 08:51:03 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-08-31 05:14:01 UTC #
 # Version: 7.00.0001 #
 
 Current Working Version:
+2014-08-31 05:09:34 UTC: #149 [abuse, distro, pastebin, & tail] Fixed ABUSE, DISTRO, PASTEBIN and GET TIME (required adjustments due to change in TIMEVAL. See CHANGELOG #148)
+2014-08-31 05:05:41 UTC: #148 [tail] Fixed TIMEVAL (now allows negative time values. As a result, the error return value of ''-1'' is no longer usable. TIMEVAL was never intented to return negative times. Now, all beads using TIMEVAL will have to be updated to check for the new error reply: '''' (null))
+2014-08-31 05:00:04 UTC: #147 [distro] Fixed DISTRO CHANGELOG LIST SINCE (fixed a couple of issues by utilizing GET TIME)
+2014-08-31 04:28:08 UTC: #146 [alarm] Added DELAY (same caveats as SB6; no repeats available just yet, not for a while)
+2014-08-31 03:36:13 UTC: #145 [alarm] Fixed ALARM (I transposed the TIME bind args: flags vs mask)
+2014-08-31 01:34:19 UTC: #144 <no specific files> Added ALARM to zenkai distribution
+2014-08-31 01:34:01 UTC: #143 [alarm] Added ALARM
+2014-08-31 01:31:42 UTC: #142 [tail] Added PRINTCTCP & PRINTCTCR (Client-To-Client-Protocol messages, request & reply respectively; PRINT also upgraded (as these just pipe through to PRINT via flags))
+2014-08-31 01:31:03 UTC: #141 [tail] Upgraded PRINT (added -CTCP & -CTCR flags)
+2014-08-31 00:44:09 UTC: #140 [tail] Added GET TIME (processes a timestamp in front of a string of text. Will process a hard timestamp (integer), URT (+3d, +1.5h, +5h15m), or any other variation that CLOCK SCAN will accept)
 2014-08-30 07:47:44 UTC: #139 [copyuser] Fixed COPYUSER -RAW (changed .-user to .tcl deluser due to internal changes in SB7)
 2014-08-30 07:46:25 UTC: #138 [copyuser] Fixed COPYUSER -RAW (when processing a bot, the BOTADDR field was munger; the GETUSER portion of the line was missing)
 2014-08-29 10:59:31 UTC: #137 [distro] Fixed DISTRO CHANGELOG GITLOG -SINCE (I never wrote the TIMEVAL code)

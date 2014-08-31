@@ -3345,9 +3345,12 @@ proc msghome message {
 
 proc rawhome text { rawprint "PRIVMSG [home] :$text" ; return }
 
+proc printctcp { nick ctcp { message "" } } { print -ctcp -strip $nick "\001[string toupper $ctcp] $message\001" }
+proc printctcr { nick ctcp { message "" } } { print -ctcr -strip $nick "\001[string toupper $ctcp] $message\001" }
+
 # All-inclusive PRINT command (including line-splitting)
 proc print args {
-	set validflags [list -none -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
+	set validflags [list -none -strip -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
 	# -DUMMY is for a variable to hold a "-private" or "-dummy" flag (based on need) within a variable
 	flags -simple $args $validflags text flags
 	if [validflag -none] { empty flags } ; # For use with NOTE and others that need to swap "-private" with "-none"
@@ -3473,6 +3476,9 @@ if $debug { debug =6 flags }
 	if [validflag -notice] { set type NOTICE ; if $intended_user { set output $target } }
 	if [validflag -wallops] { set type NOTICE ; set output $chan }
 
+	if [validflag -ctcp] { set type PRIVMSG ; set output $target }
+	if [validflag -ctcr] { set type NOTICE ; set output $target }
+
 	set queue serv
 	if [validflag -error] { set queue help ; prepend message "[effects {[ERROR]} reverse] " }
 	if [validflag -help] { set queue help }
@@ -3554,6 +3560,7 @@ if $debug { debug =7 flags }
 
 if $debug { debug nick handle chan flags output queue type speedflag }
 	foreach line $buffer {
+		if [validflag -strip] { regsub -all -nocase -- {\003([0-9][0-9]?(,[0-9][0-9]?)?)?|[\000\002-\010\013-\014\016-\037]+} $line "" line }
 		if [isempty line] { set line [space] }
 		if [notempty remote] { putbot $remote [list SB7:REMOTEIDX $target $line] ; continue }
 		if [isdccnick $target] { putdcc $target $line ; continue }
@@ -4448,49 +4455,47 @@ proc get { cmd args } {
 			return $range
 		}
 
-		`index - `range {
+		time {
+			# Syntax: GET TIME <text> [var_time] [var_remaining_text] --> returns $TIME
+			lassign $args_ arg var_time var_text
+			if [notempty var_time] { upvar 1 $var_time time }
+			if [notempty var_text] { upvar 1 $var_text text }
+			set _ [lindex $arg 0]
 
-			switch -glob -- [string tolower $count1] {
+			# Unix time stamp?
+			if [isnum -integer $_] {
+				set time $_
+				set text [lreplace $arg 0 0]
+				return $time
+			}
 
-				"" { error "\[GET [string toupper $cmd]\] Missing requested range" }
+			set timeval [timeval $_ s]
+			if [notempty timeval] {
+				set time [expr [clock seconds] - $timeval]
+				set text [lreplace $arg 0 0]
+				return $time
+			} 
 
-				first* {
-					if [isempty count2] { return [lindex $list 0] }
-					if ![isnum -integer $count2] { error "\[GET [string toupper $cmd]\] Missing marker for \"first\"" }
-					return [lrange $list 0 [incr count2 -1]]
-				}
+			# Guesstimates show that a valid timestamp can consist of SIX elements!
+			# today
+			# yesterday yesterday yesterday yesterday yesterday 11:00 (5 days ago, at 11:00)
+			# 2014-08-30 17:50:00
+			# 08/30/2014 17:50:00 -0700
+			# Saturday, August 30, 2014 17:50:00 -0700
 
-				last - end {
-					if [isempty count2] { return [lindex $list end] }
-					if ![isnum -integer $count2] { error "\[GET [string toupper $cmd]\] Missing marker for \"first\"" }
-					return [lrange $list end-[incr count2 -1] end]
-				}
-
-				end-* {
-					if ![isnum -integer [mid $count1 5]] { error "\[GET [string toupper $cmd]\] Illegal value for range: $count1" }
-					if [isempty count2] { return [lindex $list $count1] } 
-					if [isnum -integer $count2] { return [lrange $list $count1 $count2] }
-					if [regexp -nocase -- {^end(\-\d+)?$} $count2] { return [lrange $list $count1 $count2] }
-					error "\[GET [string toupper $cmd]\] Illegal second range value: $count2"
-				}
-
-				default {
-#debug args args_ count*
-					if [regexp -- {^[0-9 \-\;\,]+$} $count1] {
-						set range [get numberlist $count1 [llength $list]]
-						empty new
-						foreach a $range { lappend new [lindex $list [incr a -1]] }
-#debug range list new
-						return $new
-					}
-					if ![isnum -integer $count1] { error "\[GET [string toupper $cmd]\] Illegal value for range: $count1" }
-					if { $count1 < 0 } return
-					if [isempty count2] { return [lindex $list $count1] }
-					if [isnum -integer $count2] { return [lrange $list $count1 $count2] }
-					if [regexp -nocase -- {^end(\-\d+)?$} $count2] { return [lrange $list $count1 $count2] }
-					error "\[GET [string toupper $cmd]\] Illegal second range value: $count2"
+			set ll [llength $arg]
+			for { set count [expr $ll - 1] } { $count >= 0 } { incr count -1 } {
+				set error [ catch { set time [clock scan [lrange $arg 0 $count]] } ]
+				if !$error {
+					set text [lreplace $arg 0 $count]
+					return $time
 				}
 			}
+
+			# Fail
+			set time ""
+			set text $arg
+			return $time
 		}
 
 		numberlist - numlist {
@@ -5262,16 +5267,16 @@ proc percent { number total { decimal "" } } {
 proc timeval { value { convert_to s } } {
 	array set mult [list l .001 n .01 t .1 s 1 m 60 h 3600 d 86400 w 604800 y 31536000 e 315360000 c 315360000]
 	empty time marker
-	regexp -nocase -- {^[\+]?(\d+)([lntsmhdwyec]?)$} $value - time marker
-	if [isempty time] { return -1 }
+	regexp -nocase -- {^([\+\-]?)([\d\.]+)([lntsmhdwyec]?)$} $value - sign time marker
+	if [isempty time] return
 	if [isempty marker] { set marker s }
-	if ![info exists mult($marker)] { return -1 }
+	if ![info exists mult($marker)] return
 	set timeval [expr $time * $mult($marker) ]
 	if [notempty convert_to] {
-		if ![info exists mult($convert_to)] { return -1 }
+		if ![info exists mult($convert_to)] return
 		set timeval [expr ${timeval}.0 / $mult($convert_to)]
 	}
-	lindex [split $timeval .] 0
+	return ${sign}[lindex [split $timeval .] 0]
 }
 
 # --- Command aliases ---
