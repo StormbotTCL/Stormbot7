@@ -24,7 +24,9 @@ proc @alarm { nick host handle chan arg } {
 			# Check for -NOCTCP
 			# Check for different types of time references: URT, 1-element DATE or time, 2-element date/time
 			flags:simple $2e -noctcp text flags
-			get time $text time text
+			get time -future $text time text
+			if { $time == [clock seconds] } { print -help -short -return $nick "That would trigger right now." }
+			if { $time <  [clock seconds] } { print -help -short -return $nick "That would trigger in the past." }
 			if [isempty text] { set text Alarm! }
 			data array lappend ALARM $handle [list $time $text [validflag -noctcp]]
 			saveme data
@@ -95,8 +97,10 @@ proc @delay { nick host handle chan arg } {
 		}
 
 		add {
-			get time $2e time text
+			get time -future $2e time text
 			if [isempty text] { print -short -return $nick "What command are we buffering?" }
+			if { $time == [clock seconds] } { print -help -short -return $nick "That would trigger right now." }
+			if { $time <  [clock seconds] } { print -help -short -return $nick "That would trigger in the past." }
 			data array lappend DELAY $handle [list $time $text]
 			saveme data
 			print -short $nick "I've added your DELAY for: [format:date $time $handle]: [join $text]"

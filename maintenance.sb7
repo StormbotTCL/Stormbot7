@@ -23,7 +23,7 @@ proc @maintenance { nick host handle chan arg } {
 		l - ld - laod - load {
 #debug nick host handle chan arg 1 2e
 			if [isempty 2] { sb7 error $nick * "Missing list of beads to load" }
-			empty ok dne bad wrong files
+			empty ok dne bad wrong text files
 			set temp $2e
 			foreach file $temp {
 				if [is wildcard $file] {
@@ -35,6 +35,7 @@ proc @maintenance { nick host handle chan arg } {
 			}
 			foreach file $files {
 				set ::sb7_beadname [sb7 component $file] ; # If error, RETURN original name
+				if [regexp -- {^sb7_[^\.]+\.txt$} [file tail $::sb7_beadname]] { lappend text $file ; continue }
 				if ![regexp -- {^(sb7.*?\.tcl|.+?\.sb7)$} [file tail $::sb7_beadname]] { lappend wrong $file ; continue }
 #debug file ::sb7_beadname =EXISTS([file exists $::sb7_beadname])
 				if ![file exists $::sb7_beadname] { lappend dne $file ; continue }
@@ -50,6 +51,7 @@ proc @maintenance { nick host handle chan arg } {
 			if [notempty ok] { print $nick "\[MAINTENANCE\] Successfully loaded: [ajl $ok]" }
 			if [notempty bad] { print $nick "\[MAINTENANCE\] Load errors: [ajl $bad]" }
 			if [notempty dne] { print $nick "\[MAINTENANCE\] No such bead: [ajl $dne]" }
+			if [notempty text] { print $nick "\[MAINTENANCE\] Ignored (text files): [ajl $text]" }
 			if [notempty wrong] { print $nick "\[MAINTENANCE\] Wrong file type (not SB7 component): [ajl $wrong]" }
 			return 0
 		}

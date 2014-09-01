@@ -2176,7 +2176,7 @@ proc isnum args {
 	if [validflag -integer]     { return [regexp -- {^[\+\-]?\d+$} $number] }
 	if [validflag -even ]       { int number ; return [regexp -- {[02468]$} $number] }
 	if [validflag -odd  ]       { int number ; return [regexp -- {[13579]$} $number] }
-	if [validflag -negative]    { return [left $number 1 -] }
+	if [validflag -negative]    { return [ expr ( $number <  0 ) ? 1 : 0 ] }
 	if [validflag -positive]    { return [ expr ( $number >  0 ) ? 1 : 0 ] }
 	if [validflag -nonnegative] { return [ expr ( $number >= 0 ) ? 1 : 0 ] }
 	if [validflag -prime]       { return [isprime $number] }
@@ -2185,8 +2185,6 @@ proc isnum args {
 	if [validflag -octal]       { return [regexp -- {^([&\\]?[0-7]+|0[0-7]+|0o[0-7]+)$} $number] }
 	if [validflag -decimal]     { return [regexp -- {^[#\+\-]*([^0]+[0-9]+|0)$} $number] }
 	if [validflag -hexadecimal] { return [regexp -- {^((#)?\$|0[xX]|\\0?x)?[0-9A-Fa-f]+$} $number] }
-	if [validflag -positive]    { return [not [left [string trimleft $number +] 1 -]] }
-	if [validflag -negative]    { return      [left [string trimleft $number +] 1 -]  }
 	regexp -- {^[\+\-]?\d+?(\.\d+)?$} [noscinot $number]
 }
 
@@ -3305,7 +3303,7 @@ proc effects { text args } {
 
 			nocolor { regsub -all -- {\003([0-9]{1,2}(,[0-9]{1,2})?)?} $text "" text }
 
-			^x$ - strip { empty open close ; regsub -all -- {\003([0-9]{1,2}(,[0-9]{1,2})?)?|\002|\037|\017|\026|\015} $text "" text }
+			^x$ - strip { empty open close ; regsub -all -- {\003([0-9]{1,2}(,[0-9]{1,2})?)?|\002|\037|\026|\017} $text "" text }
 
 			^hex\:from$ {
 				if [regexp -nocase -- {^0[xX]} $text] { set text [mid $text 3] }
@@ -4456,23 +4454,34 @@ proc get { cmd args } {
 		}
 
 		time {
-			# Syntax: GET TIME <text> [var_time] [var_remaining_text] --> returns $TIME
-			lassign $args_ arg var_time var_text
+			# Syntax: GET TIME <text> [byref: var_time] [byref: var_remaining_text] --> returns $TIME
+			flags -param -force $args_ [list -past 0 -negative 0 -future 0 -positive 0 -time 1] arg_ flags
+			if $flags(-negative) { set flags(-past) 1 }
+			if $flags(-positive) { set flags(-future) 1 }
+			if $flags(-time) { set current_time $flags(-time) } { set current_time [clock seconds] }
+
+			lassign $arg_ arg var_time var_text
+			set arg [escape $arg]
+
 			if [notempty var_time] { upvar 1 $var_time time }
 			if [notempty var_text] { upvar 1 $var_text text }
+
 			set _ [lindex $arg 0]
 
 			# Unix time stamp?
 			if [isnum -integer $_] {
 				set time $_
-				set text [lreplace $arg 0 0]
+				set text [join [lreplace $arg 0 0]]
 				return $time
 			}
 
 			set timeval [timeval $_ s]
 			if [notempty timeval] {
-				set time [expr [clock seconds] - $timeval]
-				set text [lreplace $arg 0 0]
+				set sign -
+				if $flags(-past) { set sign - ; set timeval [expr abs($timeval)] }
+				if $flags(-future) { set sign + ; set timeval [expr abs($timeval)] }
+				set time [expr $current_time $sign $timeval]
+				set text [join [lreplace $arg 0 0]]
 				return $time
 			} 
 
@@ -4487,14 +4496,14 @@ proc get { cmd args } {
 			for { set count [expr $ll - 1] } { $count >= 0 } { incr count -1 } {
 				set error [ catch { set time [clock scan [lrange $arg 0 $count]] } ]
 				if !$error {
-					set text [lreplace $arg 0 $count]
+					set text [join [lreplace $arg 0 $count]]
 					return $time
 				}
 			}
 
 			# Fail
 			set time ""
-			set text $arg
+			set text [join $arg]
 			return $time
 		}
 
@@ -4926,7 +4935,8 @@ proc flags args { # Have to allow several variations in order to unite everythin
 		# $TEXT: this is a sentence.
 		# $FLAGS[]: -flag0 1 flag1 Text -flag2 {} -flag5 {1 2 3 4 5}
 
-		set blank 1
+		set blank_1 1
+		set blank_0 0
 		lassign $args text array var_text var_flags
 
 		array set params ""
@@ -4962,28 +4972,29 @@ proc flags args { # Have to allow several variations in order to unite everythin
 					set worf [lindex $text 0]
 					if [left $worf 1 -] {
 						#NO! break
-						# Did we find a legit flag? Or does it just LOOK like one?
+						# Did we find a legit flag, or, does it just LOOK like one?
 						set um [uniquematch [array names params] $worf]
-						if [notempty um] { break; # Don't swallow the next flag; process it! }
+						if [notempty um] { break ; # Don't swallow the next flag; process it! }
 					}
 					if [notempty worf] { lappend processed($um) $worf }
 					set text [lreplace $text 0 0]
 				}
 			} {
-				lappend processed($um) $um
+				#lappend processed($um) $um
+				lappend processed($um) 1
 			}
 		}
 
-		# So no errors are thrown by flag-checked variables in the calling PROC
+		# So no errors are thrown by flag-checked variables in the calling PROC ....
 		# Is this a good idea?
 		# No ~ flags with 0 (zero) elements will ALSO return blank ("") array elements by design.
 		# Let's make this coder-controlled via the -FORCE flag
 		if [validflag -force] {
 			foreach { a - } $array {
 				if [info exists processed($a)] {
-					if [string eq "" $processed($a)] { set processed($a) $blank }
+					if [string eq "" $processed($a)] { set processed($a) $blank_1 }
 				} {
-					set processed($a) ""
+					set processed($a) $blank_0
 				}
 			}
 		}
