@@ -2229,7 +2229,7 @@ if ![iseggcorecmd lassign] {
 		# Return unused elements as a new list
 		# Any unused variables should be set to "" (this is different than REGEXP)
 		# Use only raw TCL commands (no SB extensions)
-
+if { [string eq *** $list] || [string eq *** $args] } { putlog "\[LASSIGN\] LIST($list):ARGS($args)" }
 		set leftovers [list]
 		foreach a $list b $args {
 			upvar 1 $b local_$b
@@ -2254,8 +2254,8 @@ if ![iseggcorecmd lrepeat] {
 		if { ![isnum -integer $iterations] && [isnum -integer $list] } { swap iterations list }
 		if ![isnum -integer $iterations] { error "\[LREPEAT\] Expected integer but got: $iterations" }
 		# No: allow creation of null lists - if [isempty list] {return ""}
-		if {$iterations < 1} return
-		if {$iterations == 1} { return $list }
+		if { $iterations <  1 } return
+		if { $iterations == 1 } { return $list }
 	
 		empty lrepeat
 		for { zero iteration } { $iteration < $iterations } { incr iteration } {
@@ -5014,7 +5014,8 @@ proc flags:simple { list valid { var_text "" } { var_flags "" } { flags2variable
 		while { [notempty list] } {
 			set 0 [lindex $list 0]
 			if [string eq $0 --] { set list [lreplace $list 0 0] ; break }
-			set u [uniquematch $valid $0]
+			# We do not allow flags to have "? *" in them; can create false matches when processing text with wildcards that happend to match flags
+			if [is wildcard $0] { empty u } { set u [uniquematch $valid $0] }
 			if [isempty u] break
 			lappend flags $u
 			set list [lreplace $list 0 0]

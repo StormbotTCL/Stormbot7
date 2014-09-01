@@ -459,7 +459,7 @@ proc @botsend:complete { bot cmd id } {
 		set factor 1 ; # Tested OK
 	}
 #putlog "\[@BOTSEND:COMPLETE\] ELAPSED_MILLI($elapsed_milli):WORD($word)"
-	print -home "\[BOTSEND\] Transfers complete: \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma $elapsed_milli] $word\037\002 ([format %.1f [expr (${size}.0 / $elapsed_milli ) * $factor ]] KiB/s)"
+	print -home "\[BOTSEND\] Transfers complete: \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma [format %.1f $elapsed_milli]] $word\037\002 ([format %.1f [expr (${size}.0 / $elapsed_milli ) * $factor ]] KiB/s)"
 	return
 }
 

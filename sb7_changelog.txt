@@ -1,7 +1,10 @@
-# StormBot.TCL 7 version Changelog -- 2014-09-01 02:06:40 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-09-01 04:55:09 UTC #
 # Version: 7.00.0001 #
 
 Current Working Version:
+2014-09-01 03:30:48 UTC: #162 <no specific files> tali Fixed ISNUM (-POSITIVE & -NEGATIVE had two different definitions: one string-based and one value-based. Both technically worked but the first one in order (value-based) always handled it. Code went into last GIT commit but wasn't logged)
+2014-09-01 03:20:29 UTC: #161 [tail] Fixed FLAGS:SIMPLE (use of UNIQUEFLAGS allowed wildcarded text, which was to survive the flag check but happened to match the flags-to-check-against, to match the array of flags. Exposed by ''AJL ***'' during CONFIG -GLOBAL SHORTCUT ADD MASTER ***. The shortcut would add; the output is where the error was)
+2014-09-01 02:24:08 UTC: #160 [botsend] Fixed BOTSEND SEND (cosmetic: transfer speed calculation wasn't truncated / rounded to 1 decimal place like the other parts of the output)
 2014-09-01 02:00:43 UTC: #159 [maintenance] Fixed MAINTENANCE LOAD (the parser for files being processed (which determines whether or not a file is a valid SB7 file) wasn't considering the text files)
 2014-09-01 01:56:25 UTC: #158 [alarm] Fixed ALARM & DELAY (sanity checks for times being added)
 2014-09-01 01:23:43 UTC: #157 [tail] Fixed GET TIME (due to all the debugging, I had variable names all mixed up because I had to create ''sub-variables'' to help the debugging process)
