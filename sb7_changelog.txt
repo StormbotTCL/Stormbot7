@@ -1,7 +1,17 @@
-# StormBot.TCL 7 version Changelog -- 2014-09-01 04:55:09 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-09-02 10:17:53 UTC #
 # Version: 7.00.0001 #
 
 Current Working Version:
+2014-09-02 07:12:40 UTC: #172 [tail] Added DISPATCH (shortcut for the common SWITCH that happens in almost every command)
+2014-09-02 06:15:40 UTC: #171 [access] Fixed ADDUSER, MODUSER, REMUSER, USERLIST, & ADMIN (application of -redirect command flag)
+2014-09-02 06:14:30 UTC: #170 [login & tail] Fixed SB7 COMMAND ADD, SB7:GETCMDARGS; LOGIN & PASSHINT (renamed the following flags: -ok:badchan -> -badchan:ok, -ok:logout -> -logout:ok, & -ok:suspended -> -suspended:ok (allow for unique matching of flags))
+2014-09-02 06:08:43 UTC: #169 [sb7 & tail] COMMAND ADD & SB7:GETCMDARGS (added new command flag: -redirect: for commands like SB6:EXEMPT & SB6:INVEX which are being redirected into a different command: BAN. The flag will not affect command's execution; it's only for auditing purposes)
+2014-09-01 22:39:16 UTC: #168 [access] Added HOSTS (this replaces SB6:ADDMASK & SB6:REMMASK, and, also does host lists and searches)
+2014-09-01 22:09:00 UTC: #167 [tail] Upgraded tail (added interpreter alias: ''lmatch'' -> ''ldestroy -not'')
+2014-09-01 21:46:44 UTC: #166 [distro] Fixed DISTRO (clarified primary-command default error message)
+2014-09-01 21:31:47 UTC: #165 [say] Fixed SAY (due to using tabs to align braces but ahaving an extra ident where there isn't supposed to be one, there were one-too-many close-braces. The RETURN at the end of the PROC was actually processed as global so no error was reported; the bead wouldn't be read past that point)
+2014-09-01 21:30:41 UTC: #164 [say] Added ACT to SAY's bead
+2014-09-01 20:18:09 UTC: #163 [botsend] Fixed BOTSEND SEND (when reporting the transfers are complete, also list the files that are ''complete'' in case there were multiple sends activated in quick succession)
 2014-09-01 03:30:48 UTC: #162 <no specific files> tali Fixed ISNUM (-POSITIVE & -NEGATIVE had two different definitions: one string-based and one value-based. Both technically worked but the first one in order (value-based) always handled it. Code went into last GIT commit but wasn't logged)
 2014-09-01 03:20:29 UTC: #161 [tail] Fixed FLAGS:SIMPLE (use of UNIQUEFLAGS allowed wildcarded text, which was to survive the flag check but happened to match the flags-to-check-against, to match the array of flags. Exposed by ''AJL ***'' during CONFIG -GLOBAL SHORTCUT ADD MASTER ***. The shortcut would add; the output is where the error was)
 2014-09-01 02:24:08 UTC: #160 [botsend] Fixed BOTSEND SEND (cosmetic: transfer speed calculation wasn't truncated / rounded to 1 decimal place like the other parts of the output)

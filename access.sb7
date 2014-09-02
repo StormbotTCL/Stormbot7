@@ -1,15 +1,16 @@
 sb7 command add ACCESS     0 -core ; # -chanspec <--- due to -GLOBAL, don't use -CHANSPEC
-sb7 command add ADDUSER  400 -none AU
-sb7 command add MODUSER  400 -none MU
-sb7 command add REMUSER  400 -none RU
-sb7 command add USERLIST   1 -none UL
-sb7 command add ADMIN    501 -none ADM
+sb7 command add ADDUSER  400 -none AU -redirect
+sb7 command add MODUSER  400 -none MU -redirect
+sb7 command add REMUSER  400 -none RU -redirect
+sb7 command add USERLIST   1 -none UL -redirect
+sb7 command add ADMIN    501 -none ADM -redirect
 sb7 command add WHO      100 -none
 sb7 command add WHOIS      1 -none WI
 sb7 command add WHOAMI    -1 -none WAI
 sb7 command add PROTECT  501 -none
 sb7 command add TOKENS     1 -none TOKEN
 sb7 command add RANK       0 -none RANKS
+sb7 command add HOST     400 -none 
 
 proc @adduser  { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS ADD <level> <list of users>" }
 proc @remuser  { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS DEL <list of users>" }
@@ -310,6 +311,122 @@ proc @access { nick host handle chan arg } {
 
 	}
 	return
+}
+
+proc @host { nick host handle chan arg } {
+	FLAGS
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[HOST\]:"
+			print -help $nick "Syntax: $::botnick HOST HELP"
+			print -help $nick "Syntax: $::botnick HOST HINT"
+			print -help $nick "Syntax: $::botnick HOST ADD <user> <list of hosts to add>"
+			print -help $nick "Syntax: $::botnick HOST DEL <user> <list of hosts to remove>"
+			print -help $nick "Syntax: $::botnick HOST LIST <list of users>"
+			print -help $nick "Syntax: $::botnick HOST FIND <host (wildcard OK)>"
+			print -help $nick "Syntax: $::botnick HOST CLEAR <user>"
+			print -help $nick ""
+			print -help $nick "The HOST command controls hostmasks for user identification."
+			print -help $nick "For a user to add a host to her/himself, you may need to use the IDENT command"
+			print -help $nick "Syntax: /msg $::botnick ident <password> <handle>"
+			print -help $nick "The IDENT command is not a StormBot.TCL command\; it is an intrinsic Eggdrop command. The bot's permanent owner can remove (or rename) the IDENT command so it is not guaranteed to be available at any time."
+			return
+		}
+
+		hint {
+			print -help $nick "\[HOST\]:"
+			print -help $nick "The following SB3 / SB4 / SB5 / SB6 commands have been absorbed into the HOST command in SB7:"
+			print -help $nick "ADDMASK -> $::botnick HOST ADD <user> <list of hosts>"
+			print -help $nick "REMMASK -> $::botnick HOST DEL <user> <list of hosts>"
+			return
+		}
+
+		add {
+			if [string eq "" $2] { print -help -short -return $nick "From what user(s) hosts are we adding hosts?" }
+			if [string eq "" $3] { print -help -short -return $nick "From host are we adding?" }
+			lassign [whois [join $2] $handle] - - - target
+			if ![validuser $target] { print -help -short -return $nick "No such user: [join $2]" }
+			if ![access compare -self:ok $handle $target] { print -help -short -return $nick "You don't have access to alter ${target}'s hosts." }
+			empty ok bad
+			foreach mask $3e {
+				if [validhost [join $mask] $target] { lappend bad [join $mask] ; continue }
+				lappend ok $mask
+				setuser $target hosts [join $mask]
+			}
+			if [notempty ok] { saveme user ; print $nick "Host added: [ajl $ok]" }
+			if [notempty bad] { print $nick "Not added (already exists): [ajl $bad]" }
+			return
+		}
+
+		del {
+			if [string eq "" $2] { print -help -short -return $nick "From what user(s) hosts are we removing hosts?" }
+			if [string eq "" $3] { print -help -short -return $nick "From host are we removing?" }
+			lassign [whois [join $2] $handle] - - - target
+			if ![validuser $target] { print -help -short -return $nick "No such user: [join $2]" }
+			if ![access compare -self:ok $handle $target] { print -help -short -return $nick "You don't have access to alter ${target}'s hosts." }
+			empty ok bad
+			foreach mask $3e {
+				if ![validhost [join $mask] $target] { lappend bad [join $mask] ; continue }
+				lappend ok $mask
+				delhost $target [join $mask]
+			}
+			if [notempty ok] { saveme user ; print $nick "Host removed: [ajl $ok]" }
+			if [notempty bad] { print $nick "Not removed (no such mask): [ajl $bad]" }
+			return
+		}
+
+		list {
+			if [string eq "" $2] { print -help -short -return $nick "What user(s) hosts are we listing?" }
+			zero users hosts
+			foreach user [join $2e] {
+				incr users
+				lassign:array target [whois $user $handle] online nick host handle chan authhandle authnick
+				print -short $nick "User: [nph $target(nick) $target(handle)]"
+				foreach userhost [getuser $target(handle) hosts] { incr hosts ; print $nick "[space 5]$userhost" }
+			}
+			print -short $nick "[comma $users] [plural user $users] & [comma $hosts] [plural host $hosts] displayed."
+			return
+		}
+
+		find {
+			if [string eq "" $2] { print -help -short -return $nick "For what hosts are we searching?" }
+			empty hostlist
+			zero users hosts
+			foreach user [lsort -uni -dict -inc [userlist]] { # Include bots
+				set matches [lmatch -all -nocase -glob -multiple -glob -- [getuser $user hosts] [join $2e]]
+				if [notempty matches] {
+					incr users
+					incr hosts [llength $matches]
+					print -short $nick "User: $user"
+					foreach match $matches { print $nick "[space 5]$match" }
+				}
+				set hostlist [concat $hostlist ]
+			}
+			if !$hosts { print -short -return $nick "No matching hosts." }
+			print -short $nick "[comma $users] [plural user $users] & [comma $hosts] [plural host $hosts] matched."
+			return
+		}
+
+		clear {
+			if ![string eq -nocase CLEAR $2] { print -help -short -return $nick "Are you [effects sure up un b]?! Use \"CLEAR CLEAR\" to convince me." }
+			empty ok bad access
+			foreach user $3e {
+				lassign [whois [join $user] $handle] - - - target
+				if ![validuser $target] { lappend bad [join $user] ; continue }
+				if ![access compare $handle $target] { lappend access [nph [join $user] $target] ; continue }
+				setuser $target hosts ""
+			}
+			if [notempty ok] { saveme user ; print -short $nick "Hosts purged from: [ajl $ok]" }
+			if [notempty bad] { print -short $nick "Unable to purge from users (unknown users): [ajl $bad]" }
+			if [notempty access] { print -short $nick "Unable to purge from users (insufficient access): [ajl $access]" }
+			return
+		}
+
+		default { print -help -short -return $nick "Unknown command: [join $1]" }
+
+	}
+	?
 }
 
 proc @rank { nick host handle chan arg } {

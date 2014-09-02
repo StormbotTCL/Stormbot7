@@ -1,7 +1,7 @@
-sb7 command add LOGIN    0 -locklevel -core -auth -ok:logout ; # Why remove OK:LOGOUT for this?
+sb7 command add LOGIN    0 -locklevel -core -auth -logout:ok ; # Why remove OK:LOGOUT for this?
 sb7 command add LOGOUT   0 -locklevel -core
 sb7 command add OPASS 1000 -locklevel -core
-sb7 command add PASSHINT 1 -locklevel -core -ok:logout PH ; # Levels -1 & 0 don't require authing
+sb7 command add PASSHINT 1 -locklevel -core -logout:ok PH ; # Levels -1 & 0 don't require authing
 sb7 register user PASSHINT:PASS
 sb7 register user PASSHINT:OPASS
 

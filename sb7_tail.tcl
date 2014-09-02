@@ -25,7 +25,7 @@ proc sb7 args { # General
 			switch -exact -- [string tolower $1] {
 
 				add {
-					set validflags [list -none -ok:badchan -ok:logout -ok:suspended -auth -chanspecific -locklevel -corecommand]
+					set validflags [list -none -badchan:ok -logout:ok -suspended:ok -auth -chanspecific -locklevel -corecommand -redirect]
 					set source [file tail [data get @BEAD]]
 					set proc @[string tolower $2]
 					set flags [lassign $args - - cmd level]
@@ -527,7 +527,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# User logged in?
 	set access [access higher $handle $chan]
 	if { $cmdinfo(level) > 0 } {
-		if { [lsearch -exact $cmdinfo(flags) -ok:logout] == -1 } {
+		if { [lsearch -exact $cmdinfo(flags) -logout:ok] == -1 } {
 			if ![is authed $handle $nick $host] { print -private -error $nick "\[SB7\] Who are you?" ; return 0 }
 			if { $cmdinfo(level) > $access } { print -private -error $nick "\[SB7\] You don't have access to the [string toupper $cmd] command." ; return 0 }
 		}
@@ -1588,7 +1588,7 @@ rawhome "\[SB7:COMMAND\] Why is this being used ?!?!? COMMAND($command):ARGS($ar
 
 proc sb7:getcmdargs {arg var_cmd var_level var_flags var_abbr} {
 #$args cmd level flags abbr
-	set validflags [list -none -ok:badchan -ok:logout -ok:suspended -auth -chanspecific -locklevel -corecommand]
+	set validflags [list -none -badchan:ok -logout:ok -suspended:ok -auth -chanspecific -locklevel -corecommand -redirect]
 	switch -exact -- [string tolower [lindex $arg 0]] {
 
 		add {
@@ -2397,6 +2397,7 @@ debug =final list
 	return $list_map
 }
 
+# Note: LMATCH (interp alias) -> "LDESTROY -NOT"
 proc ldestroy args {
 	# This replaces SB6/LDESTROY! (:
 	# This replaces SB6/LMATCH (via -NOT) (:
@@ -2410,7 +2411,7 @@ proc ldestroy args {
 	if [validflag -multiple] { set total $text } { set total [list $text] }
 
 	# Priority: glob, regexp, exact (default: glob)
-#     if [validflag -regexp] { set match regexp } elseif [validflag -exact] { set match exact } else { set match glob }
+	#if [validflag -regexp] { set match regexp } elseif [validflag -exact] { set match exact } else { set match glob }
 	set match glob ; # Default (order (lowest-to-highest: regexp, exact, glob)
 	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
 
@@ -3899,6 +3900,8 @@ proc pingpong { { time "" } } {
 
 # --- Other commands ---
 
+proc DISPATCH { 1 args } { set ::_args $args ; uplevel 1 { eval switch -exact -- [string tolower $1] $::_args } ; unset ::_args }
+
 proc os { { checkme "" } } {
 	if [string eq -nocase VERSION $checkme] {
 		set os $::tcl_platform(os)
@@ -5313,6 +5316,7 @@ interp alias {} % {} percent
 interp alias {} userflags {} userflag
 interp alias {} getflags {} sb7 parseflags
 interp alias {} FLAGS {} sb7 parseflags ; # Case sensitive!
+interp alias {} lmatch {} ldestroy -not
 
 # --- Deprecated commands ---
 
