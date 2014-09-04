@@ -19,6 +19,7 @@ proc @botmon { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick BOTMON FREE <add | del | list | clear>"
 			print -help $nick "Syntax: $::botnick BOTMON NOTIFY <hourly | links | hubs> <off | on>"
 			print -help $nick "Syntax: $::botnick BOTMON DEFERTO <list of bots>"
+			print -help $nick "Syntax: $::botnick BOTMON SUSPEND <timestamp , URT offset, or other valid time>"
 			print -help $nick "Syntax: $::botnick BOTMON STATUS"
 			print -help $nick ""
 			print -help $nick "The BOTMON command tracks bots connecting or leaving the local botnet, or, returns the botnet's current status. All information is reported to my \"home\" channel ([home])"
@@ -41,6 +42,23 @@ proc @botmon { nick host handle chan arg } {
 			print $nick "Botnet: extra bots: [none [ldestroy -all -multiple -nocase [bots] [concat [data array get BOTMON IGNORE] [data array get BOTMON OFFLINE] [data array get BOTMON BOTS]]] <none>]"
 			print $nick "Defer to: [none [data array get BOTMON deferto] <none>]"
 			print $nick "Ignore mode: [none [data array get BOTMON IGNOREMODE] "default (report)"]"
+			print $nick "Suspend mode: [none [data array get BOTMON SUSPEND] off "until [format:date [data array get botmon suspend] $handle]"]"
+			return
+		}
+
+		susp - suspend {
+			if [isempty 2] { print -help -short -return $nick "What are we doing with BOTMON SUSPEND?" }
+			if [string eq -nocase OFF $2] {
+				data array set botmon suspend ""
+				saveme data
+				print $nick "\[BOTMON SUSPEND\] BOTMON alerts are no longer suspended."
+				return
+			}
+			set ts [get time -future $2e]
+			if [isempty ts] { print -help -return $nick "\[BOTMON SUSPEND\] I don't understand a date or time from that: [join $2]" }
+			print $nick "\[BOTMON SUSPEND\] BOTMON alerts are suspended until: [format:date $ts $handle]"
+			data array set botmon suspend $ts
+			saveme data
 			return
 		}
 
@@ -434,7 +452,11 @@ proc @botmon { nick host handle chan arg } {
 			
 		}
 		
-		"" - now - force - check { print -return -short $nick "[@botmon:interpret]" }
+		"" - now - force - check { 
+			set ts [@botmon:is_suspended]
+			if $ts { print -return $nick "\[BOTMON CHECK\] Currently suspended until: [format:date $ts $handle]" }
+			print -return -short $nick "[@botmon:interpret]" 
+		}
 
 		default { print -help -return -error $nick "\[${0u}\] Unknown option: $1u" }
 
@@ -544,10 +566,22 @@ proc @botmon:deferred args {
 
 proc @botmon:hourly args {
 	if ![data array get -boolean BOTMON NOTIFY:HOURLY] return
-	if [@botmon:deferred] return
+	if [@botmon:deferred] { putlog "\[@BOTMON:HOURLY\] BOTMON is currently deferred to: []" ; return }
+	if [@botmon:is_suspended] return
 	set output [@botmon:interpret]
 	print -home "\[BOTMON HOURLY\] $output"
 	return
+}
+
+proc @botmon:is_suspended args {
+	# Return time that suspension is valid until (will pass boolean test), or, "0" indicate no suspension / invalid time / already expired
+	# Don't interfere if expired: the UTIMER will eventually catch it
+	set ts [data array get botmon suspend]
+	if [isempty ts] { return 0 
+}
+	if ![isnum -integer $ts] { return 0 }
+	if { [clock seconds] >= $ts } { return 0 }
+	return $ts
 }
 
 proc @botmon:interpret args {
@@ -578,32 +612,8 @@ proc @botmon:interpret args {
 
 			}
 		}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#%# Anything missing here?
 		set output [join $output \n]
-
 	} {
 		empty output_missing explanation
 		set ll [llength [bots]]
@@ -683,6 +693,26 @@ proc @botmon:interpret args {
 	return $output
 }
 
+proc @botmon:suspend_check args {
+	if ![validtimer @botmon:suspend_check] { utimer 1 @botmon:suspend_check }
+	set ts [data array get botmon suspend]]
+	if [isempty ts] return
+
+	# Sanity check
+	if ![isnum -integer $ts] {
+		data array set botmon suspend ""
+		saveme data
+		return
+	}
+
+	if { [clock seconds] >= $ts } {
+		print -home "\[BOTMON SUSPEND\] Suspension released ...."
+		data array set botmon suspend ""
+		saveme data
+	}
+	return
+}
+
 ##### 
 # Bootstrap
 
@@ -693,5 +723,4 @@ bind join - * @botmon:join
 bind sign - * @botmon:sign
 bind part - * @botmon:part
 bind kick - * @botmon:kick
-
-
+utimer 1 @botmon:suspend_check

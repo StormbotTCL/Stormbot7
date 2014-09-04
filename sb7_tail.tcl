@@ -2403,7 +2403,13 @@ proc ldestroy args {
 	# This replaces SB6/LMATCH (via -NOT) (:
 
 	flags -simple $args [list -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
-
+if { [string match -nocase BOTFL $temp] || [string eq -nocase $flags "-all -multiple -nocase -nonulls"] } {
+	putlog "\[LDESTROY\] TEMP($temp)"
+	putlog "\[LDESTROY\] FLAGS($flags)"
+	putlog "\[LDESTROY\] INFO:0([info level [expr [info level] - 0]])"
+	putlog "\[LDESTROY\] INFO:1([info level [expr [info level] - 1]])"
+	putlog "\[LDESTROY\] INFO:2([info level [expr [info level] - 1]])"
+}
 	# We're CONSTANTLY using the -NONULLS flag: let's make it default, shall we?
 	if ![validflag -keepnulls] { lappend flags -nonulls }
 
@@ -2427,7 +2433,7 @@ proc ldestroy args {
 		}
 		set temp_list [concat $temp_list $__]
 	}
-
+#####putlog "__($__):FLAGS($flags):LEVEL/0([info level [info level]]):LEVEL/1([info level [expr [info level] - 1]])"
 	# Re-assemble
 	array set new [list list "" not ""]
 	set ll [llength $list]
@@ -2453,6 +2459,13 @@ proc ldestroy args {
 	if [validflag -increasing] { set new(list) [lsort -increasing $new(list)] }
 	if [validflag -decreasing] { set new(list) [lsort -decreasing $new(list)] }
 	if [validflag -unique] { set new(list) [lunique $new(list)] }
+
+	if ![validflag -all] {
+		# The loops above seem to still capture all data despite the -ALL flag.
+		# So, let's trim it here with a healthy crop!
+#####putlog "\[LDESTROY\] NEW([array get new])"
+#####		foreach a [array names new] { if [notempty new($a)] { set new($a) [lindex $new($a) 0] } }
+	}
 
 	if [validflag -both] {
 		if [validflag -nonulls] { set new(not) [lsearch -inline -all -not -exact $new(not) ""] }
@@ -2739,6 +2752,31 @@ proc validhost { host handle } {
 	return 0
 }
 
+proc validutimer text {
+	foreach utimer [utimers] { if [string match -nocase $text [lindex $utimer 1]] { return 1 } }
+	return 0
+}
+
+proc validtimer text {
+	foreach timer [timers] { if [string match -nocase $text [lindex $timer 1]] { return 1 } }
+	return 0
+}
+
+proc findtimer text {
+	empty findtimer
+	foreach timer [timers] { if [string match -nocase $text [lindex $timer 1]] { lappend findtimer [lindex $timer 2] } }
+	foreach utimer [uimers] { if [string match -nocase $text [lindex $utimer 1]] { lappend findtimer [lindex $utimer 2] } }
+	return $findtimer
+}
+
+proc gettimer text {
+	empty gettimer
+	foreach a [concat [utimers] [timers]] {
+		if { [string eq -nocase $text [lindex $a 1]] || [ string eq -nocase $text [lindex $a 2]] } { lappend gettimer $a }
+	}
+	return $gettimer
+}
+
 proc userlist:level { { range "1-1001" } { chan "" } } {
 	array set userlist ""
 	empty list
@@ -2779,7 +2817,7 @@ proc access args {
 			lassign $args - handle chan
 			if [isempty chan] {
 				# Global
-				if [ispermowner $handle] { 
+				if [is permowner $handle] { 
 					set level 1000
 					regsub -all -- {,| [ ]+} $::owner " " o
 					if { [llength $o] > 1 } {
@@ -3314,7 +3352,7 @@ proc effects { text args } {
 				set text [binary format H* $text]
 			}
 
-			^hex\:to$ { binary scan $text H* text }
+			^hex\:to$ { binary scan $text H* text ; set text [string toupper $text] }
 
 			utf8 - ^utf\-8$ { set text [encoding convertto utf-8 $text] }
 
@@ -4305,7 +4343,7 @@ proc get { cmd args } {
 
 		owner - owners { if [isempty ::owner] { return "" } { return [regsub -all -- {,|[ ]{2,}} $::owner " "] } }
 
-		permowner { set o $::owner ; if [isempty o] return ; return [lindex [split $o ,] 0] }
+		permowner { set o $::owner ; if [isempty o] return ; return [lindex [split $o ", "] 0] ; # Why only index #0? }
 
 		op - ops - opsymbol {
 			lassign $args nick chan
@@ -5399,6 +5437,6 @@ utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
 
 sb7:setup ; # Last thing to be executed!
 
-putlog "\[StormBot.TCL\] StormBot.TCL v[data get @VERSION] (by Mai \"Domino\" Mizuno) loaded"
+putlog "\[StormBot.TCL\] StormBot.TCL v[data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
 
 
