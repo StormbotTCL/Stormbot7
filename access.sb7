@@ -1,9 +1,11 @@
 sb7 command add ACCESS     0 -core ; # -chanspec <--- due to -GLOBAL, don't use -CHANSPEC
-sb7 command add ADDUSER  400 -none AU -redirect
-sb7 command add MODUSER  400 -none MU -redirect
-sb7 command add REMUSER  400 -none RU -redirect
-sb7 command add USERLIST   1 -none UL -redirect
-sb7 command add ADMIN    501 -none ADM -redirect
+sb7 command add ADDUSER  400 -none -redirect AU
+sb7 command add MODUSER  400 -none -redirect MU
+sb7 command add REMUSER  400 -none -redirect RU
+sb7 command add USERLIST   1 -none -redirect UL
+sb7 command add ADMIN    501 -none -redirect ADM
+sb7 command add ADDMASK  400 -none -redirect
+sb7 command add REMMASK  400 -none -redirect
 sb7 command add WHO      100 -none
 sb7 command add WHOIS      1 -none WI
 sb7 command add WHOAMI    -1 -none WAI
@@ -15,8 +17,8 @@ sb7 command add HOST     400 -none
 proc @adduser  { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS ADD <level> <list of users>" }
 proc @remuser  { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS DEL <list of users>" }
 proc @moduser  { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS MOD <new level> <list of users>" }
-proc @admin    { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS -GLOBAL ADD <level> <list of users>" }
-proc @userlist { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS \[-GLOBAL\] \[-SHORT\] LIST \[range\]" }
+proc @admin    { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS ADD -GLOBAL <level> <list of users>" }
+proc @userlist { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS LIST \[-GLOBAL\] \[-SHORT\] \[range\]" }
 
 proc @access { nick host handle chan arg } {
 	# This will be the all-encompassing ACCESS controller
@@ -40,7 +42,8 @@ proc @access { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick ACCESS DEL <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS DEL -GLOBAL <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS SCRUB <list of nicks>"
-			print -help $nick "Syntax: $::botnick ACCESS LIST \[-GLOBAL\] \[range of levels\]"
+			print -help $nick "Syntax: $::botnick ACCESS LIST \[-GLOBAL\] \[-DEAD\] \[range of levels\]"
+			print -help $nick "Syntax: $::botnick ACCESS AUDIT"
 			print -help $nick "Syntax: $::botnick ACCESS <user>"
 			print -help $nick ""
 			print -help $nick "The ACCESS command is a combination of several previously separate commands: ADDUSER, ADDBOT, MODUSER, REMUSER, ACCESS, USERLIST, & ADMIN. For simplicity, due to similaries in code, I'm combining them together into one bead."
@@ -104,7 +107,7 @@ proc @access { nick host handle chan arg } {
 			foreach user $users {
 				set user [join $user]
 				lassign:array adduser [whois $user $handle] online nick host handle chan
-				if [string eq -nocase $handle $adduser(handle)] { lappend status(self) $user ; continue }
+#				if [string eq -nocase $handle $adduser(handle)] { lappend status(self) $user ; continue }
 				if ![access compare $handle $adduser(handle)] { lappend status(access) $user ; continue }
 				if [none [access get $adduser(handle) $chan] 0] { lappend status(moduser) $user ; continue }
 				if [validuser $adduser(handle)] {
@@ -139,7 +142,6 @@ proc @access { nick host handle chan arg } {
 						break
 					}
 				}
-				lappend status(ok) $user
 			}
 			if [notempty status(self)] { saveme user ; print -short $nick "Unable to handle mirrors (can't add yourself!): [ajl $status(self)]" }
 			if [notempty status(ok)] { saveme user ; print -short $nick "Added users: [ajl $status(ok)]" }
@@ -173,7 +175,7 @@ proc @access { nick host handle chan arg } {
 			array set status [list ok "" access "" unknown "" adduser "" self ""]
 			foreach user $users {
 				lassign:array moduser [whois [join $user] $handle] online nick host handle chan
-				if [string eq -nocase $handle $moduser(handle)] { lappend status(self) $user ; continue }
+#				if [string eq -nocase $handle $moduser(handle)] { lappend status(self) $user ; continue }
 				if ![validuser $moduser(handle)] { lappend status(unknown) $user ; continue }
 				if ![none [access get $moduser(handle) $chan] 0] { lappend status(adduser) $user ; continue }
 				if ![access compare $handle $moduser(handle)] { lappend status(access) $user ; continue }
@@ -257,7 +259,7 @@ proc @access { nick host handle chan arg } {
 					 default { error "\[ACCESS SCRUB\] Unknown WHOIS reply: ONLINE($online):WN($wn):WM($wm):WH($wh):WC($wc) (report this to the coder)" }
 				}
 				if ![validuser $wh] { lappend bad $user ; continue }
-				set list [ldestroy -not -nocase -glob -multiple [get first [userinfo list $user]] [list USERLEVEL:* ACCESS:#*]]
+				set list [ldestroy -all -not -nocase -glob -multiple [get first [userinfo list $user]] [list USERLEVEL:#* ACCESS:#*]]
 				foreach element $list { userinfo set $user $element }
 				if [string eq -nocase $user $wh] { lappend ok $user } { lappend ok "$user ([nph $wn $wh])" }
 			}
@@ -269,9 +271,9 @@ proc @access { nick host handle chan arg } {
 		list {
 			# SB3/SB4/SB5/SB6:USERLIST
 			set arg [lreplace $arg 1 1]
-			FLAGS -short -none -global
+			FLAGS -short -dead -global
 			# Handle special case first: -NONE
-			if [validflag -none] {
+			if [validflag -dead] {
 				empty o
 				foreach user [userlist -b] {
 					zero m
@@ -300,6 +302,34 @@ proc @access { nick host handle chan arg } {
 				lappend users($user) [none $level 0]
 			}
 			foreach a [lsort -dictionary -increasing -unique [array names users]] { print $nick "${a}: [ajl $users($a)]" }
+			return
+		}
+
+		audit {
+			flags:simple $2e [list -global -all] text flags true
+			if $global { if ![access check 501 $handle] { print -error -return -short $nick "You don't have access to the -GLOBAL flag." } }
+			if $all { if ![access check 501 $handle] { print -error -return -short $nick "You don't have access to the -ALL flag." } }
+			set channels $chan
+			if [validflag -all] { set channels [channels] }
+			foreach channel $channels {
+				array set audit [list flags1level0 "" level1flags0 "" nohosts ""]
+				foreach user [userlist] {
+					if [string eq "" [getuser $user hosts]] { lappend audit(nohosts) $user }
+					if [matchattr $user b] {
+						if { [access get $user $channel] > 0 } { lappend audit(botlevel) $user }
+					} {
+						if { [string match *|- [chattr $user $channel]] && ( [access get $user $channel] > 0 ) } { lappend audit(flags1level0) $user }
+						if { ![string match *|- [chattr $user $channel]] && ( [access get $user $channel] == 0 ) } { lappend audit(flags1level0) $user }
+					}
+				}
+				zero found
+				if [notempty audit(nohosts)] { one found ; print $nick "\[ACCESS AUDIT: ${channel}\] Users with no hosts: [ajl $audit(nohosts)]" }
+				if [notempty audit(flags1level0)] { one found ; print $nick "\[ACCESS AUDIT: ${channel}\] Users with flags but have not been ACCESS ADDed yet: [ajl $audit(flags1level0)]" }
+				if [notempty audit(level1flags0)] { one found ; print $nick "\[ACCESS AUDIT: ${channel}\] Users with access (ACCESS ADD) but no flags: [ajl $audit(level1flags0)]" }
+				if [notempty audit(botlevel)] { one found ; print $nick "\[ACCESS AUDIT: ${channel}\] Bots with channel access: [ajl $audit(botlevel)]" }
+				if !$found { print $nick "\[ACCESS AUDIT: ${channel}\] No problems found! :)" }
+				unset audit
+			}
 			return
 		}
 
@@ -1054,11 +1084,11 @@ proc @tokens { nick host handle chan arg } {
 		return
 	}
 
-	set list [ldestroy -not -mult -glob [get first [data get userlevels]] [list chan* global* bot*]]
+	set list [ldestroy -all -not -mult -glob [get first [data get userlevels]] [list chan* global* bot*]]
 	if [isempty 1] { print -short -return $nick "Currently available tokens: [ajl $list]" }
 
 	# Find by token name ....
-	set matches [ldestroy -not -glob -nocase -mult $list [regsub -all -- {\$} $1e "" ]]
+	set matches [ldestroy -all -not -glob -nocase -mult $list [regsub -all -- {\$} $1e "" ]]
 	if [notempty matches] {
 		foreach token $matches {
 			set data [get token $token $chan]

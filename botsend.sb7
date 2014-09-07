@@ -176,7 +176,8 @@ proc @botsend { nick host handle chan arg } {
 			if [isempty ::botnet-nick] { set id $::botnick } { set id ${::botnet-nick} }
 			append id :[clock seconds]:[expr abs([clock clicks -milli])]:[addzero [rand 10000000] 7]
 			data set @BOTSEND:$id $send(bots)
-			set buffer_timeout 30
+			data set @BOTSEND:${id}:FILES $send(files)
+			set buffer_timeout 60
 			set clock [clock seconds]
 			foreach file $send(files) {
 				set error [ catch { set data [readfile $file "" true] } crap ]
@@ -407,8 +408,10 @@ proc @botsend:receive { bot - arg } {
 			set text_autoload ""
 #debug =BOTSEND =EOF =7
 			if [data get -boolean BOTSEND:option:AUTOLOAD] {
-				set text_autoload " (auto-loaded)" ; # Space!
-				[sb7 command get maintenance proc] $nick $host $handle $chan "maintenance load [file tail $filename]"
+				if [is component $filename] {
+					set text_autoload " (auto-loaded)" ; # Space!
+					[sb7 command get maintenance proc] $nick $host $handle $chan "maintenance load [file tail $filename]"
+				}
 			}
 			putbot $bot [list botsend:complete $id]
 #debug =BOTSEND =EOF =8
@@ -434,10 +437,14 @@ proc @botsend:complete { bot cmd id } {
 #putlog "\[@BOTSEND:COMPLETE\] BOT($bot):CMD($cmd):ID($id)"
 	set data [data get @BOTSEND:$id]
 #putlog "\[@BOTSEND:COMPLETE\] DATA($data)"
-	set data [ldestroy -nocase $data $bot]
+	set data [ldestroy -all -nocase $data $bot] ; # -ALL is irrelevant; each bot should only be listed once per transfer stream anyway (sanity check during SEND)
 #putlog "\[@BOTSEND:COMPLETE\] DATA($data)"
 	data set @BOTSEND:$id $data
 	if [notempty data] return
+	set temp [data get @BOTSEND:${id}:FILES]
+	empty files
+	foreach a $temp { if [is component $a] { lappend files [sb7 shortname $a] } { lappend files $a } }
+#debug files =DATA([data find @BOTSEND:${id}*])
 	set size [data get @BOTSEND:${id}:SIZE]
 #putlog "\[@BOTSEND:COMPLETE\] SIZE($size)"
 	data set @BOTSEND:${id}:SIZE ""
@@ -459,7 +466,7 @@ proc @botsend:complete { bot cmd id } {
 		set factor 1 ; # Tested OK
 	}
 #putlog "\[@BOTSEND:COMPLETE\] ELAPSED_MILLI($elapsed_milli):WORD($word)"
-	print -home "\[BOTSEND\] Transfers complete: \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma [format %.1f $elapsed_milli]] $word\037\002 ([format %.1f [expr (${size}.0 / $elapsed_milli ) * $factor ]] KiB/s)"
+	print -home "\[BOTSEND\] Transfers complete ([effects [ajl $files] b]): \002\037[comma $size] bytes\037\002 ([bytes $size 1]) in \002\037[comma [format %.1f $elapsed_milli]] $word\037\002 ([format %.1f [expr (${size}.0 / $elapsed_milli ) * $factor ]] KiB/s)"
 	return
 }
 

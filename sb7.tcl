@@ -25,7 +25,7 @@
 # 02111-1307, USA. Or, you can read it at http://www.gnu.org/ or you may read
 # the license on our website in the MISCELLANEOUS section, or the  text  file
 # included in the tarball from which you extracted this file (usually called:
-# sb7_gpl_v3_license.txt).
+# sb7_license.txt).
 
 # TRANSLATION: if you modify this script into  your  own  product,  you  must
 # credit us as the source of the original source code. After  all,  we  wrote
@@ -250,8 +250,8 @@ set sb7(config:give_p) 0
 # converted to scientific notation (e.g. 1.70141183E+38).
 #
 # Please note: using the maximum value  of  "17"  will  cause  IEEE  rounding 
-# errors (a value of "2" will become "1.9999999999999999" instead). It's  not
-# recommended to use this value; use "16" instead.
+# errors (a value of 2 will become "1.9999999999999999" in some  calculations
+# instead). It's not recommended to use this value; use "16" instead.
 
 # Additional note: in TCL 8.6, a TIP is active to allow a new value "0" which
 # will allow TCL to use whatever precision necessary to  internally  preserve
@@ -288,6 +288,15 @@ set sb7(@boot_fail_die) true
 # 100    - do_restart is now reset before actually performing a rehash or restart to
 # 101      ensure it doesn't try to do it again infinitely.
 # 102      Found by: Domino / Patch by: thommey
+
+# An acknowledgement from Eggdrop core for a bug report and a command 
+# suggestion re: STICKY bans and related typoes:
+# ( http://egg.lib.so:1352/cgi-bin/gitweb.cgi?p=eggcvs1.8;a=commitdiff;h=4548fef )
+# 1.8.0 (CVS):
+#
+#+  - Fix error messages of the Tcl commands (un)stick(exempt/invite).
+#+  - Add an alias for (un)stickban to correspond to them.
+#+    Found by: Domino / Patch by: thommey
 
 # Note: there are only 2 files now: CORE (sb7.tcl) and  TAIL  (sb7_tail.tcl).
 # The DISP (dispatcher) & LOAD (loader) files  are  now  part  of  TAIL.  The

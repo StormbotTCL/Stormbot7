@@ -3,13 +3,12 @@ sb7 command add DNS 501 -none
 
 proc @dns { nick host handle chan arg } {
 	sb7 parseflags -dig -host -nslookup -more
-
 	if [string eq -nocase HELP $1] {
 		print -help $nick "\[DNS\]:"
-		print -help $nick "The DNS command will \037ATTEMPT\037 to resolve the given DNS or IP into the other. Note that this bead can not handle IPv6-formatted addresses at this time."
-		print -help $nick "Syntax: $::botnick DNS \[flags\] <IP> (\037finds the DNS name for the given IP\037)"
-		print -help $nick "Syntax: $::botnick DNS \[flags\] <DNS> (\037finds the IP for the given DNS name\037)"
+		print -help $nick "Syntax: $::botnick DNS \[-DIG | -NSLOOKUP\] <IP> (\037finds the DNS name for the given IP\037)"
+		print -help $nick "Syntax: $::botnick DNS \[-DIG | -NSLOOKUP\] <DNS> (\037finds the IP for the given DNS name\037)"
 		print -help $nick "Syntax: $::botnick DNS COUNTRY <IP> (\037looks-up what country a given IP is from\037)"
+		print -help $nick "The DNS command will \037ATTEMPT\037 to resolve the given DNS or IP into the other. Note that this bead can not handle IPv6-formatted addresses at this time."
 		print -help $nick "DNS will return all matching entries. By default, DNS will implement NSLOOKUP on a Windows machine (including on Cygwin), and HOST on a *nix machine."
 		print -help $nick "To make a *nix machine use DIG or NSLOOKUP, use the -DIG & -NSLOOKUP flags, respectively (these flags are ignored on Windows machines)."
 		print -help $nick "If, on a *nix machine, -DIG & -NSLOOKUP are both specified, -DIG will overrule (cancel) -NSLOOKUP for a DNS name lookup. DIG can not handle IP address lookups."
@@ -28,7 +27,7 @@ proc @dns { nick host handle chan arg } {
 		set www_split [split $www \n]
 		if ![instr [sl1 $www_split] unknown] { lset reply 0 [lrange [lindex $www_split 1] 1 end] }
 		lset reply 1 [lrange [lindex $www_split 0] 1 end]
-		print -short $nick "${2}: [join [ldestroy -nonull $reply] " -- "]"
+		print -short $nick "${2}: [join [ldestroy -all -nonull $reply] " -- "]"
 		return
 	}
 

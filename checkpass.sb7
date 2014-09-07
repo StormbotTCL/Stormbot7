@@ -94,7 +94,7 @@ proc @checkpass:return { bot - text } {
 
 	data lappend @CHECKPASS:DATA:$handle [list $bot $valid]
 	set list [data get @CHECKPASS:LIST:$handle]
-	set list [ldestroy -exact -nocase $list $bot]
+	set list [ldestroy -all -exact -nocase $list $bot]
 	data set @CHECKPASS:LIST:$handle $list
 	# If all have returned, pipe to common output parser
 	if [isempty list] { @checkpass:bot:output $handle }
@@ -137,5 +137,4 @@ proc @checkpass:bot:output handle {
 
 bind bot - @checkpass:bot @checkpass:bot
 bind bot - @checkpass:return @checkpass:return
-
 

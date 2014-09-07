@@ -23,7 +23,7 @@ proc @abbr { nick host handle chan arg } {
 				if [isempty 3] { print -return -error -short $nick "You forgot to tell me what we're adding to $2" }
 				sb7 abbr add $2 $3e
 				saveme data
-				print -return -short $nick "New abbreviation list for ${2}: [join [sb7 abbr list $2]]"
+				print -return -short $nick "New abbreviation list for ${2}: [join [sb7 abbr get $2]]"
 			}
 
 			del {
@@ -31,13 +31,12 @@ proc @abbr { nick host handle chan arg } {
 				if [isempty 3] { print -return -error -short $nick "You forgot to tell me what we're removing from $2" }	
 				sb7 abbr del $2 $3e	
 				saveme data	
-				print -return -short $nick "New abbreviation list for ${2}: [join [sb7 abbr list $2]]"
+				print -return -short $nick "New abbreviation list for ${2}: [none [join [sb7 abbr get $2]] <none>]"
 			}
 
 			list {
-				set matchme *
 				foreach cmd [ldestroy -not -multiple -nocase -all -glob [sb7 command list] [none $2e *]] {
-					set abbr [join [sb7 abbr get $cmd]]
+					set abbr [join [sb7 abbr get [join $cmd]]]
 					if [notempty abbr] { print $nick "\[[string toupper $cmd]\] [ajl $abbr]" }
 				}
 				print $nick "End of list."
@@ -65,5 +64,4 @@ proc @abbr { nick host handle chan arg } {
 	}
 	return
 }
-
 

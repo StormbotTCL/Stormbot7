@@ -101,6 +101,7 @@ proc sb7 args { # General
 		abbr {
 			##if [string eq "" $2] { set abbr "" } { set abbr [data array value ABBR $2] }
 			#if ![string eq "" $2 ] { set abbr [data array value ABBR $2] }
+#putlog "\00301,00\[SB7 ABBR\] [info level [info level]]\003"
 			set abbr [data array get ABBR $2]
 			switch -exact -- [string tolower $1] {
 
@@ -113,15 +114,15 @@ proc sb7 args { # General
 				}
 
 				del {
-					if ![sb7 command check $2] { error "\[SB7 ABBR ADD\] Unknown command: $2" }
+					if ![sb7 command check $2] { error "\[SB7 ABBR DEL\] Unknown command: $2" }
 					if [isempty 2] { error "\[SB7 ABBR DEL\] Missing keyword" }
 					if [isempty 3] { error "\[SB7 ABBR DEL\] Missing abbreviation to remove from $2" }
-					data array set ABBR $2 [ldestroy -nonulls -nocase -unique -multiple -increasing -- $abbr [join [lrange $args 3 end]]]
+					data array set ABBR $2 [ldestroy -nonulls -all -nocase -unique -multiple -increasing -- $abbr [join [lrange $args 3 end]]]
 					return $abbr
 				}
 
-				get - list {
-					if ![sb7 command check $2] { error "\[SB7 ABBR ADD\] Unknown command: $2" }
+				get {
+					if ![sb7 command check $2] { error "\[SB7 ABBR GET\] Unknown command: $2" }
 					return [lsort -inc -uni -dict $abbr]
 				}
 
@@ -169,7 +170,7 @@ proc sb7 args { # General
 					set match [uniquematch $valid $2]
 					if [isempty match] { error "\[SB7 REGISTER DEL\] Unknown data type: $2" }
 					set data [data array value %VARIABLES $match]
-					set data [ldestroy -multiple -nocase -nonulls -unique -increasing $data [lrange $arg 3 end]]
+					set data [ldestroy -multiple -all -nocase -nonulls -unique -increasing $data [lrange $arg 3 end]]
 					data array set %VARIABLES $match $data
 					return $data
 				}
@@ -192,7 +193,7 @@ proc sb7 args { # General
 			set dir ./scripts/sb7
 			foreach dir [list ./scripts/sb7 ./scripts/sb7/[string tolower $::nick]] {
 				set list [list %.sb7 sb7_%.tcl sb7%.tcl % sb7_% %.tcl %.txt sb7_%.txt]
-				if { [lsearch -exact [list "" core] $1] != -1 } { empty 1 ; set list [ldestroy -nonulls $list %] } ; # Core (the FILE EXISTS will match the directory itself! ): )
+				if { [lsearch -exact [list "" core] $1] != -1 } { empty 1 ; set list [ldestroy -all -nonulls $list %] } ; # Core (the FILE EXISTS will match the directory itself! ): )
 				foreach element $list {
 					regsub % $element $1 temp
 					foreach name [glob -nocomplain -directory $dir -tails -- $temp] {
@@ -463,7 +464,9 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# Get command
 	set original $arg
 #debug =0 arg
-	set arg [ldestroy -nonulls [split $arg]]
+	#set arg [ldestroy {forgot -all !!} -nonulls [split $arg]]
+	set arg [split $arg]
+	set arg [lsearch -all -inline -not $arg ""]
 #debug =1 arg
 	set cmd [string tolower [lindex $arg 0]]
 #putlog [effects DISPATCH:09 11,12 bold]:CMD($cmd)
@@ -674,7 +677,7 @@ proc sb7:dispatch:dcc {           handle idx  arg } { data set @LASTBIND DCC ; s
 # NOTC requires special handling 
 proc sb7:dispatch:not { nick host handle arg { target "" } } {
 	if ![string eq -nocase $target $::botnick] { return 0 }
-	set 0 [lindex [split $arg] 0]
+	set 0 [lindex [lsearch -all -inline -not -exact [split $arg] ""] 0]
 	if ![sb7 command check $0] { return 0 }
 	data set @LASTBIND NOT
 	sb7:dispatch $nick $host $handle * $arg
@@ -687,7 +690,7 @@ proc sb7:dispatch:pubm { nick host handle chan arg } {
 	if ![normalize $active] return
 	if [isempty shortcut] return
 	set len [len $shortcut]
-	set 0 [lindex [ldestroy -nonulls [split $arg]] 0]
+	set 0 [lindex [lsearch -all -inline -not -exact [split $arg] ""] 0]
 	if ![left $0 $len $shortcut] return
 	set test [mid $0 [ expr $len + 1 ]]
 #debug active shortcut len 0 test
@@ -770,6 +773,9 @@ proc sb7:setup args {
 	# will be inconvenient on a REHASH. ):
 	# Solution: check boot type! (:
 	if ![data get -boolean @BOOT:TYPE] { sb7:logout * }
+
+	# Check for USERINFO names
+	@userinfo:check_valid
 
 	# Load beads
 	sb7:loadbeads * true
@@ -915,7 +921,7 @@ proc data args {
 
 			# Too many things use -NORMALIZE (DEBUG, MSGHOME, ....)
 			# Change it to -BOOLEAN?
-			if [validflag -normalize] { set flags [ldestroy -exact -replacewith $flags -normalize -boolean] }
+			if [validflag -normalize] { lappend flags -boolean ; lremove flags -normalize }
 			lassign [string tolower $text] name arraycheck
 			set name [lindex [string tolower $text] 0]
 			if { ![validflag -default] || [validflag -array] } {
@@ -1139,7 +1145,7 @@ proc data args {
 					#set arg2 [string tolower $arg2]
 					#set arg3 [string tolower $arg3]
 					flags -simple [lrange $args 2 end] [list -isnull -isempty -notempty -upper -lower -title -sentence -length -llength -normalize -nozero -join -split -boolean -default] text flags
-					if [validflag -normalize] { set flags [ldestroy -exact -replacewith $flags -normalize -boolean] }
+					if [validflag -normalize] { lappend flags -boolean ; lremove flags -normalize }
 					lassign [string tolower $text] name element default
 					if [isempty name] { error "\[DATA ARRAY [string toupper $arg1]\] Missing array name" }
 					if [isempty element] { error "\[DATA ARRAY [string toupper $arg1]\] Missing element name (for array \"${name}\")" }
@@ -1867,6 +1873,10 @@ proc comma number {
 	join $s .
 }
 
+# Replacement PROC 2014-09-06 18:13:02 -0700
+# By Peter Spjuth, from http://wiki.tcl.tk/526, modified by Pixelz
+proc comma value { regsub -all {\d(?=(\d{3})+($|\.))} $value {\0,} }
+
 proc nocomma { number { comma , } } { regsub -all -nocase -- $comma $number "" number ; return $number }
 
 proc iscomma { number { comma , } } { string match -nocase *${comma}* $number }
@@ -2399,25 +2409,19 @@ debug =final list
 
 # Note: LMATCH (interp alias) -> "LDESTROY -NOT"
 proc ldestroy args {
+#addlog ldestroy.txt -1:[info level [expr [info level] - 1]]
+#addlog ldestroy.txt +0:[info level [info level]]
+#addlog ldestroy.txt ""
 	# This replaces SB6/LDESTROY! (:
 	# This replaces SB6/LMATCH (via -NOT) (:
 
-	flags -simple $args [list -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
-if { [string match -nocase BOTFL $temp] || [string eq -nocase $flags "-all -multiple -nocase -nonulls"] } {
-	putlog "\[LDESTROY\] TEMP($temp)"
-	putlog "\[LDESTROY\] FLAGS($flags)"
-	putlog "\[LDESTROY\] INFO:0([info level [expr [info level] - 0]])"
-	putlog "\[LDESTROY\] INFO:1([info level [expr [info level] - 1]])"
-	putlog "\[LDESTROY\] INFO:2([info level [expr [info level] - 1]])"
-}
+	flags -simple $args [list -debug -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
 	# We're CONSTANTLY using the -NONULLS flag: let's make it default, shall we?
-	if ![validflag -keepnulls] { lappend flags -nonulls }
+	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
 
 	lassign $temp list text replacewith
 	if [validflag -multiple] { set total $text } { set total [list $text] }
 
-	# Priority: glob, regexp, exact (default: glob)
-	#if [validflag -regexp] { set match regexp } elseif [validflag -exact] { set match exact } else { set match glob }
 	set match glob ; # Default (order (lowest-to-highest: regexp, exact, glob)
 	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
 
@@ -2425,6 +2429,7 @@ if { [string match -nocase BOTFL $temp] || [string eq -nocase $flags "-all -mult
 	set _ $list
 	empty temp_list temp_not
 	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
+	# Ignore -ALL for now, collect all possibilities (we'll limit the results later)
 	foreach text $total {
 		if [validflag -all] {
 			set __ [lsearch -all -${match} $_ $text]
@@ -2433,13 +2438,13 @@ if { [string match -nocase BOTFL $temp] || [string eq -nocase $flags "-all -mult
 		}
 		set temp_list [concat $temp_list $__]
 	}
-#####putlog "__($__):FLAGS($flags):LEVEL/0([info level [info level]]):LEVEL/1([info level [expr [info level] - 1]])"
+
 	# Re-assemble
 	array set new [list list "" not ""]
 	set ll [llength $list]
+#if [validflag -debug] { putlog "\[LDESTROY\] LL($ll):LIST($list)" }
 	for { set a 0 } { $a < $ll } { incr a } {
 		if { [lsearch -exact $temp_list $a] != -1 } {
-			#lappend new(list) ""
 			if [validflag -replacewith] { lappend new(list) $replacewith } { lappend new(list) "" }
 			lappend new(not) [lindex $list $a]
 		} {
@@ -2455,26 +2460,23 @@ if { [string match -nocase BOTFL $temp] || [string eq -nocase $flags "-all -mult
 	if [validflag -not] { swap new(list) new(not) }
 
 	# Post-processing (if -BOTH, we also need to do it to "NOT" below!)
-	if [validflag -nonulls] { set new(list) [lsearch -inline -all -not -exact $new(list) ""] }
-	if [validflag -increasing] { set new(list) [lsort -increasing $new(list)] }
-	if [validflag -decreasing] { set new(list) [lsort -decreasing $new(list)] }
-	if [validflag -unique] { set new(list) [lunique $new(list)] }
+#if [validflag -debug] { putlog "\[LDESTROY\] FLAGS($flags)" }
+	if [validflag -nonulls] { foreach element [array names new] { set new($element) [lsearch -inline -all -not -exact $new($element) ""] } }
+	if [validflag -increasing] { foreach element [array names new] { set new($element) [lsort -increasing $new($element)] } }
+	if [validflag -decreasing] { foreach element [array names new] { set new($element) [lsort -decreasing $new($element)] } }
+	if [validflag -unique] { foreach element [array names new] { set new($element) [lunique $new($element)] } }
 
 	if ![validflag -all] {
-		# The loops above seem to still capture all data despite the -ALL flag.
+		# The loops above captures all data despite the -ALL flag.
 		# So, let's trim it here with a healthy crop!
-#####putlog "\[LDESTROY\] NEW([array get new])"
-#####		foreach a [array names new] { if [notempty new($a)] { set new($a) [lindex $new($a) 0] } }
+#if [validflag -debug] { putlog "\[LDESTROY\] =01 NEW([array get new])" }
+		foreach a [array names new] { set new($a) [lindex $new($a) 0] }
+#if [validflag -debug] { putlog "\[LDESTROY\] =02 NEW([array get new])" }
 	}
+#if [validflag -debug] { putlog "\[LDESTROY\] =10 NEW([array get new])" }
 
-	if [validflag -both] {
-		if [validflag -nonulls] { set new(not) [lsearch -inline -all -not -exact $new(not) ""] }
-		if [validflag -increasing] { set new(not) [lsort -increasing $new(not)] }
-		if [validflag -decreasing] { set new(not) [lsort -decreasing $new(not)] }
-		if [validflag -unique] { set new(not) [lunique $new(not)] }
-		return [list $new(list) $new(not)]
-	}
-
+	# Separated so other things can be checked AFTER sorting options can process (NONULLS, et al)
+	if [validflag -both] { return [list $new(list) $new(not)] }
 	return $new(list)
 }
 
@@ -2521,7 +2523,7 @@ proc ldefault args {
 
 	lpad list [llength $defaults]
 	for { set x 0 } { $x < [llength $defaults] } { incr x } {
-	    set index [lindex $list $x]
+		set index [lindex $list $x]
 		if [isempty index] { set index [lindex $defaults $x] }
 		lset list $x $index
 	}
@@ -3198,28 +3200,33 @@ proc maskmatches { nick host handle } {
 	return $list
 }
 
+proc @userinfo:check_valid args {
+	set core [list botfl botaddr hosts laston info xtra comment email e-mail url handle pass]
+	set who  [lindex [userlist] 0]
+	if [isempty who] return ; # Can't conduct tests without a test subject!
+	foreach test $core {
+		set error [ catch { getuser $who $test } ]
+		if $error { lremove core $test }
+	}
+	return $core
+}
+
 proc userinfo { cmd handle args } {
 	lassign $args type arg
 
 	# There seems to be some differences in what Eggdrop versions handle what info
-	set core [list botfl botaddr hosts laston info xtra comment email e-mail url handle pass]
-	
-	empty removeme
-	foreach test $core {
-		set error [ catch { getuser $handle $test } ]
-		if $error { lappend removeme $test }
-	}
-	if [notempty removeme] { set core [ldestroy -all -multiple -nocase $core $removeme] }
+	if [data get -isempty @USERINFO:VALID] @userinfo:check_valid
+	set core [data get @USERINFO:VALID]
 	set m [lsearch $core [string tolower $type]]
 
 	switch -exact -- [string tolower $cmd] {
 
 		set {
 			# Note special format:
-			# userinfo set HANDLE ALL [list type1 data type2 data ...]
+			# userinfo set HANDLE ALL [list type1 data1 type2 data2 ...]
 			if ![validuser $handle] { return "" }
 			set data $arg
-			if [string eq all $type] {
+			if [string eq -nocase ALL $type] {
 				# Reflexive!
 				foreach { a b } $data { userinfo $handle set $a $b }
 				return $data
@@ -3252,7 +3259,7 @@ proc userinfo { cmd handle args } {
 			} {
 				set list [concat $list [get first [getuser $handle xtra]]]
 			}
-			if [notempty type] { set list [ldestroy -not -all -nocase -multiple -glob $list $type] }
+			if [notempty type] { set list [ldestroy -not -all -nocase -multiple -glob -- $list $type] }
 			return [string tolower [lsort -uni -dict -uni $list]] ; # Breaks STRING / LIST rule
 		}
 
@@ -3392,8 +3399,8 @@ proc print args {
 	flags -simple $args $validflags text flags
 	if [validflag -none] { empty flags } ; # For use with NOTE and others that need to swap "-private" with "-none"
 	set debug [validflag -debug]
-	if [validflag -raw] { set flags [ldestroy -replacewith $flags -raw -burst] }; # Synonym
-	if [validflag -noraw] { set flags [ldestroy -replacewith $flags -noraw -noburst] }; # Synonym
+	if [validflag -raw] { set flags [ldestroy -all -replacewith -- $flags -raw -burst] }; # Synonym
+	if [validflag -noraw] { set flags [ldestroy -all -replacewith -- $flags -noraw -noburst] }; # Synonym
 	lassign $text target message
 if $debug { debug =-1 target message }
 	empty open close
@@ -3483,17 +3490,17 @@ if $debug { debug =3 flags target }
 		# Presume -RESET was before other flags that should be the only survivors
 		set m [lsearch -exact $flags -reset]
 		set flags [lreplace $flags 0 $m]
-		#set flags [ldestroy -nonulls -error -debug -multiple $flags [list -normal -help -quick -burst -private -msg -notice -next]]
+		#set flags [ldestroy -all -nonulls -error -debug -multiple $flags [list -normal -help -quick -burst -private -msg -notice -next]]
 	}
 
 if $debug { debug =4 flags }
-	if [validflag -noburst] { set flags [ldestroy -nonulls -multiple $flags [list -noburst -burst]] } ; # Supercede -burst
-	if [validflag -normal] { set flags [ldestroy -nonulls -multiple $flags [list -normal -help -quick -burst -private -msg -notice -next]] ; set output $target ; set type NOTICE }
+	if [validflag -noburst] { set flags [ldestroy -all -nonulls -multiple $flags [list -noburst -burst]] } ; # Supercede -burst
+	if [validflag -normal] { set flags [ldestroy -all -nonulls -multiple $flags [list -normal -help -quick -burst -private -msg -notice -next]] ; set output $target ; set type NOTICE }
 	if [validflag -channel] { set output $chan ; set type PRIVMSG }
 
 if $debug { debug =5 flags target }
 	set burstavail [data array value CONFIG BURST:ALLOW]
-	if [isfalse $burstavail] { set flags [ldestroy -nonulls $flags -burst] ; # [lsearch -inline -all -not $flags -burst] }
+	if [isfalse $burstavail] { set flags [ldestroy -all -nonulls $flags -burst] ; # [lsearch -inline -all -not $flags -burst] }
 
 	# In priority order ....
 	empty remote
@@ -3685,6 +3692,12 @@ proc format:date args {
 	set gmtflag [boolean -truefalse [validflag -gmt]]
 	if { [validflag -gmt] && [validflag -cliptz] } { append format " +0000" }
 	clock format $time -format $format -gmt $gmtflag
+}
+
+proc format:percent args {
+	flags:simple $args [list -leading_zero -trim] text flags
+	lassign [concat $text 1] value decimal
+	format %[iff [validflag -leading_zero] 0][expr ( 3 - ( [validflag -trim] * 2 ) ) + ( ( $decimal > 0 ) ? $decimal + 1 : 0 ) ].${decimal}f $value
 }
 
 proc using args {
@@ -3938,8 +3951,6 @@ proc pingpong { { time "" } } {
 
 # --- Other commands ---
 
-proc DISPATCH { 1 args } { set ::_args $args ; uplevel 1 { eval switch -exact -- [string tolower $1] $::_args } ; unset ::_args }
-
 proc os { { checkme "" } } {
 	if [string eq -nocase VERSION $checkme] {
 		set os $::tcl_platform(os)
@@ -4071,12 +4082,12 @@ proc integer value { int value ; return $value }
 proc mantissa value { mant value ; return $value }
 
 proc maskformat args {
-
 	# "Numeric mode" will override flags-based formatting (this allows me to
 	# defer to Eggdrop1.8 options by default)
 
 	flags:simple $args [list -full -static -domain -nick] text flags
 	lassign $text mask mode
+	if [isempty mask] return
 	if ![instr $mask !] { prepend mask *! } 
 
 	# Numeric mode first
@@ -5270,8 +5281,6 @@ proc bytes { number { decimal * } { align_bytes "false" } } {
 	return "[format %.${decimal}f $number] [lindex $powers 0]B"
 }
 
-proc format:percent { number { decimal 1 } } { format %6s [format %4.${decimal}f $number]% }
-
 proc double { number { times_double "1" } } { 
 	# Mathematical doubling without concern for "integer too large" errors.
 	set error [ catch { set test [ expr $number * pow( 2 , $times_double ) ] } crap ]
@@ -5324,12 +5333,58 @@ proc timeval { value { convert_to s } } {
 	if [isempty time] return
 	if [isempty marker] { set marker s }
 	if ![info exists mult($marker)] return
-	set timeval [expr $time * $mult($marker) ]
+	set timeval [expr ${sign}$time * $mult($marker) ]
 	if [notempty convert_to] {
 		if ![info exists mult($convert_to)] return
-		set timeval [expr ${timeval}.0 / $mult($convert_to)]
+		set timeval [expr ( ${timeval} / 1.0 ) / $mult($convert_to)]
 	}
-	return ${sign}[lindex [split $timeval .] 0]
+	normalize $timeval
+}
+
+proc angle args {
+	flags:simple $args [list -dms -decimal -help] value flags
+	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0° 0' 0\"" }
+	set degree_mark \xB0
+	if [validflag -decimal] {
+		catch { set value [join $value] }
+		set value [encoding convertfrom utf-8 $value]
+		regsub % {^(\d+)[ %]+(\d+)[ ']+(\d+)[\"]*$} $degree_mark regexp
+		if ![regexp -- $regexp $value - degrees minutes seconds] { error "\[ANGLE -DECIMAL\] expected degrees\[${degree_mark}\] minutes\['\] seconds\[\"\] -- got: $value" }
+
+		return [expr {$degrees + ( $minutes / 60.0 ) + ( $seconds / 3600.0 ) } ]
+	}
+	if [validflag -dms] { return [concat [expr int( $value )]$degree_mark [clock format [expr round( $value * 3600 )] -format "%M' %S\"" -gmt true]] }
+	return $value
+}
+
+proc addlog { filename text } {
+	set a [open $filename a]
+	puts $a "[clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S %z]|$text"
+	flush $a
+	close $a
+	putcmdlog "\[ADDLOG\] $text"
+	return $filename
+}
+
+proc getbytesfree { { dir . } } {
+	# Original code: http://wiki.tcl.tk/526
+	switch -glob -- $::tcl_platform(os) {
+		FreeBSD - Linux - OSF1 - SunOS - CYGWIN_NT-* {
+			# Use end-2 instead of 3 because long mountpoints can make the output to appear in two lines. There is "df -k -P" to avoid this, but -P is Linux specific afaict
+			return [lindex [lindex [split [exec df -a -B 1 $dir] \n] end] end-2]
+		}
+		HP-UX { return [lindex [lindex [split [exec bdf $dir] \n] end] 3] }
+		{Windows 95} - {Windows 98} - {Windows NT} { return [getbytesfree:dos [regsub -all -- / $dir \\]] }
+		default { error "\[GETBYTESFREE\] I don't know how to df on $::tcl_platform(os)" }
+	}
+	return 
+}
+
+proc getbytesfree:dos { { dir . } } {
+	set dir [exec cmd /C dir /-C $dir]
+	regsub -all -- { [ ]+} [string trimleft [string trimright [lindex [split $dir \n] end]]] " " last
+	scan $last {%i %s %i bytes free} - - free
+	return $free
 }
 
 # --- Command aliases ---
@@ -5360,62 +5415,6 @@ interp alias {} lmatch {} ldestroy -not
 
 proc sb7:parseflags args { msghome "\[SB7\] PARSEFLAGS -- FROM(<--[info level [expr [info level] -1]]):ARGS($args) (Remove me!)" }
 
-# --- Emergency reload commands ---
-# This should go last!
-
-proc sb7:emergency { nick host handle chan arg } {
-	lassign $arg bot cmd arg1 arg2
-	if { !( [string eq * $bot] || [string eq -nocase $bot $::botnick] ) } return 
-	set cmd [string tolower $cmd]
-	switch -exact -- [string tolower $cmd] {
-
-	  tcl {
-		  set e [catch { set r [ eval [join [lrange [split $arg] 2 end]] ] } s]
-		  if $e { rawprint "PRIVMSG $chan :\[TCL error\] $s" } { rawprint "PRIVMSG $chan :\[TCL result\] $r" }
-		  return
-		}
-
-		load {
-			empty ok bad
-			foreach item [lrange $arg 2 end] {
-				set file [sb7:emergency $nick $host $handle $chan "component $item"]
-				if [file exists $file] {
-					set ::_sb7_emergency $file
-					set error [ catch { uplevel #0 { source $::_sb7_emergency } } shit ]
-					unset ::_sb7_emergency
-					if $error { lappend bad [list $item $shit] } { lappend ok $item }
-				} {
-					lappend dne $item
-				}
-			}
-			if [notempty ok] { rawprint "PRIVMSG $chan :\[EMERGENCY LOAD\] Completed: [ajl $ok]" }
-			if [notempty bad] { rawprint "PRIVMSG $chan :\[EMERGENCY LOAD\] Failed: [ajl $bad]" }
-			if [notempty dne] { rawprint "PRIVMSG $chan :\[EMERGENCY LOAD\] Not found: [ajl $dne]" }
-			return
-		}
-
-		rehash - restart { rawprint "PRIVMSG $chan :\[EMERGENCY [string toupper $cmd]\] [string toupper $cmd]ing ...." ; eval $cmd ; return }
-
-		die { set h [binary format H* e6adbbe38293e381a7e38197e381bee381a3e3819fe381aee381a7e38199e38185e38185e38185e38185e38185efbc81efbc81] ; rawprint "PRIVMSG $chan :\[EMERGENCY DIE\] $h" ; rawprint "DIE $h" ; die $h }
-
-		component {
-			#set dir [file dirname [file normalize $::config]]/scripts/sb7
-			set dir ./scripts/sb7
-			set list [list % %.sb7 sb7_% %.tcl sb7%.tcl sb7_%.tcl %.txt sb7_%.txt]
-			if { [lsearch -exact [list "" core] $arg1] != -1 } { empty arg1 ; set list [lreplace $list 0 0] } ; # Core (the FILE EXISTS will match the diretory itself! ): )
-			foreach element $list {
-				regsub % $element $arg1 name
-				if [file exists ${dir}/$name] { return ${dir}/$name }
-			}
-			return $1
-		}
-
-		default { rawprint "PRIVMSG $chan :\[EMERGENCY\] Unknown command: $cmd" ; return }
-
-	}
-	return
-}
-
 #############################################################################
 #############################################################################
 #############################################################################
@@ -5425,7 +5424,6 @@ proc sb7:emergency { nick host handle chan arg } {
 #####
 # Bootstrap:
 
-bind PUB  n !ee sb7:emergency
 bind DCC  t dcc *dcc:dccstat
 bind DCC  - /w  *dcc:whois
 bind DCC  - q   *dcc:quit

@@ -176,7 +176,11 @@ proc @note { nick host handle chan arg } {
 			set range $2e
 			if [isempty range] { print -short -return $nick "What notes are we deleting?" }
 			set deleted [@notes delete $handle $archivename $range]
-			print $nick "Notes numbers deleted: [process numberlist $deleted]"
+			if [isempty deleted] {
+				print $nick "No notes found in that range."
+			} {
+				print $nick "Note numbers deleted: #[process numberlist $deleted]"
+			}
 			saveme data
 			return
 		}

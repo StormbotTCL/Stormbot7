@@ -37,8 +37,10 @@ proc @copyuser { nick host handle chan arg } {
 			if {[getuser $who comment] != ""} {lappend datapacket ".tcl setuser $who comment \{[getuser $who COMMENT]\}"}
 			if {[getuser $who console] != ""} {lappend datapacket ".tcl setuser $who console [getuser $who console]"}
 			foreach a [getuser $who HOSTS] { lappend datapacket ".+host $who $a" }
-			lappend datapacket ".tcl setuser $who fstat d [getuser $who fstat d]"
-			lappend datapacket ".tcl setuser $who fstat u [getuser $who fstat u]"
+			if ![matchattr $who b] {
+				lappend datapacket ".tcl setuser $who fstat d [getuser $who fstat d]"
+				lappend datapacket ".tcl setuser $who fstat u [getuser $who fstat u]"
+			}
 
 			# Channel-level stuff #
 			foreach ch [channels] {
