@@ -1,21 +1,21 @@
-# StormBot.TCL 7 version Changelog -- 2014-09-07 07:11:47 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-09-07 07:28:00 UTC #
 # Version: 7.00.0001 #
 
 Current Working Version:
-2014-09-07 06:44:32 UTC: #218 [note] Fixed NOTE DELETE (cosmetic: ''notes numbers'' ... both words plural?! Oy ...)
-2014-09-07 06:44:27 UTC: #217 [note] Fixed NOTE DELETE (when no notes matched the requested range, the same text was still used but a blank list was presented: ''#'')
-2014-09-07 06:43:04 UTC: #216 [access] Fixed ACCESS ADD & MOD (a user with global access, who passes all other tests, should be able to add her/himself to a channel as well. Previously, this was blocked by a sanity check but it's really overkill)
-2014-09-07 06:42:01 UTC: #215 [botsend] Fixed @BOTSEND:COMPLETE (when a non-SB7-component was processed, don't try to MAINTENANCE LOAD it (like a picture file))
-2014-09-07 06:39:21 UTC: #214 [core] Fixed CORE (fixed the name of the license file in the disclaimer. The file was renamed a few weeks ago)
-2014-09-07 06:35:14 UTC: #213 [access] Added ACCESS AUDIT
-2014-09-07 05:49:45 UTC: #212 [tail] Fixed MASKFORMAT (when a null value was passed, it was being turned into *!*@*! for some reason)
-2014-09-07 05:45:26 UTC: #211 [core] Updated CORE (another credit to me re: Eggdrop fixes; see text)
-2014-09-07 05:41:14 UTC: #210 [tail] Fixed FORMAT:PERCENT (better parser, though it exploded form 1 to 4 lines. Was necessary to handle a weird bunch of circumstances. Added -LEADING_ZERO & -TRIM flags)
-2014-09-07 05:13:42 UTC: #209 [tail] Fixed FORMAT:PERCENT (added optional leading zeroes option)
-2014-09-07 05:06:03 UTC: #208 [tail] Deleted SB7:EMERGENCY (no longer needed)
-2014-09-07 04:46:40 UTC: #207 [tail] Added GETBYTESFREE & ANGLES (just some utilities that will have value later, maybe)
-2014-09-07 02:05:38 UTC: #206 [tail] Added ADDLOG (was last night for purposes of debugging LDISTROY -ALL, so I intended to remove it when done. But it looks useful, so it stays)
-2014-09-07 02:03:51 UTC: #205 [tail] Added ANGLE (-dms and -decimal flags, with -help)
+2014-09-07 07:26:34 UTC: #218 [tail] STACK:TRACE (added a primitive stack trace, just to hunt things down while debugging)
+2014-09-07 06:44:32 UTC: #217 [note] Fixed NOTE DELETE (cosmetic: ''notes numbers'' ... both words plural?! Oy ...)
+2014-09-07 06:44:27 UTC: #216 [note] Fixed NOTE DELETE (when no notes matched the requested range, the same text was still used but a blank list was presented: ''#'')
+2014-09-07 06:43:04 UTC: #215 [access] Fixed ACCESS ADD & MOD (a user with global access, who passes all other tests, should be able to add her/himself to a channel as well. Previously, this was blocked by a sanity check but it's really overkill)
+2014-09-07 06:42:01 UTC: #214 [botsend] Fixed @BOTSEND:COMPLETE (when a non-SB7-component was processed, don't try to MAINTENANCE LOAD it (like a picture file))
+2014-09-07 06:39:21 UTC: #213 [core] Fixed CORE (fixed the name of the license file in the disclaimer. The file was renamed a few weeks ago)
+2014-09-07 06:35:14 UTC: #212 [access] Added ACCESS AUDIT
+2014-09-07 05:49:45 UTC: #211 [tail] Fixed MASKFORMAT (when a null value was passed, it was being turned into *!*@*! for some reason)
+2014-09-07 05:45:26 UTC: #210 [core] Updated CORE (another credit to me re: Eggdrop fixes; see text)
+2014-09-07 05:41:14 UTC: #209 [tail] Fixed FORMAT:PERCENT (better parser, though it exploded from 1 to 4 lines. Was necessary to handle a weird bunch of circumstances. Added -LEADING_ZERO & -TRIM flags)
+2014-09-07 05:13:42 UTC: #208 [tail] Fixed FORMAT:PERCENT (added optional leading zeroes option)
+2014-09-07 05:06:03 UTC: #207 [tail] Deleted SB7:EMERGENCY (no longer needed)
+2014-09-07 04:46:40 UTC: #206 [tail] Added GETBYTESFREE & ANGLES (just some utilities that will have value later, maybe)
+2014-09-07 02:05:38 UTC: #205 [tail] Added ADDLOG (was added last night for purposes of debugging LDISTROY -ALL, so I intended to remove it when done. But it looks useful, so it stays)
 2014-09-07 00:15:50 UTC: #204 [core] Fixed CORE (cosmetic: explanation about $TCL_PRECISION / IEEE rounding errors)
 2014-09-06 14:20:34 UTC: #203 [tail] Fixed TIMEVAL (attempt to deal with floating-point vs integer math in EXPR failure (when the initial calculation was already a float); caused ''<number>.0.0'' situation)
 2014-09-06 14:16:20 UTC: #202 [tail] Fixed TIMEVAL (needed to NORMALIZE the final value; necessary due to CHANGELOG #183 repair being incomplete)
@@ -40,7 +40,7 @@ Current Working Version:
 2014-09-06 12:30:11 UTC: #183 [tail] Fixed TIMEVAL (for some reason, I was truncating mantissas via [SPLIT $TIMEVAL .] causing only integer results. Also, fixed a cosmetic issue re: the polarity of the request (processed the sign in the regular math of the sequence so any remaining ''positive'' numbers would return as regular unsigned values))
 2014-09-06 12:18:14 UTC: #182 [access] Added ADDMASK & REMMASK (added the -redirect flags and created dummy PROCs to help with the redirect)
 2014-09-06 12:17:34 UTC: #181 [access] Fixed ACCESS (the -redirect flags for the old SB3 / SB4 / SB5 / SB6 commands ADDUSER, REMUER, USERLIST, & ADMIN were added after the abbreviations in the SB7 COMMAND ADD line. Each command was, thusly, given an abbreviation of ''-redirect'')
-2014-09-06 11:23:48 UTC: #180 [note] Upgraded NOTE DEL (cosmetic re: note list deleted: added ''#'' to output, so so the list of notes was more obvious)
+2014-09-06 11:23:48 UTC: #180 [note] Upgraded NOTE DEL (cosmetic re: note list deleted: added ''#'' to output, so the list of notes was more obvious)
 2014-09-06 11:20:16 UTC: #179 [botsend] Fixed BOTSEND SEND (cosmetic: added bold to the list of files in the 'transfers complete' message)
 2014-09-06 11:19:05 UTC: #178 [copyuser] Fixed COPYUSER -RAW (when the target is a bot, don't include FSTAT data)
 2014-09-04 01:28:33 UTC: #177 [tail] Fixed end ''loaded'' message (did not update this when updating the setting of the version information (SB7:SETUP_VERSION), cf. CHANGELOG #40)

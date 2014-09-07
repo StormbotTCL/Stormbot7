@@ -3951,6 +3951,13 @@ proc pingpong { { time "" } } {
 
 # --- Other commands ---
 
+proc stack:trace args {
+	if [isnum -integer $args] { set deep $args } { set deep [info level] }
+	empty o
+	for { set x 1 } { $x <= $deep } { incr x 1 } { lappend o "\[STACK:TRACE - level #${x}\] [info level $x]" }
+	return $o
+}
+
 proc os { { checkme "" } } {
 	if [string eq -nocase VERSION $checkme] {
 		set os $::tcl_platform(os)
