@@ -1044,9 +1044,12 @@ proc data args {
 			return $list
 		}
 
-		load { # RETURN value: success (boolean)
-			set filename [file dirname [file normalize $::config]]/${::nick}.data
+		load { # RETURN value: count of records processed (0 if fail)
+			set filename ${::nick}.data
+			if [notempty arg1] { append filename ~$arg1 }
+			if [is pathchange $filename] { return 0 }
 			if ![file exists $filename] { return 0 }
+			set count 0
 			set data [readfile $filename \n]
 			foreach line $data {
 				if [isempty line] continue
@@ -1061,6 +1064,7 @@ proc data args {
 					}
 
 					info {
+						incr count
 						switch -exact -- $version {
 
 							2 { data set $name $data }
@@ -1078,24 +1082,34 @@ proc data args {
 
 				}
 			}
-			return 1
+			return $count
 		}
 
 		save {
 			# Invoke the "timer" version of saves by default!
 			# Called by: "SAVEME DATA"
-			set filename [file dirname [file normalize $::config]]/${::nick}.data
-			set w [open $filename w]
-			puts $w "# StormBot.TCL v[data get @VERSION] data file for: ${::nick} -- [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S %Z (%z)"] #"
-			puts $w "Version 2"
-
-			# SB7 change: allow "#" for channel-based config data ....
-			foreach a [data names] {
-				if ![regexp -- {^[\!\@\$\%\^\&\*]} $a] { puts $w [list info $a [data get $a]] }
+			set filename ${::nick}.data
+			if [notempty arg1] {
+				if [string eq * $arg1] {
+					append filename ~[clock format [clock seconds] -format "%Y%m%d-%H%M%S"]
+				} {
+					append filename ~$arg1
+				}
 			}
+			if [is pathchange $filename] { return 0 }
+			set error [ catch {
+				set w [open $filename w]
+				puts $w "# StormBot.TCL v[data get @VERSION stormbot] data file for: ${::nick} -- [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S %Z (%z)"] #"
+				puts $w "Version 2"
+
+				# SB7 change: allow "#" for channel-based config data ....
+				foreach a [data names] {
+					if ![regexp -- {^[\!\@\$\%\^\&\*]} $a] { puts $w [list info $a [data get $a]] }
+				}
+			} crap ]
 			flush $w
 			close $w
-			return 0
+			if $error return { return $filename }
 		}
 
 		backup {
@@ -1352,7 +1366,7 @@ proc data args {
 }
 
 proc saveme { cmd { now false } } {
-	# Using !ISFALSE below allows variats like "-now" or "now" to be used, in case I forget the syntax. :p
+	# Using !ISFALSE below allows variants like "-now" or "now" to be used, in case I forget the syntax. :p
 	switch -exact -- [string tolower $cmd] {
 
 		* - all {
@@ -1476,8 +1490,10 @@ proc sb7:loadbeads { { match "*" } { force false } } {
 					lappend matched $root ; # $TAIL
 					data array set @BEADS TIME:$tail [file mtime $bead]
 #debug =Loading: =[data get @BEAD]
+#putlog "\[SB7:LOADBEADS\] Loading: [data get @BEAD]"
 					set error [ catch { uplevel #0 { source [data get @BEAD] } } uh_oh]
 #debug error uh_oh
+if $error { putlog "\[SB7:LOADBEADS\] Error while loading [file tail [data get @BEAD]]: $uh_oh" }
 				}
 			}
 		}
@@ -2442,7 +2458,7 @@ proc ldestroy args {
 	# Re-assemble
 	array set new [list list "" not ""]
 	set ll [llength $list]
-#if [validflag -debug] { putlog "\[LDESTROY\] LL($ll):LIST($list)" }
+if [validflag -debug] { putlog "\[LDESTROY\] LL($ll):LIST($list):NEW([array get new])" }
 	for { set a 0 } { $a < $ll } { incr a } {
 		if { [lsearch -exact $temp_list $a] != -1 } {
 			if [validflag -replacewith] { lappend new(list) $replacewith } { lappend new(list) "" }
@@ -3954,7 +3970,7 @@ proc pingpong { { time "" } } {
 proc stack:trace args {
 	if [isnum -integer $args] { set deep $args } { set deep [info level] }
 	empty o
-	for { set x 1 } { $x <= $deep } { incr x 1 } { lappend o "\[STACK:TRACE - level #${x}\] [info level $x]" }
+	for { set x 0 } { $x <= $deep } { incr x 1 } { lappend o "\[STACK:TRACE - level #${x}\] [info level $x]" }
 	return $o
 }
 
@@ -4654,7 +4670,9 @@ proc is { cmd args } {
 	set args [join $args]
 	switch -exact -- [string tolower $cmd] {
 
-	comp - component {
+		path - pathchange { return [regexp -nocase -- {\/|\\} $args] }
+
+		comp - component {
 			set file [file rootname [file tail [lindex $args 0]]] 
 			if [string eq -nocase SB7 $file] { set file core }
 			if [string eq -nocase CORE [none $file core]] { return [file exists ./scripts/sb7/sb7.tcl] }
