@@ -1828,6 +1828,7 @@ proc plural args {
 }
 
 proc ajl args {
+	if [string eq $args -] { return - }
 	flags:simple $args [list -nosort -empty -unique -increasing -decreasing] list flags
 	if [validflag -empty] { lassign $list list comma and oxford_comma } { lassign [ldefault $list [list $list ", " & false]] list comma and oxford_comma }
 	set direction increasing
@@ -2424,7 +2425,86 @@ debug =final list
 }
 
 # Note: LMATCH (interp alias) -> "LDESTROY -NOT"
+
+# 2014-09-13 18:05:00 -0700: Replaced with new (fresh re-write) version, specifically to add new function: -COMMON
 proc ldestroy args {
+	flags:simple $args [list -debug -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
+	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
+
+	lassign $temp list text replacewith
+	if [validflag -multiple] { set total $text ; lappend flags -all } { set total [list $text] }
+
+	set match glob ; # Default (order (lowest-to-highest: regexp, exact, glob)
+	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
+#debug *
+	set _ $list
+	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
+	if [validflag -common] {
+		empty common fail1 fail2
+		foreach item [lunique [concat $_ $total]] {
+			if [validflag -all] {
+				if [validflag -nocase] {
+					set __1 [lsearch -all -inline -${match} [string tolower $_] $item]
+					set __2 [lsearch -all -inline -${match} [string tolower $total]  $item]
+				} {
+					set __1 [lsearch -all -inline -${match} $_ $item]
+					set __2 [lsearch -all -inline -${match} $total $item]
+				}
+			} {
+				if [validflag -nocase] {
+					set __1 [lsearch -inline -${match} [string tolower $_] $item]
+					set __2 [lsearch -inline -${match} [string tolower $total] $item]
+				} {
+					set __1 [lsearch -inline -${match} $_ $item]
+					set __2 [lsearch -inline -${match} $total $item]
+				}
+			}
+			switch -exact -- [string eq "" $__1][string eq "" $__2] {
+				11 { error "\[LDESTROY -COMMON\] This should not be possible: \"${item}\" doesn't match either list!" }
+				10 { set fail2 [concat $fail2 $item] }
+				01 { set fail1 [concat $fail1 $item] }
+				00 { set common [concat $common $item] }
+			}
+#debug item common fail1 fail2
+		}
+	} {
+		empty temp_list temp_not
+		foreach item $total {
+			if [validflag -all] { set __ [lsearch -all -inline -${match} $_ $item] } { set __ [lsearch -inline -${match} $_ $item] }
+			if [notempty __] { set temp_list [concat $temp_list $__] } { set temp_not [concat $temp_not $item ] }
+#debug x item =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list temp_not
+		}
+	}
+
+	if [validflag -common] { 
+		if [validflag -nonulls] { foreach a [list common fail1 fail2] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
+		if [validflag -unique] { foreach a [list common fail1 fail2] { set $a [lunique [set $a]] } }
+		if [validflag -increasing -decreasing] {
+			set direction increasing
+			if [validflag -decreasing] { set direction decreasing }
+			foreach a [list common fail1 fail2] { set $a [lsort -$direction [set $a]] }
+		}
+		if [validflag -replacewith] { set common $replacewith }
+		if [validflag -both] { return [list $common $fail1 $fail2] }
+		if [validflag -not] { return [concat $fail1 $fail2] }
+		return $common
+	}
+
+	if [validflag -nonulls] { foreach a [list temp_list temp_not] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
+	if [validflag -unique] { foreach a [list temp_list temp_not] { set $a [lunique [set $a]] } }
+	if [validflag -increasing -decreasing] {
+		set direction increasing
+		if [validflag -decreasing] { set direction decreasing }
+		foreach a [list temp_list temp_not] { set $a [lsort -$direction [set $a]] }
+	}
+	if [validflag -replacewith] { set temp_list $replacewith }
+	if [validflag -both] { return [list $temp_list $temp_not] }
+	if [validflag -not] { return $temp_not }
+	return $temp_list
+}
+
+proc dummy args { # LDESTROY
+rename dummy "" ; # Suicide if used
 #addlog ldestroy.txt -1:[info level [expr [info level] - 1]]
 #addlog ldestroy.txt +0:[info level [info level]]
 #addlog ldestroy.txt ""
@@ -2436,7 +2516,7 @@ proc ldestroy args {
 	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
 
 	lassign $temp list text replacewith
-	if [validflag -multiple] { set total $text } { set total [list $text] }
+	if [validflag -multiple] { set total $text ; lappend flags -all } { set total [list $text] }
 
 	set match glob ; # Default (order (lowest-to-highest: regexp, exact, glob)
 	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
@@ -4439,7 +4519,9 @@ proc get { cmd args } {
 			set combine [istrue $combine]
 			if [isempty list] { error "List?" }
 			if [isempty lo] { error "Lo?" }
-			if [isempty hi] { error "Hi?" }
+
+			# Allow for just the "HI" to be specified
+			if [isempty hi] { if [notempty lo] { set hi $lo ; set lo 1 } { error "Hi?" } }
 			empty numbers
 			for { set x $lo } { $x <= $hi } { incr x } { lappend numbers $x } ; # SEQUENCE fails on negative $LO
 			set ll [llength $numbers]
@@ -4506,6 +4588,7 @@ proc get { cmd args } {
 					default {
 						# Digit(s) , or , range of numbers
 						# Overflow / underflow: error or just return blanks (ignore errors)?
+						if ![regexp -nocase -- {^[0-9 \-]+$} $element] return
 						set loop_lo $lo
 						set loop_hi $hi
 						if [regexp -- {^[\=]?([\-]?\d+)$} $element - item] { set loop_lo $item ; set loop_hi $item } 
@@ -5092,7 +5175,11 @@ proc flags:simple { list valid { var_text "" } { var_flags "" } { flags2variable
 			set 0 [lindex $list 0]
 			if [string eq $0 --] { set list [lreplace $list 0 0] ; break }
 			# We do not allow flags to have "? *" in them; can create false matches when processing text with wildcards that happend to match flags
-			if [is wildcard $0] { empty u } { set u [uniquematch $valid $0] }
+			if [is wildcard $0] { 
+				empty u
+			} {
+				if [string eq $0 -] { empty u } { set u [uniquematch $valid $0] }
+			}
 			if [isempty u] break
 			lappend flags $u
 			set list [lreplace $list 0 0]
