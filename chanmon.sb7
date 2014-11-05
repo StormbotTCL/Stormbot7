@@ -1,0 +1,457 @@
+sb7 command add CHANMON 500 -chanspec CMON CM
+sb7 register chan CHANMON:#
+
+proc @chanmon { nick host handle chan arg } {
+	FLAGS -global -default -force
+	set base $chan
+	if [validflag -global] { lappend flags -default }; # I keep using "-global"
+	if [validflag -default] {
+		if [access check 501 $handle] { print -help $nick "You don't have access to the -DEFAULT flag." ; return  }
+		set base global
+	}
+
+	# Data sanity check
+	#if [data array get -isempty chanmon ${chan}:active] { data array set chanmon ${chan}:active 0 }
+	#if [data array get -isempty chanmon ${chan}:max] { data array set chanmon ${chan}:max 5 }
+	#if [data array get -isempty chanmon ${chan}:delay] { data array set chanmon ${chan}:delay 2 }
+	# No!!!!! Leaving these blank will allow the "defaults" to be inserted
+	# Let @CHANMON:DEFAULTS handle this ....
+
+	data array get:all chanmon [list ${chan}:active ${chan}:max ${chan}:delay ${chan}:list] active max delay list
+
+	switch -exact -- [string tolower $1] {
+
+		"" - help {
+			print -help $nick "\[CHANMON\]:"                
+			print -help $nick "Syntax: $::botnick CHANMON ON"
+			print -help $nick "Syntax: $::botnick CHANMON OFF"
+			print -help $nick "Syntax: $::botnick CHANMON CALC"
+			print -help $nick "Syntax: $::botnick CHANMON FORCE"
+			print -help $nick "Syntax: $::botnick CHANMON \[-FORCE\] ADD <new rule>"
+			print -help $nick "Syntax: $::botnick CHANMON \[-FORCE\] EDIT <#> <updated rule>"
+			print -help $nick "Syntax: $::botnick CHANMON \[-FORCE\] DEL <#>"
+			print -help $nick "Syntax: $::botnick CHANMON LIST"
+			print -help $nick "Syntax: $::botnick CHANMON MAX"
+			print -help $nick "Syntax: $::botnick CHANMON DELAY"
+			print -help $nick "Syntax: $::botnick CHANMON CLEAR"
+			print -help $nick "This tells $::botnick to add to, del from, list, or clear its channel monitor instructions."
+			print -help $nick "CHANMON reacts to the number of users in the channel, and sets modes accordingly."
+			print -help $nick "-FORCE: when you use this flag when adding / editing / deleting rules, the parser will check if any changes are necessary to the channel modes due to what you just updated."
+			print -help $nick "CHANMON is currently: [iff [nozero [sbd:lindex CHANMON:$chan 0]] [color 3]ACTIVE[color] [color 4]inactive[color]]."
+			print -help $nick "CODER'S NOTE: using CHANMON has a caveat: if you set conflicting modes with CHANSET CHANMODE (channel settings), a [color 4]\002\037MODE WAR\037\002[color] may result! Choose your modes / settings carefully!"
+			print -help $nick ""
+			if [string eq -nocase ALL $2] {
+				print -help $nick "$::botnick CHANMON add >=24 +sm-p [color 3]If the room count gets to-or-above 24, set mode +sm-p[color]"
+				print -help $nick "$::botnick CHANMON add 10-15 +i [color 3]If the room count gets between 10 and 15 (inclusive), mode +i[color]"
+				print -help $nick "$::botnick CHANMON add <5 +s [color 3]If the room count falls below 5, set mode +s[color]"
+				print -help $nick ""
+				print -help $nick "Valid tokens: \$NEXT?, \$PREV?, #"
+				print -help $nick "     # = current room count"
+				print -help $nick "     \$PREV? = ? = integer, will count down to multiple of ? below current count"
+				print -help $nick "     \$NEXT? = ? = integer, will count up to multiple of ? above current count"
+				print -help $nick ""
+				print -help $nick "$::botnick CHANMON add =9 +l \$NEXT9 [color 3]If the room count is 9, move +l to next even multiple of 9 (which will be 18)[color]"
+				print -help $nick "$::botnick CHANMON add <50 +l \$PREV12 [color 3]If the room count falls below 50, move +l to next lower multiple of 12 (which will be 48, 36, 24, 12, or 0)[color]"
+				print -help $nick "$::botnick CHANMON add >=20 +l #+5 [color 3]If the room count is at-or-above 20, move +l to current room count (\"#\") + five[color]"
+				print -help $nick ""
+				print -help $nick "You can add up to $max entries."
+				print -help $nick "It's up to you to make sure the entries don't conflict."
+				print -help $nick ""
+				print -help $nick "CALC option lets you see how the \$NEXT / \$PREV tokens would affect the channel."
+				print -help $nick ""
+				print -help $nick "Valid count formats are: [color 3]=10[color] or [color 7]<10[color] or [color 9]>10[color] or[color 6] 1-10[color] or [color 13]<=10[color] or [color 10]>=10[color]"
+			} else {
+				print -help $nick "Use \"$::botnick HELP CHANMON ALL\" for explicit details."
+			}
+			if [access check 501 $handle] {
+				print -help $nick ""
+				print -help $nick "Lastly, as a global admin, you have one extra option:"
+				print -help $nick "$::botnick CHANMON -default <add | del | list | clear> \[settings\]"
+				print -help $nick ""
+				print -help $nick "The syntax is the same as the regular syntax. The difference is: for the -DEFAULT flag option, this makes all channels default to having the -DEFAULT settings as, well, the default settings. :)"
+				print -help $nick "What I mean is: until a channel sets-up its own CHANMON settings, the -DEFAULT settings will be substituted (but not added). Once a channel sets its CHANMON for the first time, the -DEFAULT settings will be ignored permanently (unless the CLEAR command is used)."
+			}
+			print -help $nick ""
+			print -help $nick "Command written by request of Mikey, to acquiesce to a request made by StarChat.Net admins which allowed bots to be the network, narrowly avoiding the creation of a \"NO BOTS\" policy there. Thankfully, the admins there were willing to let me try writing this command before they made their decision\; not many admins would do that. (:"
+			print -help $nick "[effects "Related Topics" u b]: MODE"
+			return
+		}
+
+		calc {
+			switch -regexp -- [string tolower [join $2]] {
+
+				{^\$prev\d*$} { set operator - }
+
+				{^\$next\d*$} { set operator + }
+
+				default { print -help $nick "\[CHANMON CALC\] Unknown token: [join $2]" ; return }
+
+			}
+			print -help $nick "CHANMON \$NEXT / \$PREV calculator:"
+			set value [mid $2 6]
+			set count $3
+			if ![isint -integer $count] { set count [llength [chanlist $chan]] }
+			set new [ expr ( int( $count / $value ) $operator 1) * $value ]
+			set new2 [ expr ( int( ( $count + 1 ) / $value ) $operator 1) * $value ]
+			set new3 [ expr ( int( ( $count - 1 ) / $value ) $operator 1) * $value ]
+			print -help $nick "Using the channel count of ${count}, and formula: ( int( $count / $value ) $operator 1) * $value: [effects $new u]"
+			print -help $nick "This means that: if someone joined the channel, the room count would become [ expr $count + 1 ], and the calculated value would become: $new2"
+			print -help $nick "This means that: if someone parted the channel, the room count would become [ expr $count - 1 ], and the calculated value would become: $new3"
+			print -help $nick "Remember: \$NEXT / \$PREV means the next / previous MULTIPLE of the step value (in this case, ${value})."
+			return
+		}
+
+		on - off {
+			set new [boolean -integer $1]
+			data array set chanmon ${base}:active $new
+			saveme data
+			print $nick "\[CHANMON\] Channel monitoring for $chan is now [string toupper [offon $new]]."
+			if $new {
+				print $nick "\[CHANMON\] Forcing an re-evalation of the channel CHANMON status ...."
+				@chanmon:delayed $chan
+			}
+			return
+		}
+
+		max {
+			if ![access check 500 $handle $chan] { print -help $nick "\[CHANMON MAX\] You don't have access to change this setting: channel owners (or above) only." ; return }
+			if [isempty 2] { print -help $nick "\[CHANMON MAX\] Current maximum: $max [plural entry $max]." ; return }
+			if ![isnum -integer $2] { print -help $nick "\[CHANMON MAX\] Invalid delay. Express an integer." ; return }
+			data array set chanmon ${base}:max $2
+			saveme data
+			print $nick "\[CHANMON MAX\] New maximum: $2"
+			return
+		}
+
+		delay {
+			set new $2
+			if [isempty new] { print -help $nick "\[CHANMON DELAY\] Current CHANMON action delay: $delay [plural second $delay]" ; return }
+
+			# Allow URT expressions
+			set timeval [timeval $new s]
+			if { $timeval != -1 } { set new $timeval }
+
+			if ![isnum -integer $new] { print -help $nick "\[CHANMON DELAY\] Invalid delay. Express an integer in seconds (25), or a URT value (e.g. +20s)." ; return }
+			data array set chanmon ${base}:delay $new
+			saveme data
+			print $nick "\[CHANMON DELAY\] CHANMON action delay for $chan now set to $new [plural second $new]."
+			return
+		}
+
+		add {
+			if { [llength $list] >= $max } { print -help $nick "\[CHANMON ADD\] You've already have the maximum allowable monitor entries (${max})." ; return }
+			set forgot 0
+			set condition $2
+			if { [isempty condition] || [isempty 3] } { print -help $nick "\[CHANMON ADD\] Forgot something, you have. To use the Force, concentrate you must." ; return }
+			if [isnum -integer $condition] { prepend condition = }
+			if [string eq "" [get range $condition 1 65535]] { print -help $nick "\[CHANMON ADD\] Illegal value: $condition" ; return }
+			if ![regexp -- {^[+\-].} $3] { print -help $nick "\[CHANMON ADD\] Illegal value: $3e (must be a direct mode change)." ; return }
+
+			# Insert valid mode check here
+			# Insert mode access check here
+
+			data array lappend chanmon ${base}:list $2e
+			saveme data
+			print $nick "\[CHANMON ADD\] New CHANMON rule: ($2) [join $3e]"
+			if [validflag -force] { @chanmon:delayed $chan }
+			return
+		}
+
+		ed - edit {
+			set rule $2
+			set new $3e
+			if [isempty new] { print -help $nick "\[CHANMON EDIT\] With what am I replacing this rule?" ; return }
+			if [isempty rule] { print -help $nick "\[CHANMON EDIT\] What rule are we altering?" ; return }
+			if ![isnum -integer $rule] { print -help $nick "\[CHANMON EDIT\] Illegal rule # (out of range)" ; return }
+			if { $rule < 1 } {print -help $nick "\[CHANMON EDIT\] Illegal rule number" ; return }
+			if { $rule > [llength $list] } { print -help $nick "\[CHANMON EDIT\] There aren't that many rules in place!" ; return }
+			set lindex [expr $rule -1] ; # Should this be -1 instead? (+2)
+			set old [lindex $list $lindex]
+			lset list $lindex $new
+			data array set chanmon ${base}:list $list
+			saveme data
+			print $nick "\[CHANMON EDIT\] Rule #${rule}: [join $old] --> [join $new]"
+			if [validflag -force] { @chanmon:delayed $chan }
+			return
+		}
+
+		del - delete {
+			set rule $2
+			if [isempty rule] { print -help $nick "\[CHANMON DEL\] What rule are we deleting?" ; return }
+			if ![isnum -integer $rule] { print -help $nick "\[CHANMON DEL\] Illegal rule # (out of range)" ; return }
+			if { $rule < 1 } {print -help $nick "\[CHANMON DEL\] Illegal rule number" ; return }
+			if { $rule > [llength $list] } { print -help $nick "\[CHANMON DEL\] There aren't that many rules in place!" ; return }
+			set lindex [expr $rule -1] ; # Should this be -1 instead? (+2)
+			set old [lindex $list $lindex]
+			set list [lreplace $list $lindex $lindex]
+			data array set chanmon ${base}:list $list
+			saveme data
+			print $nick "\[CHANMON DEL\] Rule #$2 deleted: [join $old]"
+			if [validflag -force] { @chanmon:delayed $chan }
+			return
+		}
+
+		list {
+			set active [data array get chanmon ${base}:active]
+			set chanlist [chanlist $chan]
+			set ll [llength $chanlist]
+			print $nick "\[CHANMON\] Channel monitoring for $chan is currently: [stu [boolean -on $active]]."
+			print $nick "\[CHANMON\] Current number of users in ${chan}: [comma $ll]"
+			set list [data array get chanmon ${base}:list]
+			if [isempty list] {
+				print $nick "\[CHANMON\] No entries have been added."
+			} {
+				zero count
+				foreach a $list {
+					incr count
+					empty head tail
+					lassign [get range [lindex $a 0] 1 65535] 1 2
+#debug.print "> CHANMON - LIST: \$1 ($1), \$2 ($2), L0 \$A ([l0 $a])"
+					if [is between $ll $1 $2] { set head "\037" ; set tail " (currently valid rule)" }
+					print $nick "\[CHANMON\] ${head}Rule #${count}: [join $a]$head$tail"
+				}
+			}
+			return 0
+		}
+
+		clear {
+			if ![string eq -nocase CLEAR $2] { print -help $nick "\[CHANMON CLEAR\] Are you [effects sure up u b]?! Use \"CLEAR CLEAR\" to convince me." ; return }
+			data array set chanmon ${base}:list ""
+			# If we clear it completely, the global (defaults) will take over again.
+			saveme data
+			print $nick "\[CHANMON CLEAR\] CHANMON list for $chan is now clear."
+			return
+		}
+
+		force {
+			print $nick "\[CHANMON FORCE\] Re-evaluating $chan through CHANMON ...."
+			@chanmon:delayed $chan
+			return
+		}
+
+		default { print -help -short -return $nick "Unknown option: [join $1]" }
+
+	}
+	?
+}
+
+proc @chanmon:add { nick host handle chan { 5 "" } { 6 "" } } {
+
+#debug.print "> @chanmon:ADD: UTIMERS ([utimers])"
+#debug.print "> @chanmon:ADD: TIMERS ([timers])"
+	sb7 killtimer -quiet [list @chanmon:delayed $chan]
+	if ![validchan $chan] { return }
+	data array get:all chanmon [list ${chan}:active ${chan}:max ${chan}:delay ${chan}:list] active max delay list
+	if [isempty list] { data array get:all chanmon [list global:active global:max global:delay global:list] active max delay list }
+	if ![boolean -integer $active] return
+	if [isempty delay] { set delay 0 }
+	utimer $delay [list @chanmon:delayed $chan]
+	return
+
+	# This is because when the BINDs trigger, the room count has NOT BEEN updated. In other words:
+	# 
+	# =27 +l 30
+	#
+	# This will =NOT= trigger when the 27th person joins.
+	# This will trigger when there are 27 people, and the 28th person JOINs.
+	# The CHANLIST #CHANNEL command will show the original 27, without the
+	# 28th person being added yet, thus triggering the =27 command.
+	#
+	# The variables are not updated until the WHO replies come back from the server. 
+}
+
+proc @chanmon:del {nick host handle chan { 5 "" } { 6 "" } } {
+#debug.print "> @chanmon:DEL: UTIMERS ([utimers])"
+#debug.print "> @chanmon:DEL: TIMERS ([timers])"
+
+	sb7 killtimer -quiet [list @chanmon:delayed $chan]
+	if ![validchan $chan] {return 0}
+	data array get:all chanmon [list ${chan}:active ${chan}:max ${chan}:delay ${chan}:list] active max delay list
+	if [isempty list] { data array get:all chanmon [list global:active global:max global:delay global:list] active max delay list }
+	if ![boolean -integer $active] return
+	if [isempty delay] { set delay 0 }
+	utimer $delay [list @chanmon:delayed $chan]
+	return
+}
+
+proc @chanmon:delayed { chan { offset 0 } { force 0 } } {
+
+	if ![validchan $chan] return
+	if ![botonchan $chan] return
+#	if ![botisop $chan] return
+	#if ![chanmode $::botnick $chan hoaq] return
+	set modes_now [getchanmode $chan]
+
+	# if the BOT parts the chan, this will still be triggered, but the
+	# channel name will technically be invalid by the time we get here.
+	# Therefore, we will get an "invalid channel" error in this PROC.
+
+#debug.print "> @chanmon:DELAYED: UTIMERS ([utimers])"
+#debug.print "> @chanmon:DELAYED: TIMERS ([timers])"
+	sb7 killtimer -quiet [list @chanmon:delayed $chan]
+
+	# Do NOT allow offsets here, as the chan info will have updated before
+	# the UTIMER trips. The offset, then, becomes an error factor.
+
+#debug.print "> @chanmon:DELAYED: \$CHAN ($chan), \$OFFSET ($offset)"
+
+	#SB:chanmon_defaults $chan ; # READ INFO IN TARGET PROC
+
+	data array get:all chanmon [list ${chan}:active ${chan}:list] active list
+	if [isempty list] { data array get:all chanmon [list global:active global:list] active list }
+	if ![boolean -integer $active] return
+	if [isempty list] return
+
+	empty modes_all
+	foreach a $list {
+		set chancount [expr [llength [chanlist $chan]] + $offset]
+		set setmodes [lrange $a 1 end]
+		set temp [lindex $setmodes 0]
+#debug.print "> @chanmon:DELAYED - 10: \$TEMP ($temp)"
+		foreach setmode [lrange $setmodes 1 end] {
+#debug.print "> @chanmon:DELAYED - 10: \$SETMODE ($setmode)"
+			regsub -all # $setmode $chancount setmode
+			if [string match -nocase \$next* $setmode] {
+				set num [mid $setmode 6]
+				if [isempty num] { set num 1 }
+				set new [expr $num * ( int( $chancount / $num ) + 1 )]
+				set setmode $new
+			}
+#debug.print "> @chanmon:DELAYED - 11: \$SETMODE ($setmode)"
+			if [string match -nocase \$prev* $setmode] {
+				set num [mid $setmode 6]
+				set new [expr $num * ( int( $chancount / $num ) - 0 )]; # - 1
+				set setmode $new
+			}
+#debug.print "> @chanmon:DELAYED - 12: \$SETMODE ($setmode)"
+			# We're already in KILLCODE format, so ....
+			if { [regexp -- {^[.0-9\+\-\*\/]$} $setmode] && ( [len $setmode] > 1 ) } { set setmode [expr $setmode] }
+#debug.print "> @chanmon:DELAYED - 13: \$SETMODE ($setmode)"
+			lappend temp $setmode
+#debug.print "> @chanmon:DELAYED - 14: \$TEMP ($temp)"
+		}
+		set setmodes [join $temp]
+#debug.print "> @chanmon:DELAYED - 15: \$SETMODES ($setmodes)"
+#debug =10 setmodes temp a getrange =GET/RANGE([lrange [get range [lindex $a 0] 1 65535] 0 10]...)
+		set getrange [get range [lindex $a 0] 1 65535]
+		set 1 [lindex $getrange 0]
+		set 2 [lindex $getrange end]
+		set setmodes [@chanmon:math $setmodes]
+#debug.print "> @chanmon:DELAYED: L0 \$A ([l0 $a]), \$chancount ($chancount), LLENGTH \[CHANLIST $chan\] ([llength [chanlist $chan]]), \$1 ($1), \$2 ($2)"
+
+#debug =11 chancount 1 2 =ISBETWEEN([is between $chancount $1 $2]) setmodes
+		if [is between $chancount $1 $2] {
+#debug.print "> @chanmon:DELAYED - 16: Current number of users in ${chan}: [llength [chanlist $chan]]. Executing: [join $a]"
+			putlog "\[CHANMON\] ${chan}: [join $a]"
+			rawoutput "MODE $chan $setmodes"
+#debug =([list MODE $chan $setmodes])
+			lappend modes_all $setmodes
+#debug.print "> @chanmon:DELAYED - 17: PUSHMODE \$TEMP ($temp)"
+		}
+#debug =12 modes_all
+	}
+#debug =20 active list
+
+	# Deprecated
+	if [normalize $force] {
+		# Don't show $SETMODES specifically: multiple entries may be at work ....
+		#SPAM -- msg $chan "\[CHANMON\] $chan mode updated to comply with current CHANMON settings ( [iff {[llength $modes_all] > 1} "independently: "][join $modes_all " , "] ) vs ( $modes_now )"
+	}
+	return
+}
+
+proc @chanmon:math crap {
+#debug.print "> @chanmon:math: \$CRAP ($crap)"
+	set temp ""
+	foreach a $crap {
+#debug.print "> @chanmon:math: \$A ($a)"
+		if [regexp -- {^[0-9\+\-\*\/]+$} $a] {
+			set a [expr $a]
+#debug.print "> @chanmon:math: EXPR \$A ($a)"
+		}
+		lappend temp $a
+	}
+	return $temp
+}
+
+proc @chanmon:defaults chan {
+	## This might preclude the use of global "defaults" if default data is pushed into the channel data stream
+	##return
+	# No longer true: $LIST is checked (data array get chanmon #channel:list).
+	# If empty, then presume we need to use the defaults.
+	# This allows preservation of the the active / max / delay values.
+
+	# SB6 auto-conversion (both formats, in order)
+	set changed 0
+	if [data get -notempty chanmon:default] { set changed 1 ; data rename chanmon:default chanmon:global }
+	foreach mode [concat global [channels]] {
+		foreach a [list - :] {
+			if [data get -notempty chanmon${a}$chan] {
+				set list [lassign [data get chanmon${a}$chan] active max delay]
+				set changed 1
+				data array set:all chanmon [list ${chan}:active ${chan}:max ${chan}:delay ${chan}:list] $active $max $delay $list
+				data set chanmon${a}$chan ""
+			}
+		}
+	}
+
+	# Standard SB7 data check
+	data array get:all chanmon [list ${chan}:active ${chan}:max ${chan}:delay ${chan}:list] active max delay list
+	if [isempty active] { set changed 1 ; set active 0 }
+	if [isempty max] { set changed 1 ; set max 5 }
+	if [isempty delay] { set changed 1 ; set delay 2 }
+	# $LIST can be empty: implies no data (let default supercede)
+	if $changed { saveme data }
+
+	set changed 0
+	set error [ catch { deludef flag chanmon-max } ]
+	if !$error { set changed 1 }
+	set error [ catch { deludef flag chanmon-delay } ]
+	if !$error { set changed 1 }
+	set error [ catch { deludef flag chanmon:max } ]
+	if !$error { set changed 1 }
+	set error [ catch { deludef flag chanmon:delay } ]
+	if !$error { set changed 1 }
+	if $changed { saveme chan }
+
+	return 0
+}
+
+proc @chanmon:validate { nick host handle chan mode victim } {
+	if ![validchan $chan] return
+	if ![botonchan $chan] return
+	if ![botisop $chan] return
+	#if ![SB:oppedbot oh $chan] {return 0}
+
+	# AUTOOP mode changes are forcing the mode validator to trigger,
+	# effectively BYPASSING the DELAY setting. Let's limit what modes
+	# will cause validation?
+	#if { [lsearch -glob [list s t i n k l p m] [right $mode 1]] < 0 } { return }
+	# Too many custom modes, than to IRCds that allow custom modules.
+	# Let's just limit what we =KNOW= shouldn't trigger this ....
+	if [regexp -- {^[\+\-][qaohvbeI]$} $mode] return
+
+	# OFFSET=0 (default) , FORCE=1
+	@chanmon:delayed $chan 0 [expr ( [not [isbotnick $nick]] ) * [not [data array get -normalize @chanmon reverttimer]] ]
+	data array set @CHANMON REVERTTIMER 1
+	sb7 killtimer -quiet @chanmon:reverttimer
+	utimer 5 @chanmon:reverttimer ; # 5 seconds
+	return
+}
+
+proc @chanmon:reverttimer args {
+	sb7 killtimer -quiet @chanmon:reverttimer
+	data array set @chanmon reverttimer
+	return
+}
+
+#####
+# Bootstrap:
+bind MODE - * @chanmon:validate
+bind JOIN - * @chanmon:add
+bind PART - * @chanmon:del
+#bind SPLT - * @chanmon:del
+#bind REJN - * @chanmon:add
+bind SIGN - * @chanmon:del
+bind KICK - * @chanmon:del
+

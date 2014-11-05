@@ -184,7 +184,7 @@ proc @abuse:verify_data args {
 	if [data array get -notempty abuse home] { one changed ; data array set abuse home "" }
 	if [data array get -notempty abuse level] { one changed ; data array set abuse level "" }
 	if [data array get -notempty abuse notes] { one changed ; data array set abuse notes "" }
-	if $changed { saveme data ; putlog "\[ABUSE\] Auto-updating ABUSE data info ...." }
+#	if $changed { saveme data ; putlog "\[ABUSE\] Auto-updating ABUSE data info ...." }
 	return
 }
 

@@ -5,7 +5,7 @@ sb7 command add MY 1 -none
 # NOTE: "getuser <handle> XTRA" gives a full list of set items (COPYUSER? :)
 
 # This is needed for WHOIS and COPYUSER
-data set @SET:VALID [list output gmt timezone burst prefix postfix alias color datetime private rank]
+data set @SET:VALID [list output gmt timezone burst prefix postfix alias color datetime private rank nochon]
 
 proc @my { nick host handle chan arg } {
 	sb7 parseflags
@@ -31,9 +31,12 @@ proc @set { nick host handle chan arg } {
 		list { print -return $nick "\[SET\] Available options: [ajl $valid]" }
 
 		default {
-			set param [uniquematch $valid $1]
+			set word [uniquematch $valid $1]
+			set param $word
+
+			# Will fail for NOCHON ( --> chon:quiet )
 			if [isempty 2] { print -short -return $nick "\[SET [string toupper $1]\] Value: [none [userinfo get $handle $param] <none>]" }
-			#if { [string eq -nocase NONE $2] || [string eq -nocase OFF $2] }
+
 			if [string eq -nocase NONE $2] {
 				# Can't use ISFALSE because "0" is valid for COLOR and other options
 				empty value 
@@ -57,11 +60,16 @@ proc @set { nick host handle chan arg } {
 					if [isempty value] { print -short -return $nick "Options for rank: Navy, Coast Guard, Army, Air Force, & Marines (any unique abbreviation (and spaces) accepted)" }
 				}
 
+				nochon {
+					#set param chon:quiet
+					set value [boolean -falsetrue $value]
+				}
+
 			}
 
-			userinfo set $handle $param $value
+			userinfo set $handle $param $value ; # Use $PARAM here
 			saveme data
-			print -header:short $nick "Updating your \"${param}\" setting to: [none $value <none>]"
+			print -header:short $nick "Updating your \"${word}\" setting to: [none $value <none>]" ; # Use $WORD here
 			return 0
 		}
 
@@ -112,5 +120,4 @@ proc @info { nick host handle chan arg } {
 	}
 	return 
 }
-
 

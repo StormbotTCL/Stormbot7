@@ -1,5 +1,6 @@
 sb7 command add ACCESS     0 -core ; # -chanspec <--- due to -GLOBAL, don't use -CHANSPEC
 sb7 command add ADDUSER  400 -none -redirect AU
+sb7 command add ADDBOT   400 -none -redirect AB
 sb7 command add MODUSER  400 -none -redirect MU
 sb7 command add REMUSER  400 -none -redirect RU
 sb7 command add USERLIST   1 -none -redirect UL
@@ -18,7 +19,7 @@ proc @adduser  { nick host handle chan arg } { print -help -short -return $nick 
 proc @remuser  { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS DEL <list of users>" }
 proc @moduser  { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS MOD <new level> <list of users>" }
 proc @admin    { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS ADD -GLOBAL <level> <list of users>" }
-proc @userlist { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS LIST \[-GLOBAL\] \[-SHORT\] \[range\]" }
+proc @userlist { nick host handle chan arg } { print -help -short -return $nick "Syntax change: ACCESS LIST \[-GLOBAL\] \[-SHORT\] \[-DEAD\] \[range\]" }
 
 proc @access { nick host handle chan arg } {
 	# This will be the all-encompassing ACCESS controller
@@ -42,7 +43,7 @@ proc @access { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick ACCESS DEL <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS DEL -GLOBAL <list of nicks>"
 			print -help $nick "Syntax: $::botnick ACCESS SCRUB <list of nicks>"
-			print -help $nick "Syntax: $::botnick ACCESS LIST \[-GLOBAL\] \[-DEAD\] \[range of levels\]"
+			print -help $nick "Syntax: $::botnick ACCESS LIST \[-GLOBAL\] \[-SHORT\] \[-DEAD\] \[range of levels\]"
 			print -help $nick "Syntax: $::botnick ACCESS AUDIT"
 			print -help $nick "Syntax: $::botnick ACCESS <user>"
 			print -help $nick ""
@@ -259,7 +260,7 @@ proc @access { nick host handle chan arg } {
 					 default { error "\[ACCESS SCRUB\] Unknown WHOIS reply: ONLINE($online):WN($wn):WM($wm):WH($wh):WC($wc) (report this to the coder)" }
 				}
 				if ![validuser $wh] { lappend bad $user ; continue }
-				set list [ldestroy -all -not -nocase -glob -multiple [get first [userinfo list $user]] [list USERLEVEL:#* ACCESS:#*]]
+				set list [ldestroy -all -not -nocase -glob -multiple [get first [userinfo list $user]] [list ACCESS:#*]]
 				foreach element $list { userinfo set $user $element }
 				if [string eq -nocase $user $wh] { lappend ok $user } { lappend ok "$user ([nph $wn $wh])" }
 			}
@@ -1025,7 +1026,7 @@ proc @whoami { nick host handle chan arg } {
 	# Only do this if authed!
 	if [isnum -integer $nick] { set who $idx2nick ; set host "\[DCCIDX:$nick\]" } { set who $nick }
 	set authed [sb7 auth find handle $nick]
-	mset g c -1
+	set:all g c -1
 	if [string eq $authed $handle] {
 		set authed $handle
 		set g [access get $handle]
@@ -1111,10 +1112,10 @@ debug token data
 }
 
 proc sb7:dcc:-user {handle idx arg} {
-	if [SB:commandlist iscmd PROTECT] {
+	if [sb7 command iscmd PROTECT] {
 		if [validuser $arg] {
 			if [nozero [getdata $arg PROTECT]] {
-				if ![chkaccess [SB:commandlist level protect] $handle] {
+				if ![access check [sb7 command get protect level] $handle] {
 					putidx $idx "You can't use the core EGGDROP command \"-user\" to delete this user: PROTECTion is currently on."
 					return 1
 				}
@@ -1126,7 +1127,7 @@ proc sb7:dcc:-user {handle idx arg} {
 }
 
 proc sb7:dcc:-bot { handle idx arg } {
-	if [SB:commandlist iscmd PROTECT] {
+	if [sb7 command iscmd PROTECT] {
 		if [validuser $arg] {
 			if [nozero [getdata $arg PROTECT]] {
 				if ![chkaccess [SB:commandlist level protect] $handle] {
@@ -1140,6 +1141,16 @@ proc sb7:dcc:-bot { handle idx arg } {
 	return 1
 }
 
+proc @access:fixlevels args {
+	# 2014-11-04 07:52:00 -0800
+	# Two streams were created: USERINFO/ACCESS:* (SB7) and USERINFO/USERINFO:* (SB6, back*-compat*).
+	# Intention was to move to USERINFO/ACCESS:* but it wasn't handled everywhere in code, so the back*-compat* was broken.
+	set changed 0
+	foreach user [userlist] { foreach chan [concat global [channels]] { if ![string eq "" [userinfo get $user USERLEVEL:$chan]] { set changed 1 ; userinfo set $user ACCESS:$chan [userinfo get $user USERLEVEL:$chan] ; userinfo set $user USERLEVEL:$chan ; sb7 log "\[@ACCESS:FIXLEVELS\] Fixed user access data (USERLEVEL -> ACCESS): $user ($chan)" } } }
+	if $changed { saveme user }
+	return
+}
+
 #####
 # Bootstrap:
 
@@ -1147,4 +1158,4 @@ catch { unbind dcc m|-  -user *dcc:-user }
 catch {   bind dcc m|- /-user sb7:dcc:-user }
 catch { unbind dcc t|-  -bot  *dcc:-bot  }
 catch {   bind dcc t|- /-bot  sb7:dcc:-bot  }
-
+@access:fixlevels

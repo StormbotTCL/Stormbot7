@@ -1,0 +1,104 @@
+sb7 command add CHATTR 700 -none
+sb7 register global CHATTR ; # SB7's DATA ARRAY (: may not be needed :)
+
+proc @chattr { nick host handle chan arg } {
+	FLAGS
+	# Global users can set any local flags
+	# Global techs can set any global flags except: (800) jtx (900) mM (1000) nN
+	array set temp_levels_local [list 700 adefgklopqruvwyzmnMN 9999 bchijstxyABCDEFGHIJKLOPQRSTUVWXYZ]
+	array set temp_levels_global [list 700 acdefghklopqruvwyz 800 jtx 900 mM 1000 nN 9999 bisABCDEFGHIJKLOPQRSTUVWXYZ]
+	array set levels_local [list]
+	array set levels_global [list]
+	foreach a [list local global] { foreach { b c } [array get temp_levels_$a] { foreach d [split $c ""] { set levels_${a}($d) $b } } }
+
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[CHATTR\]:"
+		print -help $nick "Syntax: $::botnick CHATTR HELP"
+		print -help $nick "Syntax: $::botnick CHATTR \[global flags\]|\[local flags \[#channel\]\] "
+		print -help $nick ""
+		print -help $nick "CHATTR ([effects CH un b]ange [effects ATTR un b]ibutes) will alter the flags for the target user."
+		print -help $nick "Due to the fact that access levels and flags go together, only certain users can change certain flags."
+		foreach a [list global local] {
+			foreach { b c } [array get temp_levels_$a] {
+				print -help $nick "[space 5][string toupper $a]: $b ([iff [string eq -nocase LOCAL $a] |]$c)"
+			}
+		}
+		return
+	}
+
+	# Let's affect a user
+	# Syntax: <user> <flags> [?channel:$CHAN]
+	lassign:array chattr [whois [join $1] $handle] online nick host handle chan authhandle authnick
+	if ![validuser $chattr(handle)] { print -help -short -return $nick "No such user: [join $1]" }
+	set chattrflags $2
+	set chattrchan $3
+	if [isempty chattrchan] { set chattrchan $chan }
+
+	lassign [split $chattrflags |] global local bot
+#	if [notempty bot] { if ![is bot $chattr(handle)] { print -help -short -return $nick "Target is not a bot: [nph [join $1] $chattr(handle)] ($bot)" } }
+
+#debug chattr
+#debug chattr(handle) global local bot chattrflags chattrchan
+
+	array set result [list local:ok "" local:bad "" local:access "" local:unknown "" global:ok "" global:bad "" global:access "" global:unknown "" bot:ok "" bot:bad "" bot:access "" bot:unknown ""]
+	# Local flags first
+	set modes ""
+	set polarity ""
+	foreach mode [list global local] {
+		if [string eq -nocase LOCAL $mode] { append modes | }
+		foreach a [split [set $mode] ""] {
+			switch -exact -- $a {
+				+ - "-" { set polarity $a ; append result(${mode}:ok) $a ; append modes $a }
+				default {
+					if ![info exists levels_${mode}($a)] { lappend result(bot:unknown) $a ; continue }
+					if { [access higher $handle $chattrchan] >= [set levels_${mode}($a)] } {
+						append result(${mode}:ok) $a
+						append modes $a
+					} {
+						append result(${mode}:access) $a
+					}
+				}
+			}
+		}
+	}
+	
+	# Bot flags last
+	set polarity ""
+	foreach a [split $bot ""] {
+		switch -exact -- $a {
+			+ - "-" { set polarity $a ; append result(bot:ok) $a ; append bots $a }
+			default {
+				if ![info exists levels_bot($a)] { lappend result(bot:unknown) $a ; continue }
+				if { [access higher $handle $chattrchan] >= $levels_bot($a) } {
+					append result(bot:ok) $a
+					append bots $a
+				} {
+					append result(bot:access) $a
+				}
+			}
+		}
+	}
+
+
+#debug result
+	set successful ""
+	zero needsave
+	if [notempty result(global:ok)] { one needsave ; append successful $result(global:ok) ; chattr $chattr(handle) $result(global:ok) }
+	append successful | ; # Must be separate from the IFs
+	if [notempty result(local:ok)] { one needsave ; append successful $result(local:ok) ; chattr $chattr(handle) |$result(local:ok) $chattrchan }
+	append successful | ; # Must be separate from the IFs
+	if [notempty result(bot:ok)] { one needsave ; append successful $result(bot:ok) ; botattr $chattr(handle) $result(bot:ok) }
+	set successful [string trimright $successful |+-]
+	if $needsave {
+		print -short $nick "Changes applied: $successful"
+		saveme user 
+	}
+	print $nick "Result ($chattr(handle)): [chattr $chattr(handle) $chattrchan]"
+	foreach mode [list global local bot] {
+		if [notempty result(${mode}:bad)] { print $nick "Unknown $mode flags: $result(${mode}:bad)" }
+		if [notempty result(${mode}:access)] { print $nick "Insufficient access to set $mode flags: $result(${mode}:access)" }
+		if [notempty result(${mode}:unknown)] { print $nick "Unknown $mode flags: $result(${mode}:unknown)" }
+	}
+	return 0
+}
+

@@ -1,0 +1,117 @@
+sb7 command add ARCHIVE 1000 -locklevel ARCH
+
+proc @archive { nick host handle chan arg } {
+	FLAGS
+	switch -exact -- [string tolower $1] {
+		help {
+			print -help $nick "\[ARCHIVE\]:"
+			print -help $nick "Syntax: $::botnick ARCHIVE HELP"
+			print -help $nick "Syntax: $::botnick ARCHIVE TEST"
+			print -help $nick "Syntax: $::botnick ARCHIVE MAKE \[-FORCE\] \[-ALL | -CONFIG -USERFILE -CHANFILE -DATAFILE -BOTCHK -NOTEFILE\] \[-DAYS | -HOURS | -MINUTES \]"
+			print -help $nick "The ARCHIVE command prepares a tarball of the following files: config file, userfile, chanfile, datafile, botchk file (if applicable), and notefile (if applicable)."
+			print -help $nick "The following flags tell you which files to include (or you can use -ALL): -CONFIG -USERFILE -CHANFILE -DATAFILE -BOTCHK -NOTEFILE"
+			print -help $nick "TEST: checks if the TAR & GZIP commands are available from the shell. This command will fail without it."
+			print -help $nick "-DAYS: limit file file name timestamp to: <date>-000000 (time will be all zeroes)"
+			print -help $nick "-HOURS: limit file file name timestamp to: <date>-<current hour>0000 (minutes and seconds will be all zeroes)"
+			print -help $nick "-MINUTES: limit file file name timestamp to: <date>-<current hour><current minute>00 (seconds will be all zeroes)"
+			print -help $nick "-FORCE: if the target tarball file already exists, overwrite it (otherwise, the command will complain)"
+			print -help $nick "-ALL: include all necessary files: config, userfile, chanfile, datafile, botchk, & notefile"
+			print -help $nick "-CONFIG: the bot's config file ($::config)"
+			print -help $nick "-USERFILE: the bot's user file, which includes exempt & invex information ($::userfile)"
+			print -help $nick "-CHANFILE: the bot's channel file ($::chanfile)"
+			print -help $nick "-DATAFILE: the bot's StormBot.TCL data file ([file tail [data filename]])"
+			print -help $nick "-BOTCHK: the bot's cron check script ([none [@archive:findbotfile botchk] <none>])"
+			print -help $nick "-NOTEFILE: the bot's note file, which is not used in StormBot.TCL ([if [info exists ::notefile] { set nf $::notefile } { set nf <none> }])"
+			print -help $nick "With all of the file name flag options above, you can specify the file in case of custom situations. You can not use the -ALL flag in this situation."
+			print -help $nick "Example: $::botnick ARCHIVE MAKE -config -userfile -chanfile -datafile -botchk MyBot.cron -notefile MyBot.notes"
+			return 0
+		}
+
+		test {
+			set tar [shell:findcmd tar]
+			if [isempty tar] { print -short -return $nick "\[ARCHIVE TEST\] I can not find TAR in either the WHEREIS or WHICH shell commands."  }
+			print $nick "\[ARCHIVE TEST\] I found TAR at: $tar"
+
+			set gzip [shell:findcmd gzip]
+			if [isempty gzip] { print -short -return $nick "\[ARCHIVE TEST\] I can not find GZIP in either the WHEREIS or WHICH shell commands." }
+			print $nick "\[ARCHIVE TEST\] I found GZIP at: $gzip"
+			print $nick "\[ARCHIVE TEST\] I have what I need to use this command successfully."
+			return
+		}
+
+		make {
+			# Using params allows for the specification of the given file type (case / name issues)
+			flags -params $2e [list -force 0 -all 0 -days 0 -hours 0 -minutes 0 -config 1 -datafile 1 -userfile 1 -chanfile 1 -notefile 1 -botchk 1] text flags
+
+			set timestamp %Y%m%d-%H%M%S
+			if [notempty flags(-days)] {set timestamp %Y%m%d-000000}
+			if [notempty flags(-hours)] {set timestamp %Y%m%d-%H0000}
+			if [notempty flags(-minutes)] {set timestamp %Y%m%d-%H%M00}
+			set archive "[clock format [clock seconds] -format ${timestamp}-${::nick}.archive.tar]"
+
+			# Check if the file exists #
+#debug archive =EXISTS([file exists $archive]) =EXISTS/GZ([file exists ${archive}.gz])
+			if [file exists $archive     ] { if [isempty flags(-force)] { print -return $nick "\[ARCHIVE MAKE\] I can't create the TARBALL \"${archive}\" (already exists). Use -FORCE to overwrite it." } { catch { file delete $archive } } }
+			if [file exists ${archive}.gz] { if [isempty flags(-force)] { print -return $nick "\[ARCHIVE MAKE\] I can't create the TARBALL GZIP \"${archive}.gz\" (already exists). Use -FORCE flag to overwrite it." } { catch { file delete ${archive}.gz} } }
+
+			set tarflag c
+			lappend sh "#!/bin/sh"
+
+			# Calculate, or insert, the file names ....
+			foreach flag [list -config -userfile -chanfile -notefile -datafile -botchk] {
+				if { [info exists flags(-all)] || [info exists flags($flag)] } {
+					switch -exact -- $flag {
+						-config { if [notempty flags($flag)] { set file $flags($flag) } { set file $::config } }
+						-userfile { if [notempty flags($flag)] { set file $flags($flag) } { set file $::userfile } }
+						-chanfile { if [notempty flags($flag)] { set file $flags($flag) } { set file $::chanfile } }
+						-notefile { if [notempty flags($flag)] { set file $flags($flag) } { if [info exists ::notefile] { set file $::notefile } { set file <undefined> } } }
+						-datafile { if [notempty flags($flag)] { set file $flags($flag) } { set file [data filename tail] } }
+						-botchk { if [notempty flags($flag)] { set file $flags($flag) } { set file [@archive:findbotfile botchk] } }
+					}
+
+					if [file exists $file] {
+						# In case of BOTCHK, we're checking for 2 possibilities
+						lappend sh "tar -${tarflag}f $archive $file"
+						set tarflag r
+					} {
+						print -return $nick "\[ARCHIVE MAKE\] I can not find the following file: $file"
+					}
+				}
+			}
+
+			if ![string eq $tarflag r] {print $nick "I couldn't find any of the requested data files!"; return 0}
+
+			lappend sh "gzip $archive"
+			append archive .gz
+
+			# Dump the shell script #
+			set tempfile archive.[clock seconds].[rand 9999999].sh
+			file:write -list $tempfile $sh
+			exec chmod 755 $tempfile
+
+			# Execute it! #
+			set error [ catch { exec ./$tempfile } ohshit ]
+			if $error {error "Error while preparing tarball: $ohshit"}
+
+			# Clean-up #
+			file delete $tempfile
+
+			print $nick "File created: $archive"
+			return 0
+		}
+
+		default { print -help -short $nick "Unknown option: [join $1]" }
+
+	}
+	?
+}
+
+proc @archive:findbotfile { { extension "" } } {
+	empty name
+	foreach a [explode $::nick] { if [string is upper $a] { append name ? } { append name $a } }
+	if [notempty extension] { append name ".[string trimleft $extension .]" }
+	set matches [glob -nocomplain $name]
+	# Sometimes, GLOB returns a TCL LIST even when there's only one file that matches
+	foreach match $matches { return $match }
+	return
+}

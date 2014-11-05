@@ -7,24 +7,27 @@ proc @debug { nick host handle chan arg } {
 # "> DEBUG: \$ARG ($arg)"
 
 	sb7 parseflags
+	set validflags [list -all -internal -eggdrop -dcclist -owners -varegg -validbinds -events -tcl -pwd -files -servers -binds -ban -exempt -invite -modes -stormbot -commands -vartcl -greet -traffic]
 
 	switch -exact -- [string tolower $1] {
 
 		"" - help {
 			print -help $nick "\[DEBUG\]:"
 			print -help $nick "Syntax: $::botnick DEBUG HELP"
-			print -help $nick "Syntax: $::botnick DEBUG INFO"
+			print -help $nick "Syntax: $::botnick DEBUG INFO \[${validflags}\]"
 			print -help $nick "Syntax: $::botnick DEBUG TRIGGERS"
 			print -help $nick "Syntax: $::botnick DEBUG COMMAND <command> (shows you internal stats on the command)"
 			print -help $nick ""
 			print -help $nick "Kicks-up information to report to the coder, in case you are having problems and can't find the issue(s) on your own."
 			print -help $nick "Report issues to: chat.bothouse.net - #BotHouse :: If no one is there, paste your DEBUG info to the channel. The channel is ALWAYS logged\; someone will forward the information to a coder. Be sure to include an email address for a reply!"
 			print -help $nick "If using the bug reporting website ( http://Bugs.BotHouse.Net/ ), you'll need to paste this info into the \"additional information\" field."
-			print -help $nick "[effects WARNING up 4,5]: This produces about 30 lines of text!"
+			print -help $nick "[effects WARNING up 4,5]: This produces about 30 ~ 50 lines of text!"
 			return 0
 		}
 	
 		info {
+			flags:simple $2e $validflags text flags
+			if [isempty flags] { set flags -all }
 			set home [home]
 			if [string eq "" $home] { print -help $nick "Some of my tests will fail because they require that I am on, at least, one channel." }
 			set nw "\$NETWORK unset"
@@ -34,136 +37,239 @@ proc @debug { nick host handle chan arg } {
 			# ----------------------------------------------------------------------
 
 			print $nick "\[DEBUG\]"
-			print $nick "Internal nick: $::nick"
-			print $nick "EGGDROP version: [lindex $::version 0], running $::tcl_platform(machine) with $::tcl_platform(os) $::tcl_platform(osVersion) ($::tcl_platform(platform)) \[[info hostname]\] system."
-			print $nick "EGGDROP source modules loaded: [ajl [stl [get first [get first [modules]]]]]"
-			empty nl1 nl2
-			if [info exist ::nicklen] { set nl1 $::nicklen } 
-			if [info exist ::nick-len] { set nl2 ${::nick-len} } 
-			print $nick "EGGDROP user information length variables: \$NICKLEN ([none $nl1 <undefined>]), \$NICK-LEN ([none $nl2 <undefined>]), \$HANDLEN ($::handlen)"
-			catch { bind COW - @test @test } event_error
-			print $nick "Binds: [ajl [trim [regsub -all -nocase -- , [lindex [split $event_error :] 1] ""]]]"
-			print $nick "Can bind to events? [boolean -truefalse [not [catch { bind evnt - @test @test ; unbind evnt - @test @test } ]]]"
-			# Events: (1.8.0): sighup sigterm sigill sigquit save rehash prerehash prerestart logfile loaded userfile-loaded connect-server init-server disconnect-server
-			print $nick ""
-			lassign [split [info patchlevel] .] tclmaj tclmin tclpatch
-			print $nick "TCL: [info patchlevel] (major: $tclmaj - minor: $tclmin - patch level: $tclpatch) from [info library]"
-			print $nick "TCL interactive mode: [boolean -truefalse $::tcl_interactive]"
-			print $nick "TCL floating-point precision: $::tcl_precision"
-			print $nick "TCL package path: $::tcl_pkgPath"
-			print $nick "TCL library path (\$tcl_libPath):"
-			foreach p $::tcl_libPath { print $nick "[space 5]$p" }
-			print $nick ""
-			print $nick "Current working directory: [file normalize [pwd]]"
-			print $nick "Bot files:"
-			mset file_user file_chan file_note <none>
-			foreach a [list user chan note] { if [info exists ::${a}file] { set file_$a [set ::${a}file]} }
-			foreach { a b } [list User user Chan chan Note note] { print $nick "[space 5]${a} file: [set file_$b]" }
+			print $nick "Requested by: ${handle}:${nick}!${host}$chan ([access get $handle]/[access get $handle $chan])"
 
-			if [info exists ::server] {
-				lassign $::server internal alias
-				if [notempty alias] { set alias " -> \"${alias}\""}
-				lassign [trim [split $internal :]] name port password
-				if [notempty password] { set password " (<password>)" }
-				print $nick "Current server: $name ($port)${password}${alias}"
-				print $nick "[space 5]since: [format:date ${::server-online} $handle] ([datediff [clock seconds] ${::server-online}] ago)"
-				print $nick "[space 5]nick: $::botnick"
-				print $nick "[space 5]altnick: $::altnick"
-				print $nick "[space 5]botnet-nick: ${::botnet-nick}"
+			if [validflag -all -internal] {
+				print $nick "Internal nick: $::nick"
+				print $nick "Configuration file: $::config"
 			}
 
-			if [notempty ::servers] {
-				print $nick "Server list:"
-				foreach a $::servers {
-					lassign $a internal alias
+			if [validflag -all -eggdrop] {
+				print $nick "EGGDROP version: [lindex $::version 0], running $::tcl_platform(machine) with $::tcl_platform(os) $::tcl_platform(osVersion) ($::tcl_platform(platform)) \[[info hostname]\] system."
+				print $nick "EGGDROP source modules loaded: [ajl [stl [get first [get first [modules]]]]]"
+			}
+
+			if [validflag -all -dcclist] {
+				# DCCLIST
+				empty telnet
+				array set dcclist_chat [list C "party line -> in file area"  c "party line" P "party line access only" p "party line access" T "TELNET" t "DCC CHAT" E "echo" e "no echo" P2 "paging" p2 "no paging"]
+				array set dcclist_bot [list P "PING send (awaiting reply)" p "" U "userfile sharing active" u "" C "local bot initiated connection" c "" O "userfile offered (awating reply)" o "" S "sending userfile" s "" G "getting userfile" g "" W "Warned this bot to stop hubbing" w "" L "leaf-only bot (not allowed as hub)" l "" I "in linking stage" i "" A "$::botnick aggressively receiving share from %BOT%" a ""]
+				print $nick "Internal (DCC) connections:"
+				set dcclist [dcclist]
+				foreach entry [lsort -index 0 $dcclist] {
+				lassign $entry socket 1 2 3 4 5
+				switch -exact -- [string tolower $3] {
+						telnet { lappend telnet [lindex $4 1] ; print $nick "[space 5]Socket #${socket}: \[LISTEN\] port: [lindex $4 1] (since [format:date $5 @short])" }
+						chat {
+							regexp -- {([Cc])([Pp])([Tt])([Ee])([Pp])\/(\d+)} $4 - c p t e p2 channel
+							print $nick "[space 5]Socket #${socket}: \[DCC CHAT\] $1 ($2): flags: [lindex [split [lindex $4 end] /] 0] \[ $dcclist_chat($c)[iff [string eq $c c] " channel: #${channel}"] --  $dcclist_chat($p) -- $dcclist_chat($t) -- $dcclist_chat($e) -- $dcclist_chat(${p2}2)\] (since [format:date $5 @short])"
+						}
+						script { print $nick "[space 5]Socket #${socket}: \[SCRIPT\] [lindex $4 1] (since [format:date $5 @short])" }
+						server { print $nick "[space 5]Socket #${socket}: \[SERVER\] $2 [lindex $4 1] (since [format:date $5 @short])" }
+						dns { print $nick "[space 5]Socket #${socket}: \[DNS\] status [lindex $4 1] (since [format:date $5 @short])" }
+						bot { 
+							regexp -- {([Pp])([Uu])([Cc])([Oo])([Ss])([Gg])([Ww])([Ll])([Ii])([Aa])} $4 - p u c o s g w l i a
+							empty output
+							foreach flag [list p u c o s g w l i a] { if [string is upper [set $flag]] { lappend output $dcclist_bot([set $flag]) } }
+							print $nick "[space 5]Socket #${socket}: \[BOT\] $1 ($2): flags: [lindex $4 end] \[[join [regsub -all %BOT% $output $1] " / "]\] (since [format:date $5 @short])" 
+						}
+						default { print $nick "[space 5]Socket #${socket}: \[${3}\] $2 -- $4 (since [format:date $5 @short])" }
+					}
+				}
+
+				# Checking against the config file ....
+				set config [file:read $::config \n]
+				array set listenports [list]
+				foreach line $config {
+putlog "\[DEBUG INFO -DCCLIST\] LINE($line)"
+					if [regexp -- {^listen (\d+) (\s+)$} $line - port type] { lappend listenports($port) $type }
+				}
+				if ![string eq "" [array names listenports]] {
+					foreach a [lsort -integer -increasing [array names listenports]] {
+						print $nick "[space 5]Config/listen: $a ($listenports($a))"
+					}
+				}
+			}
+
+			if [validflag -all -owners] {
+				print $nick "My permanent owners: [get owners]"
+			}
+
+			if [validflag -all -varegg] {
+				empty nl1 nl2
+				if [info exist ::nicklen] { set nl1 $::nicklen } 
+				if [info exist ::nick-len] { set nl2 ${::nick-len} } 
+				print $nick "EGGDROP user information length variables: \$NICKLEN ([none $nl1 <undefined>]), \$NICK-LEN ([none $nl2 <undefined>]), \$HANDLEN ($::handlen)"
+			}
+
+			if [validflag -all -validbinds] {
+				catch { bind @DEBUG:COW - @debug:test @debug:test } event_error
+				print $nick "Binds: [ajl [trim [regsub -all -nocase -- , [lindex [split $event_error :] 1] ""]]]"
+			}
+
+			if [validflag -all -events] {
+				print $nick "Can bind to events? [boolean -truefalse [not [catch { bind evnt - @debug:test @debug:test ; unbind evnt - @debug:test @debug:test } ]]]"
+				# Events: (1.8.0): sighup sigterm sigill sigquit save rehash prerehash prerestart logfile loaded userfile-loaded connect-server init-server disconnect-server
+			}
+
+			if [validflag -all -tcl] {
+				lassign [split [info patchlevel] .] tclmaj tclmin tclpatch
+				print $nick "TCL: [info patchlevel] (major: $tclmaj - minor: $tclmin - patch level: $tclpatch) from [info library]"
+				print $nick "TCL interactive mode: [boolean -truefalse $::tcl_interactive]"
+				print $nick "TCL floating-point precision: $::tcl_precision"
+				print $nick "TCL package path: $::tcl_pkgPath"
+				print $nick "TCL library path (\$tcl_libPath):"
+				foreach p $::tcl_libPath { print $nick "[space 5]$p" }
+			}
+
+			if [validflag -all -pwd] {
+				print $nick "Current working directory: [file normalize [pwd]]"
+			}
+
+			if [validflag -all -files] {
+				print $nick "Bot files:"
+				set:all file_user file_chan file_note <none>
+				foreach a [list user chan note] { if [info exists ::${a}file] { set file_$a [set ::${a}file]} }
+				foreach { a b } [list User user Chan chan Note note] { print $nick "[space 5]${a} file: [set file_$b]" }
+			}
+
+			if [validflag -all -servers] {
+				print $nick "Default server port: ${::default-port}"
+				if [info exists ::server] {
+					lassign $::server internal alias
 					if [notempty alias] { set alias " -> \"${alias}\""}
 					lassign [trim [split $internal :]] name port password
 					if [notempty password] { set password " (<password>)" }
-					print $nick "[space 5]Server: $name ($port)${password}${alias}"
+					print $nick "Current server: $name ($port)${password}${alias}"
+					print $nick "[space 5]since: [format:date ${::server-online} $handle] ([datediff [clock seconds] ${::server-online}] ago)"
+					print $nick "[space 5]nick: $::botnick"
+					print $nick "[space 5]altnick: $::altnick"
+					print $nick "[space 5]botnet-nick: ${::botnet-nick}"
 				}
-			}
 
-			print $nick "My permanent owners: [get owners]"
-			print $nick "My current binds:"
-			array set binds [list]
-			foreach bind [binds sb7:dispatch] { lappend binds([lindex $bind 1]) [lindex $bind 2] }
-			foreach a [lsort -increasing -dictionary [array name binds]] { print $nick "[space 5]BIND([effects $a b]): [ajl $binds($a)]" }
-
-			print $nick "StormBot.TCL version [data array get @version stormbot] ([format:date [data array get @version timestamp]]) from: [data array get @version distro]"
-			print $nick "Data file: [none [data filename] <none>]"
-			print $nick "Reporing events to: [none $home <nowhere>][iff [data get -boolean config mute] " (currented muted by: CONFIG -GLOBAL MUTE)"]"
-
-			# Error checks / command version checks:
-			foreach cmd [list lassign lreverse lrepeat iff] {
-				if [iseggcorecmd $cmd] { set eggorsb7 "[string toupper $cmd] is an Eggdrop core command" } { set eggorsb7 "[string toupper $cmd] is an SB7-created command" }
-				print $nick $eggorsb7
-			}
-
-			set error [ catch { lsearch -cow 1 2 } error_lsearch ]
-			print $nick "LSEARCH options: [lrange [regexp -inline -all -nocase -- {\-[A-Za-z0-9_]+} $error_lsearch ] 1 end]"
-
-			set tests {
-				{{LSEARCH multiflags} {set mode [lindex [lsearch -inline -glob "{ban b} {exempt e} {invite I}" "ban *"] 1]}}
-				{{LSET} {set check [list 0 1 2 3]; lset check 0 *}}
-				{{FILE NORMALIZE} {set check [file normalize .]}}
-				{{LRANGE END-1} {set check [lrange "1 2 3 4" 0 end-1]}}
-				{{CHANNEL GET INFO FLOOD-CHAN} {set check [channel get [home] flood-chan]}}
-				{{CHANNEL GET INFO FLOOD-PUB (this is a normal failure)} {set check [channel get [home] flood-pub]}}
-				{{SETUDEF} {setudef flag errortest} {deludef flag errortest}}
-				{{DCCSEND (only available from TRANSFER module)} {dccsend \000 \000#IllegalNick#\000}}
-				{{UNSET -NOCOMPLAIN} {set NOCOMPLAIN 0; unset -nocomplain NOCOMPLAIN} {unset NOCOMPLAIN}}
-				{{INACTIVE (needed for CHANSUSP / CHANUNSUSP)} {channel get [home] inactive}}
-			}
-
-			array set debugcheck [list 0 "" 1 ""]
-			foreach test $tests {
-				set text [lindex $test 0]
-				set error [ catch { eval [lindex $test 1] } ohcrap ]
-				if $error  { lappend debugcheck(0) "${text}: $ohcrap" } { lappend debugcheck(1) $text }
-				if ![string eq "" [lindex $test 2]] { catch { eval [lindex $test 2] } } ; # Ignore errors!
-			}
-
-			print $nick "Passed tests: [ajl $debugcheck(1)]"
-			print $nick "Failed tests: [ajl $debugcheck(0)]"
-
-			print -help $nick ""
-			print -help $nick "Critical variable dump:"
-			set variables "dccsupport default-port use-exempts use-invites ban-time ignore-time exempt-time strict-host [ldestroy -nocase -all -multiple -exact [uplevel #0 { concat [info vars tcl_*] } ] [list tcl_pkgPath tcl_libPath tcl_library tcl_interactive tcl_precision]]"
-			set tempscalar ""
-			set temparray ""
-			foreach a $variables {
-				if [info exists ::$a] {
-					if [array exists ::$a] {
-						set temp "\[\]"
-						lappend temparray "\$${a}\[\]([array get ::$a])"
-
-					} {
-						lappend tempscalar "\$${a} ([set ::$a])"
+				if [notempty ::servers] {
+					print $nick "Server list:"
+					foreach a $::servers {
+						lassign $a internal alias
+						if [notempty alias] { set alias " -> \"${alias}\""}
+						lassign [trim [split $internal :]] name port password
+						if [notempty password] { set password " (<password>)" }
+						print $nick "[space 5]Server: $name ($port)${password}${alias}"
 					}
-				} {
-					lappend tempscalar "\$$a <undefined>"
 				}
 			}
-			print -help $nick "Scalar: [ajl $tempscalar]"
-			print -help $nick "Array: [ajl $temparray]"
 
+			if [validflag -all -binds] {
+				print $nick "My current binds:"
+				array set binds [list]
+				foreach bind [binds sb7:dispatch] { lappend binds([lindex $bind 1]) [lindex $bind 2] }
+				foreach a [lsort -increasing -dictionary [array name binds]] { print $nick "[space 5]BIND([effects $a b]): [ajl $binds($a)]" }
+			}
+			
+
+			if [validflag -all -ban -exempt -invite] {
+				set commands [info commands *]
+				foreach { ban mode } [list ban b exempt e invite I] {
+					if [validflag -all -$ban] {
+						set testme [list is*${ban}* new*${ban} chan*${ban}* match*${ban}* reset*${ban}* *stick*${ban}* kill*${ban}* ${ban}*list*]
+						# Eggdrop 1.8.0 patch by Thommey due to my bug report / recommendation causes [UN]STICK vs [UN]STICKBAN issues.
+						# Can only blame myself. :p
+						if [string eq -nocase BAN $ban] { if ![validcmd stickban] { lappend testme stick unstick } }
+						set cmdlist [lmatch -increasing -all -nocase -mult -glob $commands $testme]
+						set usable 0
+						if [string eq -nocase BAN $ban] { set usable 1 }
+						if [info exists ::use-${ban}s] { set usable [set ::use-${ban}s] }
+						print $nick "[string toupper $ban] (+${mode}) available via Eggdrop variable[iff ![string eq -nocase BAN $ban] " \[\$use-${ban}s\]"] ([boolean -noyes $usable]) -- via code ([boolean -noyes [notempty cmdlist]][iff [notempty cmdlist_${ban}] ": [ajl $cmdlist]"]) -- via the server? (<unknown>) -- commands ([llength $cmdlist]): [ajl $cmdlist]"
+						if [string eq -nocase BAN $ban] { print $nick "Which version of STICK/UNSTICK BAN commands are in use: [ajl [lmatch -exact -multiple -all $commands [list stick stickban unstick unstickban]]]" }
+						print $nick ""
+					}
+				}
+			}
+
+			if [validflag -all -modes] {
+				print $nick "Available channel modes: [lsort:priority [lsort -inc [data array get @server chanmodes]] [sequence:asc a .. z] [sequence:asc A .. Z]]"
+			}
+
+			if [validflag -all -stormbot] {
+				print $nick "StormBot.TCL version [data array get @version stormbot] ([format:date [data array get @version timestamp]]) from: [data array get @version distro]"
+				print $nick "Data file: [none [data filename] <none>]"
+				print $nick "Reporing events to: [none $home <nowhere>][iff [data get -boolean config mute] " (currented muted by: CONFIG -GLOBAL MUTE)"]"
+			}
+
+			if [validflag -all -commands] {
+				# Error checks / command version checks:
+				foreach cmd [list lassign lreverse lrepeat iff] {
+					if [iseggcorecmd $cmd] { set eggorsb7 "[string toupper $cmd] is an Eggdrop core command" } { set eggorsb7 "[string toupper $cmd] is an SB7-created command" }
+					print $nick $eggorsb7
+				}
+
+				set error [ catch { lsearch -cow 1 2 } error_lsearch ]
+				print $nick "LSEARCH options: [lrange [regexp -inline -all -nocase -- {\-[A-Za-z0-9_]+} $error_lsearch ] 1 end]"
+
+				set tests {
+					{{LSEARCH multiflags} {set mode [lindex [lsearch -inline -glob "{ban b} {exempt e} {invite I}" "ban *"] 1]}}
+					{{LSET} {set check [list 0 1 2 3]; lset check 0 *}}
+					{{FILE NORMALIZE} {set check [file normalize .]}}
+					{{LRANGE END-1} {set check [lrange "1 2 3 4" 0 end-1]}}
+					{{CHANNEL GET INFO FLOOD-CHAN} {set check [channel get [home] flood-chan]}}
+					{{CHANNEL GET INFO FLOOD-PUB (this is a normal failure)} {set check [channel get [home] flood-pub]}}
+					{{SETUDEF} {setudef flag errortest} {deludef flag errortest}}
+					{{DCCSEND (only available from TRANSFER module)} {dccsend \000 \000#IllegalNick#\000}}
+					{{UNSET -NOCOMPLAIN} {set NOCOMPLAIN 0; unset -nocomplain NOCOMPLAIN} {unset NOCOMPLAIN}}
+					{{INACTIVE (needed for CHANSUSP / CHANUNSUSP)} {channel get [home] inactive}}
+				}
+
+				array set debugcheck [list 0 "" 1 ""]
+				foreach test $tests {
+					set text [lindex $test 0]
+					set error [ catch { eval [lindex $test 1] } ohcrap ]
+					if $error  { lappend debugcheck(0) "${text}: $ohcrap" } { lappend debugcheck(1) $text }
+					if ![string eq "" [lindex $test 2]] { catch { eval [lindex $test 2] } } ; # Ignore errors!
+				}
+
+				print $nick "Passed tests: [ajl $debugcheck(1)]"
+				print $nick "Failed tests: [ajl $debugcheck(0)]"
+			}
+
+			if [validflag -all -vartcl] {
+				print -help $nick "Critical variable dump:"
+				set variables "dccsupport use-exempts use-invites ban-time ignore-time exempt-time strict-host [ldestroy -nocase -all -multiple -exact [uplevel #0 { concat [info vars tcl_*] } ] [list tcl_pkgPath tcl_libPath tcl_library tcl_interactive tcl_precision]]"
+				set tempscalar ""
+				set temparray ""
+				foreach a $variables {
+					if [info exists ::$a] {
+						if [array exists ::$a] {
+							set temp "\[\]"
+							lappend temparray "\$${a}\[\]([array get ::$a])"
+	
+						} {
+							lappend tempscalar "\$${a} ([set ::$a])"
+						}
+					} {
+						lappend tempscalar "\$$a <undefined>"
+					}
+				}
+				print -help $nick "Scalar: [ajl $tempscalar]"
+				print -help $nick "Array: [ajl $temparray]"
+			}
+
+			if [validflag -all -greet] {
 			# GREET check
-			set temp ""
-			foreach a [channels] { if ![channel get $a greet] { lappend temp $a } }
-			set output "All channels have +GREET"
-			if {$temp == ""} { append output " :)" } { append output " except: [join $temp " - "]" }
-			print $nick "GREET check: \$use-info(${::use-info}), \$wait-info(${::wait-info}) -- $output"
-			print $nick ""
-			set traffic [traffic]
-			set gl_types [get longest [get first $traffic]]
-			print $nick "Traffic stats (in bytes):"
-			print $nick "[format %${gl_types}s Type] | [format %11s in:today] - [format %11s in:total] - [format %11s out:today] - [format %11s out:total]"
-			print $nick [string repeat - $gl_types]-+-[string repeat - 53]
-			foreach a [traffic] { print $nick "[format %${gl_types}s [lindex $a 0]] | [format %11s [comma [lindex $a 1]]] - [format %11s [comma [lindex $a 2]]] - [format %11s [comma [lindex $a 3]]] - [format %11s [comma [lindex $a 4]]]" }
-			print $nick ""
+				set temp ""
+				foreach a [channels] { if ![channel get $a greet] { lappend temp $a } }
+				set output "All channels have +GREET"
+				if {$temp == ""} { append output " :)" } { append output " except: [join $temp " - "]" }
+				print $nick "GREET check: \$use-info(${::use-info}), \$wait-info(${::wait-info}) -- $output"
+			}
 
-		##### Valid mode checks (can't be written until core is updated with mode scanner (raw mode 005)) #####
-		#Available channel modes: b, c, e, f, i, j, k, l, m, n, p, r, s, t, u, z; A, C, G, I, K, L, M, N, O, Q, R, S, T, V, Z
+			if [validflag -all -traffic] {
+				set traffic [traffic]
+				set gl_types [get longest [get first $traffic]]
+				print $nick "Traffic stats (in bytes):"
+				print $nick "[format %${gl_types}s Type] | [format %11s in:today] - [format %11s in:total] - [format %11s out:today] - [format %11s out:total]"
+				print $nick [string repeat - $gl_types]-+-[string repeat - 53]
+				foreach a [traffic] { print $nick "[format %${gl_types}s [lindex $a 0]] | [format %11s [comma [lindex $a 1]]] - [format %11s [comma [lindex $a 2]]] - [format %11s [comma [lindex $a 3]]] - [format %11s [comma [lindex $a 4]]]" }
+			}
 
 			print $nick "Debug complete."
 			return

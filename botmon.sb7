@@ -695,7 +695,7 @@ proc @botmon:interpret args {
 
 proc @botmon:suspend_check args {
 	if ![validtimer @botmon:suspend_check] { utimer 1 @botmon:suspend_check }
-	set ts [data array get botmon suspend]]
+	set ts [data array get botmon suspend]
 	if [isempty ts] return
 
 	# Sanity check

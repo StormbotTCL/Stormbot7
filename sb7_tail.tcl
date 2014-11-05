@@ -1,10 +1,10 @@
-# --- TAIL ---
+# TAIL!
 
 # ISEGGCORECMD must be first!
 proc iseggcorecmd cmd { expr ![string eq "" [info commands $cmd]] && [string eq "" [info procs $cmd]] }
 
-proc validcmd  cmd { expr ![string eq "" [info commands $cmd]] }
-proc validproc cmd { expr ![string eq "" [info procs    $cmd]] }
+proc validcmd cmd { expr ![string eq "" [info commands $cmd]] }
+proc validproc cmd { expr ![string eq "" [info procs $cmd]] }
 
 proc sb7 args { # General
 	global sb7
@@ -18,6 +18,11 @@ proc sb7 args { # General
 			if [isnum -integer $args] { incr level -$args }
 			if $level { set header [lindex [info level $level] 0] } { set header global }
 			return "\[[string toupper $header]\]"
+		}
+
+		log {
+			putcmdlog $1
+			return $1
 		}
 
 		command {
@@ -295,7 +300,10 @@ proc sb7 args { # General
 
 			upvar 1 arg arg flags flags
 #debug arg args =L1E/ARGS([lrange $args 1 end]) flags
-#               flags -simple [lrange $arg 1 end] [lrange $args 1 end] ::sb7_parseflags_text flags
+##			set flarg  [lrange $arg  1 end]
+##			set flargs [lrange $args 1 end]
+##			if { ( [llength $flargs] == 1 ) && ( [llength [join $flagss]] != 1 ) } { set flargs [join $flargs] }
+##			flags:simple $flarg $flargs ::sb7_parseflags_text flags
 			flags:simple [lrange $arg 1 end] [lrange $args 1 end] ::sb7_parseflags_text flags
 #debug =0 ::sb7_parseflags_text flags
 			set ::sb7_parseflags_text [linsert $::sb7_parseflags_text 0 [lindex $arg 0]]
@@ -508,15 +516,19 @@ proc sb7:dispatch { nick host handle chan arg } {
 	} {
 		set tchan $chan
 	}
-	set tchan [iff ![validchan $tchan] [data array value @OUTPUT LAST:$nick] $tchan]
-
 #msghome @COMMANDLIST([data array value @COMMANDLIST $cmd])
 
 	# Store reference data (needed for PRINT)
 	data array set @OUTPUT $nick [list $nick $host $handle $chan [data get -default @LASTBIND pub]]
 	# ALL OUTPUT MUST COME AFTER THIS POINT!!
 
-	if { ![validchan $tchan] && ( [lsearch -exact $cmdinfo(flags) -ok:invalid] != -1 ) } { print -help -return $nick "\[SB7\] Illegal channel: $tchan" }
+# if not -CHANSPECIFIC, ignore "*" as a chan (used for commands like LOGIN & REHASH)
+	if [string eq * $tchan] {
+		if { [lsearch -exact $cmdinfo(flags) -chanspecific] != -1 } { print -help -return $nick "\[SB7\] You must specify a channel in which to apply the $cmdinfo(cmd) command." }
+	} {
+		if { ![validchan $tchan] && ( [lsearch -exact $cmdinfo(flags) -ok:invalid] == -1 ) } { print -help -return $nick "\[SB7\] Illegal channel: $tchan" }
+	}
+# Why? -- set tchan [iff ![validchan $tchan] [data array value @OUTPUT LAST:$nick] $tchan]
 	set chan $tchan
 	data array lset @OUTPUT $nick 3 $tchan
 	data array set @OUTPUT LAST:$nick $chan
@@ -908,7 +920,7 @@ proc data args {
 
 		test { return SB7 }
 
-		file - filename { return [file dirname [file normalize $::config]]/${::nick}.data }
+		file - filename { if [string eq -nocase TAIL $arg1] { return ${::nick}.data } { return [pwd]/${::nick}.data } }
 
 		names { set p * ; if [notempty arg1] { set p [string tolower $arg1] } ; return [array names sb7 $p] }
 
@@ -1086,8 +1098,10 @@ proc data args {
 		}
 
 		save {
+#foreach a [stack:trace] { putcmdlog "\[STACK:TRACE\] $a" }
 			# Invoke the "timer" version of saves by default!
 			# Called by: "SAVEME DATA"
+			putlog "Writing data file ...."
 			set filename ${::nick}.data
 			if [notempty arg1] {
 				if [string eq * $arg1] {
@@ -1103,7 +1117,7 @@ proc data args {
 				puts $w "Version 2"
 
 				# SB7 change: allow "#" for channel-based config data ....
-				foreach a [data names] {
+				foreach a [lsort -dictionary -increasing [data names]] {
 					if ![regexp -- {^[\!\@\$\%\^\&\*]} $a] { puts $w [list info $a [data get $a]] }
 				}
 			} crap ]
@@ -1122,13 +1136,13 @@ proc data args {
 
 		find {# 2-element LIST: scalar, array?
 			if [isempty arg1] { return "" }
-			return [array names sb7 [string tolower $arg1]]
+			return [lsort -inc -dict -uni [array names sb7 [string tolower $arg1]]]
 		}
 
 		list {# 2-element LIST: scalar, array?
 			if [isempty arg1] { return "" }
 			empty list
-			foreach a [array names sb7 [string tolower $arg1]] { lappend list $a [data get $a] }
+			foreach a [lsort -inc -uni -dict [array names sb7 [string tolower $arg1]]] { lappend list $a [data get $a] }
 			return $list
 		}
 
@@ -1140,6 +1154,14 @@ proc data args {
 			foreach a [array names sb7] {
 				if [string match $arg1 [data get $a]] { lappend list $a }
 			}
+		}
+
+		ren - rename {
+			set arg1 [string tolower $arg1]
+			set arg2 [string tolower $arg2]
+			if [info exists sb7($arg1)] { set sb7($arg2) $sb7($arg1) } { unset -nocomplain sb7($arg2) }
+			unset -nocomplain sb7($arg1)
+			return
 		}
 
 		array {
@@ -1235,9 +1257,9 @@ proc data args {
 					return $arg4
 				}
 
-			incr { set data [data array value $arg2 $arg3] ; if [isempty data] { set data 0 } ; incr data ; data array set $arg2 $arg3 $data ; return $data }
+				incr { set data [data array value $arg2 $arg3] ; if [isempty data] { set data 0 } ; incr data ; data array set $arg2 $arg3 $data ; return $data }
 
-			decr { set data [data array value $arg2 $arg3] ; if [isempty data] { set data 0 } ; incr data -1 ; data array set $arg2 $arg3 $data ; return $data }
+				decr { set data [data array value $arg2 $arg3] ; if [isempty data] { set data 0 } ; incr data -1 ; data array set $arg2 $arg3 $data ; return $data }
 
 				append {
 					set data [data array value $arg2 $arg3]
@@ -1294,6 +1316,43 @@ proc data args {
 
 				llength { return [llength [data array value $arg2 $arg3]] }
 
+				getall - get:all {
+					# $ARG2 contains a list of data elements
+					# $ARG3~ contains a list of elements to assign to variables
+					set arg2 [string tolower $arg2]
+					if [info exists sb7($arg2)] { array set data $sb7($arg2) } { array set data "" }
+					foreach a [string tolower $arg3] b [lrange $args 4 end] {
+						if [left $b 2 ::] { upvar #0 [mid $b 3] local } { upvar $b local }
+						if [info exists data($a)] { set local $data($a) } { set local "" }
+					}
+					return
+				}
+
+				setall - set:all {
+					# Do we want to change the syntax to:
+					# data array set:all <array> element1 $VAR1 element2 $VAR2 element3 $VAR3 ... elementN $VARN
+					# ?????
+
+					# $ARG2 contains a list of data elements
+					# $ARG3~ contains a list of elements to assign to variables
+					set arg2 [string tolower $arg2]
+					if [info exists sb7($arg2)] { array set data $sb7($arg2) } { array set data [list] }
+					foreach a [string tolower $arg3] b [lrange $args 4 end] { set data($a) $b ; if [isempty b] { unset -nocomplain data($a) } }
+					set sb7($arg2) [array get data]
+					return
+				}
+
+				ren - rename {
+					set arg2 [string tolower $arg2]
+					set arg3 [string tolower $arg3]
+					set arg4 [string tolower $arg4]
+					array set data $sb7($arg2)
+					if [info exists data($arg3)] { set data($arg4) $data($arg3) } { unset data($arg4) }
+					unset -nocomplain data($arg3)
+					set sb7($arg2) [array get data]
+					return
+				}
+
 				def - default - defaults {
 					set data [data array value $arg2 $arg3]
 					set data [ldefault $data $arg4]
@@ -1325,7 +1384,7 @@ proc data args {
 					set arg3 [string tolower $arg3]
 					if ![info exists sb7($arg2)] { return "" }
 					array set data $sb7($arg2)
-					foreach loop [array names data [none $arg3 *]] { lappend list $loop }
+					foreach loop [lsort -inc -uni -dict [array names data [none $arg3 *]]] { lappend list $loop }
 					return $list
 				}
 
@@ -1334,7 +1393,7 @@ proc data args {
 					set arg2 [string tolower $arg2]
 					if ![info exists sb7($arg2)] { return "" }
 					array set data $sb7($arg2)
-					foreach loop [array names data] { 
+					foreach loop [lsort -uni -dict -inc [array names data]] { 
 						if [string match -nocase $arg3 $data($loop)] { lappend list [list $loop $data($loop)] } 
 					}
 					return $list
@@ -1366,10 +1425,12 @@ proc data args {
 }
 
 proc saveme { cmd { now false } } {
+#foreach a [stack:trace] { putcmdlog "\[STACK:TRACE\] $a" }
 	# Using !ISFALSE below allows variants like "-now" or "now" to be used, in case I forget the syntax. :p
+	set do_auto_backup [string eq -nocase ALWAYS [data array get config backup]]
 	switch -exact -- [string tolower $cmd] {
 
-		* - all {
+		* - all { # This will cause a DOUBLE backup call if CONFIG -GLOBAL BACKUP == "always" (once for user, once for data)
 			saveme user $now
 			saveme data $now
 			return 0
@@ -1378,18 +1439,21 @@ proc saveme { cmd { now false } } {
 		"" - user {
 			sb7 killtimer -quiet save
 			if ![isfalse $now] save { utimer 0 save }
+			if $do_auto_backup { if ![isfalse $now] { sb7:backup user } { utimer 0 [list sb7:backup user] } }
 			return 0
 		}
 
 		chan - chans {
 			sb7 killtimer -quiet savechannels
 			if ![isfalse $now] savechannels { utimer 0 savechannels }
+			if $do_auto_backup { if ![isfalse $now] { sb7:backup chan } { utimer 0 [list sb7:backup chan] } }
 			return 0
 		}
 
 		data {
 			sb7 killtimer -quiet [list data save]
 			if ![isfalse $now] { data save } { utimer 0 [list data save] }
+			if $do_auto_backup { if ![isfalse $now] { sb7:backup data } { utimer 0 [list sb7:backup data] } }
 			return 0
 		}
 
@@ -1632,11 +1696,11 @@ proc sb7:getcmdargs {arg var_cmd var_level var_flags var_abbr} {
 
 # --- Variable manipulation ---
 
-proc empty  args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local "" } }
-proc negone args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local -1 } }
-proc zero   args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local  0 } }
-proc one    args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local  1 } }
-proc mset   args { set value [lindex $args end] ; foreach var [lrange $args 0 end-1] { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local $value } }
+proc empty   args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local "" } }
+proc negone  args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local -1 } }
+proc zero    args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local  0 } }
+proc one     args { foreach var $args { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local  1 } }
+proc set:all args { set value [lindex $args end] ; foreach var [lrange $args 0 end-1] { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; unset -nocomplain local; set local $value } }
 
 proc emptyarray args {
 	foreach var $args {
@@ -1677,7 +1741,11 @@ proc notarray var { upvar 1 $var local ; not [array exists local] }
 
 proc prepend { var value } { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local } ; set local ${value}${local} }
 
-proc none { value { none "" } { some "" } } { if [string eq "" $value] { return $none } { if [string eq "" $some] { return $value } { return $some } } }
+proc none { value { none "" } { some "" } } { 
+	if [string eq "" $value] { return $none }
+	if ![string eq "" $some] { return $some }
+	return $value
+}
 
 proc decr { var { decrement 1 } } { if [string match ::* $var] { upvar #0 [mid $var 3] local } { upvar 1 $var local }; incr local [ expr -1 * $decrement ] }
 
@@ -1894,7 +1962,7 @@ proc comma number {
 # By Peter Spjuth, from http://wiki.tcl.tk/526, modified by Pixelz
 proc comma value { regsub -all {\d(?=(\d{3})+($|\.))} $value {\0,} }
 
-proc nocomma { number { comma , } } { regsub -all -nocase -- $comma $number "" number ; return $number }
+proc nocomma { number { comma , } } { regsub -all -nocase -- $comma $number "" }
 
 proc iscomma { number { comma , } } { string match -nocase *${comma}* $number }
 
@@ -1916,12 +1984,23 @@ proc explode args {
 }
 
 proc implode args {
+	set args [join $args]
 	flags -simple $args [list -reverse -uppercase -lowercase -nonulls] text flags
-	if [validflag -uppercase] { set text [stu $text] }; # Whichever is last wins
-	if [validflag -lowercase] { set text [stu $text] }; # Whichever is last wins
+	if [validflag -uppercase] { set text [string toupper $text] }; # Whichever is last wins
+	if [validflag -lowercase] { set text [string tolower $text] }; # Whichever is last wins
 	if [validflag -nonulls  ] { set text [lsearch -all -inline -not $text ""] }
 	if [validflag -reverse  ] { set text [reverse $text] }
 	join [join $text] ""
+}
+
+proc alphabet args {
+	flags:simple $args [list -split -reverse -uppercase -lowercase] - flags
+	set alphabet abcdefghijklmnopqrstuvwxyz
+	if [validflag -split    ] { set alphabet [split $alphabet ""] }
+	if [validflag -uppercase] { set alphabet [string toupper $alphabet] }; # Whichever is last wins
+	if [validflag -lowercase] { set alphabet [string tolower $alphabet] }; # Whichever is last wins
+	if [validflag -reverse  ] { set alphabet [reverse $alphabet] }
+	return $alphabet
 }
 
 proc nocolor text { regsub -all -- {\003([0-9]{1,2}(,[0-9]{1,2})?)?} $text "" }
@@ -2428,7 +2507,8 @@ debug =final list
 
 # 2014-09-13 18:05:00 -0700: Replaced with new (fresh re-write) version, specifically to add new function: -COMMON
 proc ldestroy args {
-	flags:simple $args [list -debug -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
+	# Use -COUNT to test number of results (0 = no matches)
+	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
 	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
 
 	lassign $temp list text replacewith
@@ -2439,6 +2519,7 @@ proc ldestroy args {
 #debug *
 	set _ $list
 	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
+
 	if [validflag -common] {
 		empty common fail1 fail2
 		foreach item [lunique [concat $_ $total]] {
@@ -2467,16 +2548,7 @@ proc ldestroy args {
 			}
 #debug item common fail1 fail2
 		}
-	} {
-		empty temp_list temp_not
-		foreach item $total {
-			if [validflag -all] { set __ [lsearch -all -inline -${match} $_ $item] } { set __ [lsearch -inline -${match} $_ $item] }
-			if [notempty __] { set temp_list [concat $temp_list $__] } { set temp_not [concat $temp_not $item ] }
-#debug x item =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list temp_not
-		}
-	}
 
-	if [validflag -common] { 
 		if [validflag -nonulls] { foreach a [list common fail1 fail2] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
 		if [validflag -unique] { foreach a [list common fail1 fail2] { set $a [lunique [set $a]] } }
 		if [validflag -increasing -decreasing] {
@@ -2485,9 +2557,32 @@ proc ldestroy args {
 			foreach a [list common fail1 fail2] { set $a [lsort -$direction [set $a]] }
 		}
 		if [validflag -replacewith] { set common $replacewith }
-		if [validflag -both] { return [list $common $fail1 $fail2] }
-		if [validflag -not] { return [concat $fail1 $fail2] }
+		if [validflag -both] { if [validflag -count] { return [list [llength $common] [llength $fail1] [llength $fail2]] } { return [list $common $fail1 $fail2] } }
+		if [validflag -not] { if [validflag -count] { return [llength [concat $fail1 $fail2]] } { return [concat $fail1 $fail2] } }
+		if [validflag -count] { return [llength $common] }
 		return $common
+	}
+	empty temp_list temp_not temp_list_ temp_not_
+
+	# First pass
+	foreach item $total {
+		if [validflag -all] { set __ [lsearch -all -inline -${match} $_ $item] } { set __ [lsearch -inline -${match} $_ $item] }
+		# Remember: we're trying to REMOVE entries by default, not keep them.
+		if [notempty __] { set temp_not_ [concat $temp_not_ $__] } { set temp_list_ [concat $temp_list_ $item ] }
+#debug x item =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_
+	}
+
+	# Second pass
+	set do_second_pass 0
+	if $do_second_pass {
+debug temp_list_ temp_not_ _
+		foreach a $_ {
+			set m [lsearch -exact $temp_list_ $a]
+			if { $m == -1 } { lappend temp_list [lindex $list $m] } { lappend temp_not $a }
+		}
+	} {
+		set temp_list $temp_list_
+		set temp_not $temp_not_
 	}
 
 	if [validflag -nonulls] { foreach a [list temp_list temp_not] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
@@ -2498,13 +2593,14 @@ proc ldestroy args {
 		foreach a [list temp_list temp_not] { set $a [lsort -$direction [set $a]] }
 	}
 	if [validflag -replacewith] { set temp_list $replacewith }
-	if [validflag -both] { return [list $temp_list $temp_not] }
-	if [validflag -not] { return $temp_not }
+	if [validflag -both] { if [validflag -count] { return [list [llength $temp_list] [llength $temp_not]] } { return [list $temp_list $temp_not] } }
+	if [validflag -not] { if [validflag -count] { return [llength $temp_not] } { return $temp_not } }
+	if [validflag -count] { return [llength $temp_list] }
 	return $temp_list
 }
 
-proc dummy args { # LDESTROY
-rename dummy "" ; # Suicide if used
+proc ldestroy' args { # LDESTROY
+#rename dummy "" ; # Suicide if used
 #addlog ldestroy.txt -1:[info level [expr [info level] - 1]]
 #addlog ldestroy.txt +0:[info level [info level]]
 #addlog ldestroy.txt ""
@@ -2673,7 +2769,9 @@ proc lloop args {
 proc lremove { var args } {
 	if [string eq "" $args] return
 	upvar 1 $var local
-	if [isnull local] { empty local }
+	if ![info exists local] { error "can't read \"${var}\": no such variable" }
+	if [string eq "" $local] return
+
 	zero matches
 	foreach arg $args {
 		set m [lsearch -all -glob [stl $local] [stl $arg]]
@@ -2683,6 +2781,68 @@ proc lremove { var args } {
 		}
 	}
 	return $matches
+}
+
+# Enter with: LCANCEL <LIST> ( list = { +1 +2 +3 -2 -3 -4 +5 +4 -5 +5 cow } --> { +1 +5 cow } )
+proc lcancel args {
+	flags:simple $args [list -cleanup -nocase -replace -annihilate] list flags
+	set list [join $list]
+	# Process -CLEANUP first: parse through and handle duplicates, baed on other flags
+	if [validflag -cleanup] {
+		set cleanup [lindex $list 0]
+		set temp_list [lrange $list 1 end]
+		lremove flags -cleanup ; # Might cause a weird endless loop? (Let's just play it safe ....)
+		while { ![string eq "" $temp_list] } {
+			set cleanup [eval [lcancel $flags $cleanup $temp_list]]
+			set temp_list [lreplace $temp_list 0 0]
+		}
+		set list $cleanup
+	}
+
+	# -REPLACE (CHANSET logic: +1 & -1 replace each other) -- DEFAULT!
+	# -ANNIHILATE = remove both (+1 and -1 annihilate (self-destruct), leaving neither behind)
+	set replace [not [validflag -annihilate]]
+	empty lcancel
+	while { ![string eq "" $list] } {
+		set element [lindex $list 0]
+		if [regexp -- {^[\+\-][^\+\-]} $element] { 
+			set polarity [left $element 1 +]
+			set anti [lindex [list + -] $polarity][string range $element 1 end]
+			if [validflag -nocase] { set m [lsearch -exact [string tolower $list] [string tolower $anti]] } { set m [lsearch -exact $list $anti] }
+			if { $m == -1 } {
+				lappend lcancel $element
+			} {
+				set list [lreplace $list $m $m]
+				if $replace { lappend lcancel $anti }
+			}
+		} {
+			lappend lcancel $element
+		}
+#debug flags list element name polarity anti m lcancel
+		set list [lreplace $list 0 0]
+	}
+	return $lcancel
+}
+
+proc inlist args {
+	if [string eq "" $args] { return 0 }
+
+	# No INLINE replies: only indicate if item(s) are in the original list, given the various flags
+	flags:simple $args [list -any -all -nocase -glob -exact -regexp] temp flags
+	lassign $temp list checkme
+	set match glob
+	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
+	zero all any
+	if [validflag -any] { one any ; lremove flags -all } { one all ; lremove flags -any }
+	set inlist 1 ; # Default to 1, we'll "short-circuit" for any failures (depending on -ANY)
+	# Because we're not going to return any list values, we can "corrupt" the list if necessary
+	if [validflag -nocase] { set list [list:tolower $list] ; set checkme [list:tolower $checkme] }
+	if [string eq "" $checkme] { return 0 }
+	foreach check $checkme {
+		set m [lsearch -$match $list $check]
+		if { $m == -1 } { set inlist 0 ; if $all break } { set inlist 1 ; if $any break }
+	}
+	return $inlist
 }
 
 proc highlight:list args {
@@ -2757,6 +2917,15 @@ proc sequence args {
 		0 { zero c ; for { set x $start } { $x <= $end } { incr x $step } { lappend sequence $x ; incr c ; if { $c > 1024 } { error LOOP! } } }
 	}
 	return $sequence
+}
+
+proc sequence:asc args {
+	set range ""
+	if [regexp -- {^\S+$} $args] { return $args }
+	if [regexp -- {^\S+ \S+$} $args] { lassign $args 1 2 ; scan $1 %c 1 ; scan $2 %c 2 ; for { ; } { $1 <= $2 } { incr 1 } { lappend range [format %c $1] } ; return $range }
+	if [regexp -- {^\S+ \.\. \S+$} $args] { lassign $args 1 - 2 ; scan $1 %c 1 ; scan $2 %c 2 ; for { ; } { $1 <= $2 } { incr 1 } { lappend range [format %c $1] } ; return $range }
+	if [regexp -- {^\S+ \S+ \.\. \S+$} $args] { lassign $args 1 3 - 2; scan $1 %c 1 ; scan $2 %c 2 ; scan $3 %c 3 ; set step [expr $3 - $1] ; for { ; } { $1 <= $2 } { incr 1 $step } { lappend range [format %c $1] } ; return $range }
+	return $args
 }
 
 # --- LIST helpers ---
@@ -2914,7 +3083,7 @@ proc access args {
 		fix { # 1399256400: Do =NOT= call ACCESS GET: infinite loop!
 			lassign $args - handle chan
 			if [isempty chan] {
-				# Global
+				# PermOwner
 				if [is permowner $handle] { 
 					set level 1000
 					regsub -all -- {,| [ ]+} $::owner " " o
@@ -2922,22 +3091,27 @@ proc access args {
 						if [string eq -nocase $handle [lindex $o 0]] { set level 1001 }
 						# Either way (: if { [lsearch -exact [string tolower $o] [string tolower $handle]] == 0 } { set level 1001 }
 					}
-					userinfo set $handle USERLEVEL:GLOBAL $level
+					userinfo set $handle access:global $level
 					return $level
 				}
-				if [isnum -integer [string eq "" [userinfo get $handle USERLEVEL:GLOBAL]]] return
+				# Global
+				## WTF??
+				##if [isnum -integer [string eq "" [userinfo get $handle access:global]]] return
+				if ![string eq "" [userinfo get $handle access:global]] return
 				foreach { flag value } [list n 900 m 800 t 700 o 600 l 575 v 550 f 501] {
-					if [userflag check $handle $flag] { userinfo set $handle USERLEVEL:GLOBAL $value ; return $value }
+					if [userflag check $handle $flag] { putcmdlog "\[ACCESS FIX\] Automatically adjusting user level: $handle (global -> $value)" ; userinfo set $handle access:global $value ; return $value }
 				}
-				userinfo set $handle USERLEVEL:GLOBAL 0
+				userinfo set $handle access:global 0
 				return 0
 			} {
 				# Local
-				if [isnum -integer [string eq "" [userinfo get $handle USERLEVEL:$chan]]] return
+				## WTF??
+				##if [isnum -integer [string eq "" [userinfo get $handle access:$chan]]] return
+				if ![string eq "" [userinfo get $handle access:$chan]] return
 				foreach { flag value } [list n 500 m 400 o 100 l 75 v 50 f 1] {
-					if [userflag check $handle $flag $chan] { userinfo set $handle USERLEVEL:$chan $value ; return $value }
+					if [userflag check $handle $flag $chan] { putcmdlog "\[ACCESS FIX\] Automatically adjusting user level: $handle ($chan -> $value)" ; userinfo set $handle access:$chan $value ; return $value }
 				}
-				userinfo set $handle USERLEVEL:$chan 0
+				userinfo set $handle access:$chan 0
 				return 0
 			}
 		}
@@ -3008,9 +3182,9 @@ proc access args {
 				if { $level > 500 } { error "\[ACCESS SET\] Illegal channel $chan access level \"${level}\" (channel level must be between 1 and 500)" }
 				if ![validchan $chan] { error "\[ACCESS SET\] Illegal channel: $chan" }
 				if $level {
-					userinfo set $handle ACCESS:$chan $level
+					userinfo set $handle access:$chan $level
 				} {
-					userinfo set $handle ACCESS:$chan
+					userinfo set $handle access:$chan
 				}
 			} {
 				if { $level < 501 } { error "\[ACCESS SET\] Illegal global access level \"${level}\" (global level must be between 501 and 1001)" }
@@ -3021,9 +3195,9 @@ proc access args {
 					}
 				}
 				if $level {
-					userinfo set $handle ACCESS:GLOBAL $level
+					userinfo set $handle access:global $level
 				} {
-					userinfo set $handle ACCESS:GLOBAL
+					userinfo set $handle access:global
 				}
 			}
 			return $level
@@ -3069,8 +3243,8 @@ proc userflag { cmd handle flags { chan "" } } {
 			if [isempty chan] { 
 				chattr $handle $flags 
 			} { 
-				if ![string match *|* $flags] { set flags |$flags }
-				chattr $handle $flags $chan 
+				if ![string match *|* $flags] { set flags |+$flags }
+				chattr $handle +$flags $chan 
 			}
 			return
 		}
@@ -4045,12 +4219,31 @@ proc pingpong { { time "" } } {
 	return
 }
 
+# --- Shell commands ---
+
+proc shell:findcmd cmd { lindex [concat [shell:which $cmd] [shell:whereis $cmd]] 0 }
+
+proc shell:which cmd { 
+	set error [ catch { set which [lindex [exec which [string tolower $cmd]] 0] } null ]
+	if $error return
+	lremove which *.gz *.man *.1
+	return $which
+}
+
+proc shell:whereis cmd { 
+	set error [ catch { set whereis [exec whereis $cmd] } null ]
+	if $error return
+	if [string eq ${cmd}: [lindex $whereis 0]] {set whereis [lreplace $whereis 0 0]}
+	lremove whereis *.gz *.man *.1
+	lindex $whereis 0
+}
+
 # --- Other commands ---
 
 proc stack:trace args {
 	if [isnum -integer $args] { set deep $args } { set deep [info level] }
 	empty o
-	for { set x 0 } { $x <= $deep } { incr x 1 } { lappend o "\[STACK:TRACE - level #${x}\] [info level $x]" }
+	for { set x $deep } { $x > 0 } { incr x -1 } { lappend o "\[STACK:TRACE - level #${x}\] [info level $x]" }
 	return $o
 }
 
@@ -4457,7 +4650,7 @@ proc get { cmd args } {
 
 		owner - owners { if [isempty ::owner] { return "" } { return [regsub -all -- {,|[ ]{2,}} $::owner " "] } }
 
-		permowner { set o $::owner ; if [isempty o] return ; return [lindex [split $o ", "] 0] ; # Why only index #0? }
+		permowner - permowners { set o $::owner ; if [isempty o] return ; return [lindex [split $o ", "] 0] ; # Why only index #0? }
 
 		op - ops - opsymbol {
 			lassign $args nick chan
@@ -4527,7 +4720,7 @@ proc get { cmd args } {
 			set ll [llength $numbers]
 
 			# Alter $LIST to force delimiters to become new LIST elements of their own accord
-			if [regexp -- {^[0-9 \-]+$} $list] {
+			if [regexp -- {^[\<\>\=]?[0-9 \+\-]+$} $list] {
 				set list [split $list { ,:;}]
 			} {
 				if { ![regexp -- , $list] && ( [llength $list] > 2 ) } {
@@ -4542,6 +4735,8 @@ proc get { cmd args } {
 				set element [string trim [string tolower [lindex $list $main_index]]]
 				if [isempty element] continue
 				switch -glob -- $element {
+
+					all { set final $numbers }
 
 					start* { if [string eq -nocase START $element] { lappend final [lindex $numbers 0] } { if [string match -nocase START+* $element] { set position [mid $element 7] ; lappend final [lindex $numbers $position] } } }
 
@@ -4588,7 +4783,7 @@ proc get { cmd args } {
 					default {
 						# Digit(s) , or , range of numbers
 						# Overflow / underflow: error or just return blanks (ignore errors)?
-						if ![regexp -nocase -- {^[0-9 \-]+$} $element] return
+						if ![regexp -nocase -- {^[<>]?[=]?[0-9 \+\-]+$} $element] return
 						set loop_lo $lo
 						set loop_hi $hi
 						if [regexp -- {^[\=]?([\-]?\d+)$} $element - item] { set loop_lo $item ; set loop_hi $item } 
@@ -4596,6 +4791,10 @@ proc get { cmd args } {
 						if [regexp -- {^([\-]?\d+)\-$} $element - item] { set loop_lo $item }
 						if [regexp -- {^([\+\-]?\d+)\-([\+\-]?\d+)$} $element - item1 item2] { if { $item1 > $item2 } { error "Reversed range: $element" } ; set loop_lo $item1 ; set loop_hi $item2 }
 						if [regexp -- {^([\-]?\d+)\+(\d+)$} $element - item1 item2] { set loop_lo $item1 ; set loop_hi [expr $item1 + $item2] }
+						if [regexp -- {^<(\d+)$} $element - item1] { set loop_hi [expr $item1 - 1] }
+						if [regexp -- {^<=(\d+)$} $element - item1] { set loop_hi $item1 }
+						if [regexp -- {^>(\d+)$} $element - item1] { set loop_lo [expr $item1 + 1] }
+						if [regexp -- {^>=(\d+)$} $element - item1] { set loop_lo $item1 }
 
 						if { $loop_lo < $lo } { set loop_lo $lo }
 						if { $loop_hi > $hi } { set loop_hi $hi }
@@ -4611,19 +4810,20 @@ proc get { cmd args } {
 			return $range
 		}
 
-		time {
+		date - time {
 			# Syntax: GET TIME <text> [byref: var_time] [byref: var_remaining_text] --> returns $TIME
 			flags -param -force $args_ [list -past 0 -negative 0 -future 0 -positive 0 -time 1] arg_ flags
 			if $flags(-negative) { set flags(-past) 1 }
 			if $flags(-positive) { set flags(-future) 1 }
-			if $flags(-time) { set current_time $flags(-time) } { set current_time [clock seconds] }
-
+			if [notempty flags(-time)] { set current_time $flags(-time) } { set current_time [clock seconds] }
 			lassign $arg_ arg var_time var_text
+#debug arg_ arg var_time var_text
 			set arg [escape $arg]
 
 			if [notempty var_time] { upvar 1 $var_time time }
 			if [notempty var_text] { upvar 1 $var_text text }
 
+			empty time
 			set _ [lindex $arg 0]
 
 			# Unix time stamp?
@@ -4643,23 +4843,27 @@ proc get { cmd args } {
 				return $time
 			} 
 
-			# Guesstimates show that a valid timestamp can consist of SIX elements!
+			# Guess'timates show that a valid timestamp can consist of SIX elements!
 			# today
 			# yesterday yesterday yesterday yesterday yesterday 11:00 (5 days ago, at 11:00)
 			# 2014-08-30 17:50:00
 			# 08/30/2014 17:50:00 -0700
 			# Saturday, August 30, 2014 17:50:00 -0700
 
+#debug =time_check arg
 			set ll [llength $arg]
-			for { set count [expr $ll - 1] } { $count >= 0 } { incr count -1 } {
+			for { set count 0 } { $count < $ll } { incr count } {
+#debug =LRANGE([lrange $arg 0 $count])
 				set error [ catch { set time [clock scan [lrange $arg 0 $count]] } ]
-				if !$error {
-					set text [join [lreplace $arg 0 $count]]
+#debug error time 
+				if $error { # Return the last valid value
+					if [isempty time] { set text [join $arg] } { set text [join [lreplace $arg 0 [expr $count - 1]]] }
 					return $time
 				}
 			}
+			if [notempty time] { return $time }
 
-			# Fail
+			# Fail (we shouldn't get here any more)
 			set time ""
 			set text [join $arg]
 			return $time
@@ -4774,8 +4978,8 @@ proc is { cmd args } {
 			set bot [lindex $args 0]
 			if [isempty bot] { return 0 }
 			if [string eq -nocase $bot $::botnick] { return 1 }
-			if [islinked $bot] { return 1 }
 			if [matchattr $bot b] { return 1 }
+			#if [islinked $bot] { return 1 } ; # Should this even BE here, Chandler?
 			return 0
 		}
 
@@ -5065,8 +5269,8 @@ proc flags args { # Have to allow several variations in order to unite everythin
 
 	if [validflag -simple] {
 		lassign $args text valid var_text var_flags
-		if [notempty var_text] { upvar 1 $var_text new_text }
-		if [notempty var_flags] { upvar 1 $var_flags new_flags }
+		if [notempty var_text] { upvar 1 $var_text new_text ; unset -nocomplain new_text }
+		if [notempty var_flags] { upvar 1 $var_flags new_flags ; unset -nocomplain new_flags}
 		if [isempty valid] {
 			empty new_flags
 			set new_text $text
@@ -5152,15 +5356,16 @@ proc flags args { # Have to allow several variations in order to unite everythin
 		if [validflag -force] {
 			foreach { a - } $array {
 				if [info exists processed($a)] {
-					if [string eq "" $processed($a)] { set processed($a) $blank_1 }
+					if [string eq "" $processed($a)] { if { $params($a) == 0 } { set processed($a) $blank_1 } }
 				} {
-					set processed($a) $blank_0
+					# The same thing! How to differentiate ....
+					if { $params($a) == 0 } { set processed($a) $blank_0 } { set processed($a) "" }
 				}
 			}
 		}
 
-		if [notempty var_text] { upvar 1 $var_text local_text ; set local_text $text }
-		if [notempty var_flags] { upvar 1 $var_flags local_flags ; array set local_flags [array get processed] }
+		if [notempty var_text] { upvar 1 $var_text local_text ; unset -nocomplain local_text ; set local_text $text }
+		if [notempty var_flags] { upvar 1 $var_flags local_flags ; unset -nocomplain local_flags ; array set local_flags [array get processed] }
 		return [list $text [array get processed]]
 	}
 
@@ -5499,6 +5704,75 @@ proc getbytesfree:dos { { dir . } } {
 	return $free
 }
 
+# --- 005 (mode handler) ---
+# VERSION trips 351 and 005 (use 351 to clear 005 data in advance so no leftovers / ghosts remain)
+
+proc sb7:351 { server code arg } { 
+	set arg [lreplace $arg 0 0]
+	data unset @server *
+	data array set @server ircd [lindex $arg 0] ; # Opposite of #004
+	data array set @server server [lindex $arg 1] ; # Opposite of #004
+	return 0 ; # RAW requires "0" 
+}
+
+proc sb7:004 { server code arg } { 
+	set arg [lreplace $arg 0 0]
+	data unset @server *
+	data array set @server ircd [lindex $arg 1] ; # Opposite of #351
+	data array set @server server [lindex $arg 0] ; # Opposite of #351
+	return 0 ; # RAW requires "0" 
+}
+
+proc sb7:005 { server code arg } {
+	set arg [lreplace $arg 0 0]
+	# Parse this?
+	foreach item $arg {
+		lassign [split $item =] name value
+		switch -glob -- [string tolower $name] {
+			uhnames - namesx - safelist - hcn { # Do nothing # }
+			:* { break ; # Do nothing more # }
+			wallchops - excepts - invex { data array set @server $name 1 }
+			maxchannels - nicklen - channellen - topiclen - kicklen - awaylen - maxtargets - watch - watchopts - silence - modes - chantypes - network - casemapping - elist - statusmsg { data array set @server $name $value }
+			chanlimit - maxlist {
+				foreach s [split $value ,]  {
+					lassign [split $s :] mode max
+					data array set @server ${name}:$mode $max
+				}
+			}
+			prefix {
+				if [string match (*)* $value] {
+					regexp -- {^\((.+)\)(.+)$} $value - modes flags
+					foreach a [split $modes ""] b [split $flags ""] {
+						data array set @server chanflag:$a $b
+						data array set @server chanflag:$b $a
+					}
+				} {
+					data array set @server $name $value
+				}
+			}
+			chanmodes {
+				lassign [split $value ,] 1 2 3 4
+				data array set @server chanmodes:1 [split $1 ""]
+				data array set @server chanmodes:2 [split $2 ""]
+				data array set @server chanmodes:3 [split $3 ""]
+				data array set @server chanmodes:4 [split $4 ""]
+				data array set @server chanmodes [concat [split $1 ""] [split $2 ""] [split $3 ""] [split $4 ""] ]
+			}
+			cmds {
+				set s [split $value ,]
+				foreach a $s { data array set @server $a 1 }
+				data array set @server cmds $s
+			}
+			extban {
+				lassign [split $value ,] type flags
+				foreach a $type { data array set @server extban:$a [split $flags ""] }
+			}
+			default { putlog "\[SB7:005\] NAME($name):VALUE($value)" }
+		}
+	}
+	return 0 ; # Must be RETURN 0 (due to the BIND RETURN rules for RAW)
+}
+
 # --- Command aliases ---
 
 interp alias {} =  {} expr
@@ -5540,8 +5814,11 @@ bind DCC  t dcc *dcc:dccstat
 bind DCC  - /w  *dcc:whois
 bind DCC  - q   *dcc:quit
 bind DCC  - ""  @dcc:null
-bind PUBM - *   sb7:dispatch:pubm
-bind TIME - *   sb7:bugsiebug_check
+bind pubm - *   sb7:dispatch:pubm
+bind time - *   sb7:bugsiebug_check
+bind raw  - 004 sb7:004
+bind raw  - 005 sb7:005
+bind raw  - 351 sb7:351
 
 utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
 

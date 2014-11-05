@@ -98,7 +98,7 @@ proc @textpad { nick host handle chan arg } {
 			set tail [file tail $j2e]
 			set split [file split $j2e]
 
-			if [SB:checkaccess [sbd:get USERLEVEL:BOTOWNER] $handle $chan] {
+			if [access check 1000 $handle $chan] {
 				set dir [file dirname $j2e]
 			} {
 				set dir ${textpad_dir}/$base
@@ -363,7 +363,7 @@ proc @textpad { nick host handle chan arg } {
 				}
 			}
 
-			if [SB:checkaccess [sbd:get USERLEVEL:BOTOWNER] $handle $chan] {
+			if [access check 1000 $handle $chan] {
 				set dir [file dirname $filename]
 			} {
 				print $nick "TEXTPAD does not create a directory heirarchy. You get a simple directory to store your text files: I'll store your files there (auto-correcting) ...."
@@ -395,7 +395,7 @@ proc @textpad { nick host handle chan arg } {
 			if [isempty textpad_filename] {print -help $nick "You don't have a file name set yet!"; return 0}
 			set split [file split $textpad_filename]
 
-			if [SB:checkaccess [sbd:get USERLEVEL:BOTOWNER] $handle $chan] {
+			if [access check 1000 $handle $chan] {
 				set dir [file dirname $textpad_filename]
 			} {
 				set dir ${textpad_dir}/$base
@@ -524,5 +524,4 @@ proc @textpad:settings handle {
 	array set settings [userinfo get $handle TEXTPAD]
 	array get settings
 }
-
 

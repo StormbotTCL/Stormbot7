@@ -1,0 +1,325 @@
+# (3a) BAN [-ban] -global -locklevel 200 -sticky *!*@* [+5h] [reason]
+# (3b) BAN [-ban] DEL -global *!*@*
+# (3c) BAN [-ban] LIST -global *!*@*
+
+sb7 command add BAN        100 -chanspecific -core -redirect
+sb7 command add UNBAN      100 -chanspecific -core -redirect
+sb7 command add BANLIST    100 -chanspecific -core -redirect
+sb7 command add EXEMPT     100 -chanspecific -core -redirect
+sb7 command add UNEXEMPT   100 -chanspecific -core -redirect
+sb7 command add EXEMPTLIST 100 -chanspecific -core -redirect
+sb7 command add INVEX      100 -chanspecific -core -redirect
+sb7 command add UNINVEX    100 -chanspecific -core -redirect
+sb7 command add INVEXLIST  100 -chanspecific -core -redirect
+sb7 command add INVITE     100 -chanspecific -core ; # Must keep INVITE separate
+
+proc @unban      { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -ban DEL [join [lreplace [split $arg] 0 0]]" }
+proc @banlist    { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -ban LIST [join [lreplace [split $arg] 0 0]]" }
+proc @exempt     { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -exempt [join [lreplace [split $arg] 0 0]]" }
+proc @unexempt   { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -exempt DEL [join [lreplace [split $arg] 0 0]]" }
+proc @exemptlist { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -exempt LIST [join [lreplace [split $arg] 0 0]]" }
+proc @invex      { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -invex [join [lreplace [split $arg] 0 0]]" }
+proc @uninvex    { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -invex DEL [join [lreplace [split $arg] 0 0]]" }
+proc @invexlist  { nick host handle chan arg } { @ban $nick $host $handle $chan "BAN -invex LIST [join [lreplace [split $arg] 0 0]]" }
+
+proc @ban { nick host handle chan arg } {
+	FLAGS -ban -exempt -invex -invite
+	if [validflag -invite] { lappend flags -invex }
+	set ban ban ; # (DekaRed!) Order = arbitrarily picked
+	set mode b
+	if [validflag -invex] { set ban invite ; set mode I }
+	if [validflag -exempt] { set ban exempt ; set mode e }
+	if [validflag -ban] { set ban ban ; set mode b }
+	set BAN [string toupper $ban]
+
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[${0u}\]:"
+			print -help $nick "Syntax: $::botnick $0u HELP"
+			print -help $nick "Syntax: $::botnick $0u <mask> \[reason\]"
+			print -help $nick "Syntax: $::botnick $0u DEL <mask>"
+			print -help $nick "Syntax: $::botnick $0u LIST \[wildcard\]"
+			print -help $nick "Syntax: $::botnick $0u CLEAR"
+			print -help $nick ""
+			print -help $nick "The BAN command issues ban-related instructions to the channel. There are three types of ban controls:"
+			print -help $nick "[space 5]\[BAN\] channel mode +b: deny access to the channel, or, restrict actions within the channel (any users that match a banished mask are summarily kicked out of the channel)"
+			print -help $nick "[space 5]\[EXEMPT]\ channel mode +e: provide an override for a ban (example: a specific user can be exempt from an entire-domain ban)"
+			print -help $nick "[space 5]\[INVEX\] channel mode +I: provide a long-term or permanent invitation to a channel (a user will always be \"invited\" to the channel and can always enter an otherwise invite-only \[channel mode +i\] channel)"
+			print -help $nick "In SB3 / SB4 / SB5 / SB6, these commands were all separate. In SB7, they have been combined because they perform extremely similar functions."
+			print -help $nick ""
+			print -help $nick "For adding ${0}s, there are many options:"
+			print -help $nick "Syntax: $::botnick $0u \[-[string toupper $ban]\] \[options\] <target>"
+			print -help $nick "Syntax: $::botnick $0u \[-[string toupper $ban]\] \[options\] <target> \[<date/time/length>\]"
+			print -help $nick "Syntax: $::botnick $0u \[-[string toupper $ban]\] \[options\] <target> \[reason\]"
+			print -help $nick "Syntax: $::botnick $0u \[-[string toupper $ban]\] \[options\] <target> \[<date/time/length>\] \[reason\]"
+			print -help $nick "Options:"
+			print -help $nick "[space 5]DATE/TIME/LENGTH: a valid date / time stamp when the entry will automatically remove itself, in one of three formats: *nix time stamp (integer), URT (+1h, +3.5d, +7d9h), or valid \"clock\" statement (1/1/2015, today 19:00, tomorrow 12:00, 3/14/2015 03:14)"
+			print -help $nick "[space 5]REASON: give a reason for the request (will show up when a list is requested)"
+			print -help $nick "[space 5]-GLOBAL: makes the [sting toupper $ban] affect all channels (only bot admins can use this option)"
+			print -help $nick "[space 5]-LOCKLEVEL <access level>: specify a user access level to restrict removal (users must be at-or-above the specified level to remove it)"
+			print -help $nick "[space 5]-STICKY: keep the mode persistently on the channel. This overrides the channel setting +dynamicbans / +dynamicexempt / +dynamicinvites which removes them when the internal list gets full, but, returns them to the channel when they are specifically needed again"
+			print -help $nick "[space 5]-PERMANENT: makes the [string toupper $ban] never expire unless manually removed"
+			print -help $nick ""
+			print -help $nick "You can add ${ban}s in two ways (\"target\"):"
+			print -help $nick "[space 5](1) if the user is on the channel, target them by nick ($::botnick will calculate the appropriate mask to ban / exempt / invex)"
+			print -help $nick "[space 5](2) you can specify the mask itself in \"nick!ident@host.domain\" format. In most cases, unless you're targetting a specific nick, your mask will start with \"*!\" (example: *!WSchuester@McKinley.HS.edu)"
+			print -help $nick ""
+			print -help $nick "All times are in \"24-hour time\" (so-called \"military time\")"
+			print -help $nick "Note: the pre-set shortcuts for ban times (B1, B2, B3 ...) have been deprecated"
+			print -help $nick "Note: to issue a long-term / permanent invitation, see the INVEX command (which sets channel mode +I (India / 'capital eye') for a standing invite)"
+			return
+		}
+
+		hint {
+			print -help $nick "\[BAN\]:"
+			print -help $nick "BAN -> $::botnick BAN -perm *!SSylvester@McKinley.HS.edu"
+			print -help $nick "EXEMPT -> $::botnick BAN -exempt -perm add *!WSchuester@McKinley.HS.edu It's Mr. Schue! You're always exempt from banishments here!"
+			print -help $nick "INVEX -> $::botnick BAN -invex -sticky add *!FHudson@McKinley.HS.edu 3 days"
+			print -help $nick "STICK -> $::botnick BAN \[-BAN | -EXEMPT | -INVEX\] STICKY ADD <mask>"
+			print -help $nick "UNSTICK -> $::botnick BAN \[-BAN | -EXEMPT | -INVEX\] STICKY DEL <mask>"
+			return
+		}
+
+		del {
+			flags:simple $2e -global text flags
+			if [isempty text] { print -help -return $nick "\[${BAN} DEL\] What ${ban}s am I deleting?" }
+
+			if [validflag -global] {
+				if ![access check 600 $handle] { print -help -return $nick "\[${BAN} DEL\] You don't have access to the -GLOBAL flag." }
+				set list [${ban}list]
+			} {
+				set list [${ban}list $chan]
+			}
+			empty ok bad access
+			foreach a $list {
+				lassign:array entry $a mask reason expire added last who
+				empty locklevel
+				regexp -- {^@(\d+) } $entry(reason) - locklevel
+				if [notempty locklevel] { if ![access check $locklevel $handle] { lappend access $entry(mask) ; continue } }
+				foreach mask $text {
+					set mask [join $mask]
+					if [string match -nocase $mask $entry(mask)] {
+						if [validflag -global] { 
+							foreach c [channels] { raw "MODE $c -$mode $entry(mask)" }
+							set success [kill${ban} $entry(mask)]
+						} {
+							raw "MODE $chan -$mode $entry(mask)"
+							set success [killchan${ban} $chan $entry(mask)]
+						}
+						if $success {
+							empty locklevel
+							if [regexp -- {^@(\d+) } $entry(reason) - locklevel] { set $entry(reason) [join [lreplace [split $entry(reason)] 0 0]] }
+							lappend ok [list $entry(mask) $entry(reason) $entry(expire) $entry(added) $entry(last) $entry(who) $locklevel]
+						}
+					}
+				}
+			}
+			if [notempty ok] {
+				saveme user
+				foreach a $ok {
+					lassign $a _mask _reason _expire _added _last _who _locklevel
+					print $nick "\[${BAN} DEL\] Successfully removed ${ban}: [effects $_mask b] (originally added by [effects $_who b], effective [format:date $_added $handle] - [format:date $_expire $handle][iff [notempty _locklevel] " -- [effects "level $_locklevel to remove" b u]"]) for: $_reason"
+				}
+			}
+			if [notempty bad] { print $nick "\[${BAN} DEL\] Failed ${ban}s (despite matching): [ajl $bad]" }
+			if [notempty access] { print $nick "\[${BAN} DEL\] Failed ${ban}s (not enough access against lock-level): [ajl $access]" }
+			return
+		}
+
+		list {
+			flags:simple $2e -global text flags
+			if [validflag -global] {
+				if ![access check 600 $handle] { print -help -return $nick "\[${BAN} LIST\] You don't have access to the -GLOBAL flag." }
+				set list [${ban}list]
+				set ll [llength $list]
+			} {
+				set list [${ban}list $chan]
+				set ll [llength $list]
+			}
+			if [isempty list] { print -return $nick "\[$0u LIST\] No entries found." }
+			set matchme [none $text * [join $text]]
+			set matchme *[string trimleft [string trimright $matchme *] *]*
+			print $nick "\[${BAN} LIST\] [iff [validflag -global] "Global entries" "Entries for $chan"] ([comma $ll]):"
+			zero count matches
+			foreach a $list {
+				incr count
+				lassign $a _mask _reason _expire _added _last _who
+				if { [string match -nocase $matchme $_mask] || [string match -nocase $matchme $_reason] } {
+					incr matches
+					empty locklevel 
+					if [regexp -- {^@(\d+) } $_reason - locklevel] { set _reason [join [lreplace [split $_reason] 0 0]] }
+					if $_expire { set _expire "to [format:date $_expire $handle]" } { set _expire (permanent) }
+					if [isempty _reason] { set _reason "unknown/default" }
+					print $nick "${count}/${ll}: [effects $_mask b] (added by [effects $_who b], effective: [format:date $_added $handle] ${_expire}[iff [notempty locklevel] " -- [effects "level $locklevel to remove" b u]"]): [join $_reason]"
+				}
+			}
+			print $nick "Total matches (${matchme}): [comma $matches]"
+			return
+		}
+
+		clear {
+			if ![string eq -nocase CLEAR $2] { print -help -return $nick "Are you [effects sure up b]?! Use \"CLEAR CLEAR\" to convince me." }
+			if [validflag -global] {
+				if ![access check 600 $handle] { print -help -return $nick "\[${BAN} CLEAR\] You don't have access to the -GLOBAL flag." }
+				set ll [llength [${ban}list]]
+				foreach a [${ban}list] { kill${ban} [lindex $a 0] }
+			} {
+				set ll [llength [${ban}list $chan]]
+				foreach a [${ban}list $chan] { killchan${ban} [lindex $a 0] }
+			}
+			saveme user
+			print $nick "\[${BAN} CLEAR\] Removed [comma $ll] [plural entry $ll]."
+			return
+		}
+
+		stick - sticky {
+			print -error -short -return $nick "Not ready yet."
+			return
+		}
+
+		default {
+			# Let's make sure all bans get queued via RAW or PUTQUICK -NEXT so they kick in, even when the notifications are stuck in the buffers
+			unset -nocomplain flags
+			flags -params -force $1e [list -global 0 -ban 0 -exempt 0 -invex 0 -sticky 0 -locklevel 1 -permanent 0] text flags
+			set reason [lassign $text mask]
+
+# Maybe just accept target time here, then, calculate proper "by-minutes" value below?
+
+			get time -future $reason time leftover
+#debug text flags time leftover
+			if $flags(-permanent) { # $TEXT can stay unchanged
+				set time 0
+				set time_words permanent
+#debug time =permanent
+			} elseif [isnum -real [lindex $reason 0]] {
+				set time [lindex $reason 0]
+				set time_words "for $time [plural minute $time]"
+				set reason [lreplace $reason 0 0]
+#debug time time_words =ISNUM:REAL
+			} elseif [notempty time] {
+				set time_words "until [format:date $time $handle]"
+				set time [expr ( $time - [clock seconds] ) / 60.0 ]
+				set reason $leftover ; # In case not all of the text was used to calculate date/time
+#debug time time_words =GET/TIME
+			} {
+				set time [channel get $chan ${ban}-time]
+				if $time { set time_words "default ($time [plural minute $time])" } { set time_words "default (permanent)" }
+#debug time time_words =CHAN:${ban}-TIME
+			}
+
+			set locklevel 0
+			if [notempty flags(-locklevel)] {
+				set locklevel [string trimleft $flags(-locklevel) @]
+#debug locklevel flags(-locklevel)
+				if $locklevel {
+					if ![access check $locklevel $handle] { print -help -short -return $nick "You can't set a lock-level above your own level!" }
+					set reason "@$locklevel $reason"
+				}
+			}
+
+#debug time time_words mask reason locklevel
+			if ![regexp -- {^[^\!]+\![^\@]+\@.+$} $mask] {
+				# Nick?
+				if ![onchan $mask $chan] { print -help -short -return $nick "You need to specify either (1) the nick of the user on ${chan}, or, (2) the specific \"*!*@*\" - formatted mask I am to use" }
+				set mask [maskformat [getchanhost $mask $chan]]
+			}
+
+			if $flags(-global) { new$ban $mask $handle $reason $time } { newchan$ban $chan $mask $handle $reason $time }
+			raw "MODE $chan +$mode $mask" ; # Push the mode change in front of the queues
+			# (as long as the ban is in memory, it won't remove itself immediately)
+
+			# If sticky ...
+			if $flags(-sticky) {
+				switch -exact -- [string tolower $ban] {
+					ban {
+						set extra [iff [validcmd stickban] ban] ; # "STICK" will be a valid alias to "STICKBAN"
+						if $flags(-global) { stick$extra $mask } { stick$extra $mask $chan }
+					}
+
+					default { if $flags(-global) { stick$ban $mask } { stick$ban $mask $chan } } 
+				}
+			}
+			saveme user ; # BANS / EXEMPTS / INVEXEN are stored in the user file (at the end)
+			print $nick "\[[string toupper $ban]\] Added [iff $flags(-global) "[effects GLOBAL b up] "]$ban for: $mask (${time_words})[iff $flags(-sticky) " (sticky)"]"
+			return
+		}
+
+	}
+	?
+}
+
+proc @invite { nick host handle chan arg } {
+	# Hint: explain invite vs invex
+	FLAGS
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[INVITE\]:"
+			print -help $nick "Syntax: $::botnick INVITE HELP"
+			print -help $nick "Syntax: $::botnick INVITE INVITE <nick>"
+			print -help $nick ""
+			print -help $nick "This command issues a single invitation to the channel."
+			print -help $nick "Note: if there are any channel limits or bans in place, the INVITE might not override them."
+			print -help $nick ""
+			print -help $nick "To issue a long-term / permanent invitation, see the INVEX command (which sets channel mode +I (India / 'capital eye') with a standing invite)"
+			return
+		}
+
+		hint {
+			print -help $nick "\[INVITE\]:"
+			print -help $nick "Syntax: $::botnick INVITE <nick> (invite a specific user to the channel)"
+			print -help $nick "Syntax: $::botnick BAN \[-time <time> | -perm\] -INVEX <host> (set a channel mode +I to protect a long-term invitation)"
+			return
+		}
+
+		default {
+			set targets [join $1e]
+			empty ok bad
+			foreach target $targets {
+				lassign [whois $target $handle] - inviteme
+				if [onchan $inviteme $chan] { lappend bad $target ; continue }
+				if [string match #* $target] {
+					set message "[nph $nick $handle] Full-channel invite attempt: $target"
+					lappend bad $target
+					continue
+				}
+				print $inviteme "[nph $nick $handle] is inviting you to: $chan"
+				putserv "INVITE $inviteme :$chan"
+				lappend ok [nph $target $inviteme]
+			}
+			if [notempty ok] { 
+				msg $chan "\[INVITE\] [nph $nick $handle] invited to ${chan}: [ajl $ok]"
+				print -short $nick "Invited to ${chan}: [ajl $ok]"
+			}
+			if [notempty bad] { print -short $nick "Already on channel: [ajl $bad]" }
+			return
+		}
+
+	}
+	?
+}
+
+proc @invite { nick host handle chan arg } {
+	FLAGS
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[${0u}\]:"
+		print -help $nick "Syntax: $::botnick INVITE HELP"
+		print -help $nick "Syntax: $::botnick INVITE <nick> \[nick \[nick \[nick \[...\]\]\]\]"
+		print -help $nick "The INVITE command makes me invite a user into the channel."
+		print -help $nick "This will not force the person to join the channel, but, the user may automatically join if they have certain settings active in their chat client."
+		print -help $nick "The bot must be a channel operator (chanop / channel mode +o), or above, to use the INVITE command."
+		return
+	}
+	if ![botisop $chan] { print -help -short -return $nick "I am not opped in $chan (can't invite anyone in)!" }
+	empty ok bad
+	foreach user $1e {
+		if [regexp -- {^[\&\#]} $user] { lappend bad [join $user] ; continue }
+		lappend ok [join $user]
+		putserv "INVITE [join $user] :$chan"
+	}
+
+	if [notempty ok] { print $nick "Invitations extended to: [ajl $ok]" }
+	if [notempty bad] { print $nick "Failed invitations (not users): [ajl $bad]" }
+	return
+}

@@ -1,0 +1,133 @@
+sb7 command add oper 800 -locklevel
+sb7 register global oper
+
+proc @oper { nick host handle chan arg } {
+	FLAGS
+	switch -exact -- [string tolower $1] {
+
+		help {
+			#
+		}
+
+		mode {
+			#
+		}
+
+		serv - servs - server - servers {
+			switch -exact -- [string tolower $2] {
+
+				help {
+					print -help $nick "\[OPER SERVERS\]"
+					print -help $nick "Syntax: $::botnick OPER SERVERS HELP"
+					print -help $nick "Syntax: $::botnick OPER SERVERS ADD"
+					print -help $nick "Syntax: $::botnick OPER SERVERS MAP"
+					print -help $nick "Syntax: $::botnick OPER SERVERS LINKS"
+					print -help $nick "Syntax: $::botnick OPER SERVERS DEL"
+					print -help $nick "Syntax: $::botnick OPER SERVERS CLEAR"
+					print -help $nick "Syntax: $::botnick OPER SERVERS LIST"
+					print -help $nick "Syntax: $::botnick OPER SERVERS VERSION"
+					print -help $nick ""
+					print -help $nick "Keeps track of the list of servers the bot should know about for various OPER commands."
+					print -help $nick "The MAP and LINKS options will poll the server and get the information from the server via the MAP or LINKS command. Note: some networks disable those commands for non-OPERs."
+					return
+				}
+
+				add {
+					if [isempty 3] { print -help -return $nick "\[OPER SERVERS ADD\] What servers are we adding?" }
+					set servers [data array get oper servers]
+					foreach a $3e { lappend servers $a }
+					data array set oper servers [lunique $servers]
+					saveme data
+					print $nick "\[OPER SERVERS ADD\] Added: [ajl [join $3e]]"
+					print $nick "Server list is now: $servers"
+					return
+				}
+
+				del {
+					if [isempty 3] { print -help -return $nick "\[OPER SERVERS DEL\] What servers are we deleting?" }
+					set servers [data array get oper servers]
+					lassign [ldestroy -multiple -both -nocase -glob $servers $3e] failed deleted
+					data array set oper servers [lunique $server]
+					saveme data
+					print $nick "\[OPER SERVERS DEL\] Removed: [ajl [join $3e]]"
+					print $nick "Server list is now: $servers"
+					return
+				}
+
+				list {
+					set servers [lsort -inc -uni -dict [data array get oper servers]]
+					if [isempty servers] { print -help -return $nick "\[OPER SERVERS LIST\] No servers in list." }
+					print -return $nick "\[OPER SERVERS LIST\] List of servers (for OPER functions only):" 
+					foreach server $servers { print $nick "[space 5]$server" }
+					print $nick "Total servers: [comma [llength $servers]]"
+					return
+				}
+
+				clear {
+					if ![string eq -nocase CLEAR $3] { print -help -return $nick "\[OPER SERVERS CLEAR\] Are you [effects SURE u up b]?! Use \"CLEAR CLEAR\" to convince me." }
+					data array set oper servers ""
+					saveme data
+					print $nick "\[OPER SERVERS CLEAR\] Server list cleared."
+					return
+				}
+
+				ver - version {
+					set servers [lsort -inc -uni -dict [none $3e [data array get oper servers]]]
+					unset -nocomplain ::_version351_list ::_version351_array ::_version351_timeout ::_version351_nick
+					set ::_version351_timeout 10
+					set ::_version351_list $servers
+					lappend ::_version351_nick $nick
+					array set ::_version351_array [list]
+					bind raw - 351 version351:raw
+					foreach server $servers { rawprint "VERSION $server" }
+					utimer $::_version351_timeout version351:done
+					print $nick "\[VERSION\] Processing server data: [ajl $servers]"
+					print $nick "\[VERSION\] Timeout: [comma $::_version351_timeout] [plural second $::_version351_timeout]"
+					return
+				}
+
+				default { print -help -return $nick "\[OPER SERVERS\] Unknown command: [join $2]" }
+
+			}
+		}
+
+		stat - stats {
+		}
+
+		collect {
+			# Collect all the server names
+
+			# Collect all stats per server
+			return
+		}
+
+		default { print -help -short -return $nick "Unknown option: [join $1]" }
+
+	}
+	?
+}
+
+# OPER SERVERS VERSION
+proc version351:raw { 1 2 3 } {
+	lassign $3 - version server
+	set version [string trimright $version .]
+	set m [lsearch -exact [stl $::_version351_list] [stl $server]]
+	if { $m == -1 } { print $::_version351_nick "\[VERSION351:RAW\] Unknown server reply: \$::_version351_LIST($::_version351_list) vs \$SERVER($server)" ; return 0 }
+	set ::_version351_list [lreplace $::_version351_list $m $m]
+	lappend ::_version351_array($version) $server
+	if [string eq "" $::_version351_list] { killutimer version351:done ; version351:done }
+	return 0 
+}
+
+# OPER SERVERS VERSION
+proc version351:done args {
+#debug ::_version351_list ::_version351_array ::_version351_nick ::_version351_timeout
+	foreach nick $::_version351_nick {
+		foreach a [lsort -increasing -dictionary -unique [array names ::_version351_array]] { print $nick "\[VERSION\] ${a}: [ajl $::_version351_array($a)]" }
+		if ![string eq "" $::_version351_list] { print $nick "\[VERSION\] Servers that didn't respond ([comma $::_version351_timeout] [plural second $::_version351_timeout]): [ajl $::_version351_list]" }
+	}
+	unbind raw - 351 version351:raw
+	foreach a [info vars ::_version351_*] {	unset $a }
+	return
+}
+

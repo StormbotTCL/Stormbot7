@@ -1,1 +1,2 @@
-7.0.001.core 1365571753 {[Private Distribution]}
+stormbot7.00.0001.core.tar.gz 1410756966 quick
+

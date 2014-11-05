@@ -1,0 +1,109 @@
+sb7 command add CHANINFO 400 -chanspec CI
+sb7 command add CHANSET  400 -chanspec CS
+
+data set @chanset:valid [list:tolower [list aop-delay autohalfop autoop autovoice ban-time bitch chanmode cycle dontkickops dynamicbans dynamicexempts dynamicinvites enforcebans exempt-time flood-chan flood-ctcp flood-deop flood-join flood-kick flood-nick greet idle-kick inactive invite-time need-invite need-key need-limit need-op need-unban nodesynch protectfriends protecthalfops protectops revenge revenge-mode revengebot secret seen shared statuslog stopnethack-mode userbans userexempts userinvites]]
+
+proc @chaninfo { nick host handle chan arg } {
+	FLAGS
+	# static isoptest wasoptest
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[CHANINFO\]:"
+			print -help $nick "Syntax: $::botnick CHANINFO HELP"
+			print -help $nick "Syntax: $::botnick CHANINFO"
+			print -help $nick "Syntax: $::botnick CHANINFO GET <value>"
+			print -help $nick ""
+			print -help $nick "The CHANINFO command displays the current settings for the channel. In particular, the values shown are for room maintenance via mode settings and controls. The values are set via the CHANSET command."
+			print -help $nick "GET: display a specific value. Valid options: [ajl [data get @chanset:valid]]"
+			return
+		}
+
+		get {
+			empty ok bad admin
+			if [isempty 2] { print -help -return $nick "\[CHANINFO GET\] What values are we getting?" }
+			if { [lsearch -exact [string tolower $2e] all] != -1 } { set list $value } { set list $2e }
+			foreach a [split $list] {
+				if [string match -nocase need-* $a] { if ![access check 501 $handle] { lappend admin $a ; continue } }
+				set error [ catch { set value [channel get $chan $a] } - ]
+				if $error { lappend bad $a ; continue }
+				if [regexp -- {^[01]$} $value] { if { [lsearch -exact [channel info $chan] [lindex [list - +] $value]$a] != -1 } { set value [lindex [list - +] $value]$a } }
+				lappend ok "$a (${value})"
+			}
+			if [notempty ok] { print $nick "\[CHANINFO GET\] ${chan}: [ajl $ok]" }
+			if [notempty bad] { print $nick "\[CHANINFO GET\] Illegal settings: [ajl $bad]" }
+			if [notempty admin] { print $nick "\[CHANINFO GET\] Admins only: [ajl $admin]" }
+			return
+		}
+
+		default {
+			# Calculate and display them all!!! ... ???
+			array set chaninfo [list]
+			array set final [list]
+			set ci [channel info $chan]
+			foreach a [data get @chanset:valid] {
+				set error [ catch { set value [channel get $chan $a] } crap ]
+				if $error { error "${crap}: $a" }
+				set chaninfo($a) $value
+				if { [lsearch -exact [list aop-delay flood-chan flood-ctcp flood-deop flood-nick flood-join flood-kick] $a] != -1 } { set value [join $value :] }
+				set m [lsearch -exact $ci $value]
+				set n [lsearch -glob $ci ?$a]
+				if { ( $m == -1 ) && ( $n == -1 ) } { print -help -short -return $nick "Unable to find channel info type in list: $a ($value) vs $ci" }
+				if { $n != -1 } { 
+					set value [lindex [list - +] $value]$a
+					set ci [lreplace $ci $n $n] 
+				} elseif { $m != -1 } { 
+					set ci [lreplace $ci $m $m] 
+				}
+				switch -glob -- [string tolower $a] {
+					chanmode { set type chanmode }
+					need-* { set type need }
+					flood-* { set type flood }
+					default { if [regexp -- {^[\+\-]} $value] { set type flag[left $value 1] } { set type other } }
+				}
+				if [string match -nocase flag? $type] { lappend final($type) $value } { lappend final($type) "$a ($value)" }
+			}
+
+			print -short $nick "Channel settings for ${chan}:"
+			set order [list chanmode flood need flag+ flag- other]
+			foreach a $order {
+				if [string eq -nocase NEED $a] { if ![access check 501 $handle] continue }
+				print $nick "[ajl $final($a)]"
+			}
+
+			if [notempty ci] { print $nick "Other values: $ci" }
+			return
+		}
+
+	}
+	?
+}
+
+proc @chanset { nick host handle chan arg } {
+	FLAGS
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[CHANSET\]:"
+		print -help $nick "Syntax: $::botnick CHANSET HELP"
+		print -help $nick "Syntax: $::botnick CHANSET <setting> <new value>"
+		print -help $nick ""
+		print -help $nick "The CHANSET command sets new information into the channel's control settings."
+		print -help $nick "To remove a value, enter: none"
+		print -help $nick "To see the current settings, use the CHANINFO command."
+		return
+	}
+
+	set word [lassign $1e setting]
+	if [string match -nocase NEED-* $setting] { if ![access check 501 $handle] { print -help -short -return $nick "You don't have access to set $1 (admins only)" } }
+	if [regexp -- {^[\+\-][^\+\-]} $setting] {
+		if { [lsearch -exact [data get @chanset:valid] [mid $setting 2]] == -1 } { print -help -short -return $nick "No such option: $1u (valid options: [ajl [data get @chanset:valid]])" } 
+		channel set $chan $setting
+		print -short $nick "Value set: $setting"
+	} {
+		if { [lsearch -exact [data get @chanset:valid] $setting] == -1 } { print -help -short -return $nick "No such option: $1u (valid options: [ajl [data get @chanset:valid]])" } 
+		if [string eq -nocase NONE $word] { empty value } { set value $word }
+		channel set $chan $setting $value
+		print -short $nick "Value now set: $setting ($word)"
+	}
+	saveme chan
+	return
+}
