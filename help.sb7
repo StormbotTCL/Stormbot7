@@ -1,5 +1,5 @@
-sb7 command add HELP -1 -locklevel -core ?
-sb7 command add HINT -1 -locklevel -core ?
+sb7 command add HELP -1 -locklevel -core
+sb7 command add HINT -1 -locklevel -core
 
 proc @help { nick host handle chan arg } {
 	sb7 parseflags 

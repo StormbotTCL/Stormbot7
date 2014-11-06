@@ -10,7 +10,7 @@ proc @findport { nick host handle chan arg } {
 	}
 
 	set range [get range [none $1e 0-65535] 0 65535]
-	if [isempty range] { print -help $nick "\[${0u}\] Invalid port number range: $1e" ; return }
+	if [isempty range] { print -help $nick "\[${0u}\] Invalid port number range: [join $1e]" ; return }
 	set os [os]
 	zero matched
 	switch -glob -- [string tolower $os] {

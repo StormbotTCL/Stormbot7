@@ -310,7 +310,7 @@ if !$sb7(@fullfile) {
 	if $sb7(@boot_error) {
 		putcmdlog "\[SB7\] Boot up error while loading\n\[SB7\] $dammit"
 		if [info exists sb7(@boot_fail_die)] {
-			if $sb7(@boot_fail_die) { die "\[SB7\] Boot failure: $dammit" }
+			if $sb7(@boot_fail_die) { die "\[SB7\] Boot failure in: $dammit" }
 			return
 		} {
 			die "\[SB7\] Boot failure: $dammit"

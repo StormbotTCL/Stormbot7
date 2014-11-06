@@ -1,2 +1,2 @@
-stormbot7.00.0001.core.tar.gz 1410756966 quick
+stormbot7.00.0001 1410757257 {Current working version}
 

@@ -16,4 +16,3 @@ proc @clearqueue { nick host handle chan arg } {
 	return $c
 }
 
-

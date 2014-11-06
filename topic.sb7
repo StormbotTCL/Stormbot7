@@ -106,4 +106,3 @@ proc sb7:topic:lockcheck:timer { nick host handle chan topic } {
 
 bind TOPC - * sb7:topic:lockcheck:timer
 
-

@@ -1,0 +1,70 @@
+sb7 command add unicode 1 -none uni
+proc @unicode { nick host handle chan arg } {
+	FLAGS
+	if ![validflag -to -from] { lappend flags -from }
+	if ![validflag -hexadecimal -binary -octal] { lappend flags -hexadecimal }
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[UNICODE\]:"
+			print -help $nick "Syntax: $::botnick UNICODE HELP"
+			print -help $nick "Syntax: $::botnick UNICODE FROM <ENCODING> \[FORMAT\] \[ENDIAN\] <STRING>"
+			print -help $nick "Syntax: $::botnick UNICODE TO <ENCODING> \[FORMAT\] \[ENDIAN\] <STRING>"
+			print -help $nick ""
+			print -help $nick "The UNICODE command converts a string (in one of several formats) to, or from, Unicode format."
+			print -help $nick "Example: $::botnick UNICODE FROM utf-8 -HEXADECIMAL -BIGENDIAN 0xEFBBBF"
+			print -help $nick "[space 5]Will return: 0xFEFF (encoded [effects from u b] the UTF-8 word \"EBBBBF\" in [effects "big endian" u b] format, returned as a [effects hexadecimal u b]-formatted number)"
+			print -help $nick ""
+			print -help $nick "FORMAT: -binary -octal -decimal [effects -hexadecimal u b] (default)"
+			print -help $nick "ENDIAN: -littleendian [effects -bigendian u b] (default)"
+			print -help $nick "ENCODINGS: [highlight:list [lsort:priority [encoding names] "" utf-8] utf-8 u b] (default)"
+			return
+		}
+
+		
+		to {
+			flags:simple $2e [list -binary -octal -decimal -hexadecimal -bigendian -littleendian] text flags
+			lassign $text from text
+			
+			set text [convert:tobin $text]
+		}
+
+		from {
+			
+	-to -from -binary -octal -decimal -hexadecimal -bigendian -littleendian
+		}
+
+		default { print -help -short -return $nick "Unknown option: [join $1]" }
+
+	}
+	?
+}
+
+proc convert:tobin text {
+	# Binary
+	if [regexp -- {^0[Bb][01]+$} $text] { return [mid $text 3] }
+	if [regexp -- {^[01]+$} $text] { return $text }
+
+	# Octal
+	if [regexp -- {^0[Oo]?[0-7]+$} $text] { return [string map [list 0 000 1 001 2 010 3 011 4 100 5 101 6 110 7 111] [regsub -all " " [mid $text 3] ""]] }
+	if [regexp -- {^[0-7]+$} $text] { return [string map [list 0 000 1 001 2 010 3 011 4 100 5 101 6 110 7 111] [regsub -all " " $text ""]] }
+
+	# Hexadecimal
+	if [regexp -- {^0[Xx][0-9a-fA-F]+$} $text] { return [string map [list 0 0000 1 0001 2 0010 3 0011 4 0100 5 0101 6 0110 7 0111 8 1000 9 1001 A 1010 B 1011 C 1100 D 1101 E 1110 F 1111] [regsub -all " " [mid $text 3] ""]] }
+	if [regexp -- {^[0-9a-fA-F]+$} $text] { return [string map [list 0 0000 1 0001 2 0010 3 0011 4 0100 5 0101 6 0110 7 0111 8 1000 9 1001 A 1010 B 1011 C 1100 D 1101 E 1110 F 1111] [regsub -all " " $text ""]] }
+
+	# Decimal (default)
+	if [regexp -- {^0[Dd]?[0-9]+$} $text] { set text [mid $text 3] } ; # Fall-through .... (:
+	if [regexp -- {^[0-9]+$} $text] { 
+		if { [llength $text] == 1 } {
+			return [format %02X $text]
+		} {
+			set o ""
+			foreach a $text { append o [format %2X $a] }
+			return $o
+		}
+	}
+
+	# Unknown
+	error "\[[string toupper [lindex [info level 0] 0]]\] Unknown value (unable to convert): $text"
+}

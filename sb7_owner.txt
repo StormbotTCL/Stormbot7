@@ -1,0 +1,28 @@
+How will the bot learn you as its new (permanent) owner?
+
+TELNET:
+	(1) TELNET the bot
+	(2) enter "NEW"
+	(3) enter your password
+	(4) get on the same channel as your bot (however you want to do this)
+	(5) find your host via ".channel" command
+	(6) .+HOST <handle> <*!*@* formatted mask>
+	(7) Jump to step #8 below
+
+IRC:
+	(1) join a channel with your bot (any channel will do)
+	(2) /msg bot HELLO
+	(3) set your password
+	(4) LOGIN with the password you just set
+	(5) use the WHOAMI command [this will set your 1000 / 1001 level]
+	(6) set your OPASS: /msg bot opass <owner password>
+	(7) jump to step #8 below
+
+Continuing:
+	(8) DCC CHAT or TELNET your bot (if you TELNETted before, just leave it open / stay there)
+	(9) .channel <#channel you share with your bot>
+	(10) You should see a line:
+		@Domino          Domino        ---  N  1m  Domino@Coder.StormBot.Org
+	(11) The line should consist of: your current nick, your "handle" , a useless value, the letter N, your on-channel idle time, and finally your current mask (without NICK! on it)
+
+

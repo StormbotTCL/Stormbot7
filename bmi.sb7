@@ -23,6 +23,7 @@ proc @bmi { nick host handle chan arg } {
 		print -help $nick "Use of this BMI index does NOT replace the advice of a qualified medical practicioner / professional."
 		return
 	}
+
 	if [validflag -test] {
 		set stone2kg 6.349206349206349
 		set test1 180 ; # 237
@@ -42,6 +43,7 @@ proc @bmi { nick host handle chan arg } {
 		print $nick "Stone to Metric: [expr $result3 / $result2]"
 		return
 	}
+
 	if ![isnum -real $1] { print -short -return $nick "I can only accept numbers: \"${1}\" is invalid" }
 	if ![isnum -real $2] { print -short -return $nick "I can only accept numbers: \"${2}\" is invalid" }
 	set height $2

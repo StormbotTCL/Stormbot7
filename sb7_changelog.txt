@@ -1,7 +1,8 @@
-# StormBot.TCL 7 version Changelog -- 2014-11-05 14:22:27 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-11-06 01:19:40 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2014-11-05 14:29:24 UTC: #318 [findport] Fixed FINDPORT (cosmetic: error message for invalid port needed a JOIN)
 2014-11-05 14:22:15 UTC: #317 [botnet] Fixed TREE (renamed from BOTTREE, in case errors polluted the original command; also forgot to change one of the sub-routined from SB:TREE_GETCHILDREN to TREE:GETCHILDREN)
 2014-11-05 14:18:58 UTC: #316 [chanmon] Completed CHANMON (now fully functional; translation complete from SB6)
 2014-11-05 13:36:06 UTC: #315 [tail] Fixed GET RANGE (I forgot to code for ''>#'' ''<#'' ''<=#'' ''>='' which was exposed when working on CHANMON)
