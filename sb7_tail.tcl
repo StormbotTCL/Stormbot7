@@ -6,7 +6,7 @@ proc iseggcorecmd cmd { expr ![string eq "" [info commands $cmd]] && [string eq 
 proc validcmd cmd { expr ![string eq "" [info commands $cmd]] }
 proc validproc cmd { expr ![string eq "" [info procs $cmd]] }
 
-proc sb7 args { # General
+proc sb7 { args } { # General
 	global sb7
 	lassign $args cmd 1 2 3 4 5 6 7 8 9
 	switch -exact -- [string tolower $cmd] {
@@ -39,11 +39,6 @@ proc sb7 args { # General
 			if [isnum -integer $args] { incr level -$args }
 			if $level { set header [lindex [info level $level] 0] } { set header global }
 			return "\[[string toupper $header]\]"
-		}
-
-		log {
-			putcmdlog $1
-			return $1
 		}
 
 		command {
@@ -524,7 +519,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# draw the $HANDLE from here (and WHOIS checks by nick first), we can
 	# fix this in one place: here
 
-	set h [sb7 auth find nick $nick]
+	set h [sb7 auth find nick $nick] ; # Make sure we use the logged-in handle, not the mask-matched handle!
 	if [notempty h] { set handle $h }
 
 #putlog [effects DISPATCH:10.2 11,12 bold]:CMD($cmd):ABBR($abbr)
@@ -546,7 +541,11 @@ proc sb7:dispatch { nick host handle chan arg } {
 #msghome @COMMANDLIST([data array value @COMMANDLIST $cmd])
 
 	# Store reference data (needed for PRINT)
-	data array set @OUTPUT $nick [list $nick $host $handle $chan [data get -default @LASTBIND pub]]
+	if [string eq * $tchan] { set tchan [data array get @LAST:CHAN $nick $chan] }
+	data array set @LAST:CHAN $nick $tchan
+	# -DEFAULT is needed because the PUB bind, which comes straight here, isn't set into @LASTBIND like the others are
+	data array set @OUTPUT $nick [list $nick $host $handle $tchan [data get -default @LASTBIND pub]]
+#putlog "\[SB7:DISPATCH\] NICK($nick):HOST($host):HANDLE($handle):CHAN($chan):TCHAN($tchan):LASTBIND([data get @LASTBIND]):@OUTPUT([data array get @output $nick])"
 	# ALL OUTPUT MUST COME AFTER THIS POINT!!
 
 # if not -CHANSPECIFIC, ignore "*" as a chan (used for commands like LOGIN & REHASH)
@@ -579,7 +578,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	#  =1000 command: user o-authed?
 	if { $cmdinfo(level) >= 1000 } {
 		if { [lsearch -exact $cmdinfo(flags) ok:logout] == -1 } {
-			if ![is oauth $handle $nick $host] { print -private -error $nick "\[SB7\] Who are you?" ; return 0 }
+			if ![is oauthed $handle $nick $host] { print -private -error $nick "\[SB7\] Who are you?" ; return 0 }
 		}
 	}
 
@@ -1066,6 +1065,8 @@ proc data args {
 
 		llength { return [llength [data get $arg1]] }
 
+		lremove { set data [data get $arg1] ; lremove $data $arg2 ; data set $arg1 $data ; return $data }
+
 		in - inlist {
 			flags -simple [lrange $args 1 end] -nocase text flags
 			lassign $text arg1 arg2
@@ -1075,6 +1076,36 @@ proc data args {
 				set m [lsearch -exact [data get $arg1] $arg2]
 			}
 			return [expr ( $m != -1 ) ? 1 : 0]
+		}
+
+		find {# 2-element LIST: scalar, array?
+			if [isempty arg1] { return "" }
+			return [lsort -inc -dict -uni [array names sb7 [string tolower $arg1]]]
+		}
+
+		list {# 2-element LIST: scalar, array?
+			if [isempty arg1] { return "" }
+			empty list
+			foreach a [lsort -inc -uni -dict [array names sb7 [string tolower $arg1]]] { lappend list $a [data get $a] }
+			return $list
+		}
+
+		search {# Search for text WITHIN the data streams
+			if [isempty arg1] { return "" }
+			if ![is wildcard $arg1] { set arg1 "*${arg1}*" }
+			set arg1 [string tolower $arg1]
+			empty list
+			foreach a [array names sb7] {
+				if [string match $arg1 [data get $a]] { lappend list $a }
+			}
+		}
+
+		ren - rename {
+			set arg1 [string tolower $arg1]
+			set arg2 [string tolower $arg2]
+			if [info exists sb7($arg1)] { set sb7($arg2) $sb7($arg1) } { unset -nocomplain sb7($arg2) }
+			unset -nocomplain sb7($arg1)
+			return
 		}
 
 		def - default - defaults {
@@ -1171,36 +1202,6 @@ proc data args {
 			set error [ catch { file copy $filename ${filename}~bak } crap ]
 			if $error { error "\[DATA BACKUP\] Unable to save data file backup: ${filename}~bak" ; return }
 			return 0
-		}
-
-		find {# 2-element LIST: scalar, array?
-			if [isempty arg1] { return "" }
-			return [lsort -inc -dict -uni [array names sb7 [string tolower $arg1]]]
-		}
-
-		list {# 2-element LIST: scalar, array?
-			if [isempty arg1] { return "" }
-			empty list
-			foreach a [lsort -inc -uni -dict [array names sb7 [string tolower $arg1]]] { lappend list $a [data get $a] }
-			return $list
-		}
-
-		search {# Search for text WITHIN the data streams
-			if [isempty arg1] { return "" }
-			if ![is wildcard $arg1] { set arg1 "*${arg1}*" }
-			set arg1 [string tolower $arg1]
-			empty list
-			foreach a [array names sb7] {
-				if [string match $arg1 [data get $a]] { lappend list $a }
-			}
-		}
-
-		ren - rename {
-			set arg1 [string tolower $arg1]
-			set arg2 [string tolower $arg2]
-			if [info exists sb7($arg1)] { set sb7($arg2) $sb7($arg1) } { unset -nocomplain sb7($arg2) }
-			unset -nocomplain sb7($arg1)
-			return
 		}
 
 		array {
@@ -1353,6 +1354,8 @@ proc data args {
 
 				len - length { return [string length [data array value $arg2 $arg3]] }
 
+				lremove { set data [data array get $arg2 $arg3] ; lremove $data $arg4 ; data array set $arg2 $arg3 $data ; return $data }
+
 				llength { return [llength [data array value $arg2 $arg3]] }
 
 				getall - get:all {
@@ -1381,6 +1384,28 @@ proc data args {
 					return
 				}
 
+				find {
+					set list ""
+					set arg2 [string tolower $arg2]
+					set arg3 [string tolower $arg3]
+					if ![info exists sb7($arg2)] { return "" }
+					array set data $sb7($arg2)
+					foreach loop [lsort -inc -uni -dict [array names data [none $arg3 *]]] { lappend list $loop }
+					return $list
+				}
+
+				list {
+					set list ""
+					set arg2 [string tolower $arg2]
+					if ![info exists sb7($arg2)] { return "" }
+					array set data $sb7($arg2)
+					set arg3 [none $arg3 *]
+					foreach loop [lsort -uni -dict -inc [array names data]] { 
+						if [string match -nocase $arg3 $data($loop)] { lappend list [list $loop $data($loop)] } 
+					}
+					return $list
+				}
+
 				ren - rename {
 					set arg2 [string tolower $arg2]
 					set arg3 [string tolower $arg3]
@@ -1390,6 +1415,22 @@ proc data args {
 					unset -nocomplain data($arg3)
 					set sb7($arg2) [array get data]
 					return
+				}
+
+				clear {
+					set arg2 [string tolower $arg2]
+					set arg3 [string tolower $arg3]
+					if ![info exists sb7($arg2)] { return "" }
+					array set data $sb7($arg2)
+					set list [array names data [none $arg3 *]]
+					foreach element $list { unset data($element) }
+					if [string eq "" [array names data]] {
+						set sb7($arg2) ""
+						unset sb7($arg2)
+					} {
+						set sb7($arg2) [array get data]
+					}
+					return $list
 				}
 
 				def - default - defaults {
@@ -1415,44 +1456,6 @@ proc data args {
 						set sb7($arg2) [array get data]
 					}
 					return $arg3
-				}
-
-				find {
-					set list ""
-					set arg2 [string tolower $arg2]
-					set arg3 [string tolower $arg3]
-					if ![info exists sb7($arg2)] { return "" }
-					array set data $sb7($arg2)
-					foreach loop [lsort -inc -uni -dict [array names data [none $arg3 *]]] { lappend list $loop }
-					return $list
-				}
-
-				list {
-					set list ""
-					set arg2 [string tolower $arg2]
-					if ![info exists sb7($arg2)] { return "" }
-					array set data $sb7($arg2)
-					set arg3 [none $arg3 *]
-					foreach loop [lsort -uni -dict -inc [array names data]] { 
-						if [string match -nocase $arg3 $data($loop)] { lappend list [list $loop $data($loop)] } 
-					}
-					return $list
-				}
-
-				clear {
-					set arg2 [string tolower $arg2]
-					set arg3 [string tolower $arg3]
-					if ![info exists sb7($arg2)] { return "" }
-					array set data $sb7($arg2)
-					set list [array names data [none $arg3 *]]
-					foreach element $list { unset data($element) }
-					if [string eq "" [array names data]] {
-						set sb7($arg2) ""
-						unset sb7($arg2)
-					} {
-						set sb7($arg2) [array get data]
-					}
-					return $list
 				}
 
 				default { error "\[DATA\] Unknown option for ARRAY: [string toupper $arg1]" }
@@ -1521,7 +1524,7 @@ proc saveme { cmd { now false } } {
 
 proc sb7:logout args {
 #logme
-	if [string eq * $args] {set args [userlist]}
+	if [string eq * $args] { set args [userlist] }
 	empty successful
 	foreach user $args {
 		if ![validuser $user] continue
@@ -2608,37 +2611,34 @@ proc ldestroy args {
 	empty temp_list temp_not temp_list_ temp_not_
 
 	# First pass
+	set collected ""
 	foreach item $total {
 		if [validflag -all] { 
 			set __ [lsearch -all -inline -${match} $_ $item] 
-			set _n [lsearch -not -all -inline -${match} $_ $item] 
 		} { 
 			set __ [lsearch -inline -${match} $_ $item] 
-			set _n [lsearch -not -inline -${match} $_ $item] 
 		}
 		# Remember: we're trying to REMOVE entries by default, not keep them.
 		if [notempty __] {
-			set temp_list_ [concat $temp_not_ $__]
-			set temp_not_ [concat $temp_list_ $_n]
+			#set temp_list_ [concat $temp_not_ $__]
+			set collected [concat $collected $__]
 		} { 
-			set temp_not_ [concat $temp_list_ $__] ; # $item
-			set temp_list_ [concat $temp_list_ $_n]
+			#set temp_not_ [concat $temp_list_ $__] ; # $item
 		}
-if $debug { debug item _ __ match =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_ }
+if $debug { debug collected item _ __ match =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_ }
 	}
 
 	# Second pass
-	set do_second_pass 0
+	set do_second_pass 1
 	if $do_second_pass {
 if $debug { debug temp_list_ temp_not_ _ }
-		foreach a $_ {
-			set m [lsearch -exact $temp_list_ $a]
-			if { $m == -1 } { lappend temp_list [lindex $list $m] } { lappend temp_not $a }
+		foreach a $collected {
+			set m [lsearch -exact $_ $a]
+			if { $m != -1 } { lappend temp_not $a ; set _ [lreplace $_ $m $m] }
 		}
-	} {
-		set temp_list $temp_list_
-		set temp_not $temp_not_
+		set temp_list $_
 	}
+if $debug { debug _ collected temp_list temp_not }
 
 	if [validflag -nonulls] { foreach a [list temp_list temp_not] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
 	if [validflag -unique] { foreach a [list temp_list temp_not] { set $a [lunique [set $a]] } }
@@ -3115,6 +3115,7 @@ proc nph { nick handle { join " " } { open "(" } { close ")" } } {
 	set nick [casenick $nick]
 	set handle [casehandle $handle]
 	if [isempty nick] { return $handle }
+	if [isnum -integer $nick] { return $handle }
 	if [isempty handle] { return $nick }
 	if ![validuser $handle] { return $nick }
 	if [string eq -nocase $nick $handle] { return $handle }
@@ -3789,6 +3790,9 @@ if $debug { debug =2 flags target }
 		set type [data array value -default CONFIG OUTPUT NOTICE]
 		set intended_user 1
 		lassign [data array value @OUTPUT $target] - host handle chan
+		if [string eq * $chan] { set chan [data array get @output last:$target] }
+#putlog "\[PRINT\] TARGET($target):CHAN($chan)"
+		if { [lsearch -exact [list "" *] $chan] != -1 } { set flags [ldestroy -replacewith $flags -msg -notice] ; set:all temp temp_type notice ; set output $target }
 		if [validuser $handle] {
 			if [boolean -integer [userinfo get $handle BURST]] { set:all burst_ok user_setting_burst 1 ; lprepend flags -burst }
 			set pre [userinfo get $handle prefix]
@@ -3802,7 +3806,25 @@ if $debug { debug =2 flags target }
 
 				chan { set output $chan ; set type PRIVMSG }
 
-				#* { set output $temp ; set type PRIVMSG }
+				"#*" { set output $temp ; set type PRIVMSG }
+
+				same {
+					# set flags [ldestroy -replace [list -notice] -notice -msg] 
+					switch -exact -- [string tolower [lindex [data array get @output $target] 4]] {
+
+						pub - pubm { set output $chan ; set type PRIVMSG }
+
+						msg { set output $target ; set type PRIVMSG }
+
+						not - notc { set output $target ; set type NOTICE }
+
+						dcc { set output $target ; set type dcc }
+
+						default { error "\[PRINT\] User $target has an output setting of \"SAME\" but I can't tell where to send the output! @OUTPUT([data array get @output $target])" }
+
+					}
+					#putlog "\[PRINT\] SAME:FLAGS($flags):@OUTPUT([lindex [data array get @output $target] 4]):OUTPUT($output):TYPE($type)"
+				}
 
 				default { set output $target }
 
@@ -3813,7 +3835,7 @@ if $debug { debug =2 flags target }
 		if ![validflag -nouserdata] { if [notempty color] { set open $color } }
 	}
 
-if $debug { debug =3 flags target }
+if $debug { debug =3 flags target output }
 	if [validflag -reset] {
 		# Set ALL items to default values: no colour, notice, to user
 		set output $target
@@ -3824,12 +3846,12 @@ if $debug { debug =3 flags target }
 		set flags [lreplace $flags 0 $m]
 	}
 
-if $debug { debug =4 flags }
+if $debug { debug =4 flags target output }
 	if [validflag -noburst] { set flags [ldestroy -all -nonulls -multiple $flags [list -noburst -burst]] } ; # Supercede -burst
 	if [validflag -normal] { set flags [ldestroy -all -nonulls -multiple $flags [list -normal -help -quick -burst -private -msg -notice -next]] ; set output $target ; set type NOTICE }
 	if [validflag -channel] { set output $chan ; set type PRIVMSG }
 
-if $debug { debug =5 flags target =CONFIG:BURST[data array get config burst] burst_user_setting }
+if $debug { debug =5 flags target =CONFIG:BURST([data array get config burst]) burst_user_setting }
 	switch -exact -- [string tolower [data array get config burst]] {
 
 		all - force { set burst_ok 1 }
@@ -5134,29 +5156,46 @@ proc is { cmd args } {
 		auth - authed {
 			# Call with: is authed <handle> <nick> [host]
 			lassign $args handle nick host
-			if [valididx $nick] {
-				set i2h [idx2hand $nick]
-				return [string eq -nocase $i2h $handle]
-			}
+
 			# DCC users are ALWAYS considered as "logged-in"
-			lassign [data array value @AUTH $handle] auth_handle auth_nick auth_host
-			if ![string eq -nocase $nick $auth_nick] { return 0 }
-			if [notempty host] { if ![string eq $host $auth_host] { return 0 } }
-			return 1
+			if [valididx $nick] { return [string eq -nocase [idx2hand $nick] $handle] }
+
+			set data [data array get @AUTH $handle]
+			if { [llength [join $data]] == 3 } {
+				# Original SB7 format
+				lassign [data array value @AUTH $handle] auth_handle auth_nick auth_host
+				if ![string eq -nocase $nick $auth_nick] { return 0 }
+				if [notempty host] { if ![string eq $host $auth_host] { return 0 } }
+				return 1
+			} {
+				# New SB7 format (multi-nick authing)
+				set authed 0
+				foreach auth $data {
+					lassign $auth _nick _host
+					if [string eq -nocase $nick $_nick] {
+						set authed 1
+						if [notempty host] { # Make the auth check optional, if the requested host is ""
+							set authed [string eq -nocase $host $_host]
+							break
+						}
+					}
+				}
+				return $authed
+			}
 		}
 
-		oauth - oauthed {
-			# Call with: is authed <handle> <nick> [host]
+		oauth - outhed - oauthed {
+			# Call with: is Oauthed <handle> <nick>
 			lassign $args handle nick host
-			if [valididx $nick] {
-				set i2h [idx2hand $nick]
-				return [string eq -nocase $i2h $handle]
-			}
-			# DCC users are ALWAYS considered as "logged-in"
-			lassign [data array value @OUTH $handle] auth_handle auth_nick auth_host
-			if ![string eq -nocase $nick $auth_nick] { return 0 }
-			if [notempty host] { if ![string eq $host $auth_host] { return 0 } }
-			return 1
+
+			# DCC users are NEVER considered as "ologged-in" by default
+			# Because the OLOGIN command must be used, even in DCC, we might have problem with storing hosts. So, we won't.
+			
+			set data [data array get @OUTH $handle]
+			# New SB7 format (multi-nick authing), backward-compatible to original SB7 format
+
+			if ![is authed $handle $nick $host] { return 0 } ; # Require normal LOGIN as well
+			return [expr { [lsearch -exact [string tolower $data] [string tolower $nick] ] == -1 } ? 0 : 1 ]
 		}
 
 		wildcard { return [regexp -- {[\*\?]} $args] }
@@ -5909,6 +5948,7 @@ proc sb7:005 { server code arg } {
 				data array set @server chanmodes:2 [split $2 ""]
 				data array set @server chanmodes:3 [split $3 ""]
 				data array set @server chanmodes:4 [split $4 ""]
+				foreach a [list 1 2 3 4] { foreach b [split [set $a] ""] { putlog "\[SB7:005\] A($a):B($b)" ; data array set @server chanmode:$b $a } }
 				data array set @server chanmodes [concat [split $1 ""] [split $2 ""] [split $3 ""] [split $4 ""] ]
 			}
 			cmds {
@@ -6011,5 +6051,4 @@ proc @version { nick host handle chan arg } {
 #####
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
-
 

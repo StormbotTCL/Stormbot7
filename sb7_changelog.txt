@@ -1,14 +1,20 @@
-# StormBot.TCL 7 version Changelog -- 2014-11-15 09:58:36 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-11-19 04:39:22 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2014-11-18 12:56:56 UTC: #370 [tail] Fixed NPH (when $NICK is an integer (DCC index), just return $HANDLE)
+2014-11-18 12:44:17 UTC: #369 [set & tail] Upgraded PRINT & SET OUTPUT (created a new output mode: ''same'' where the bot will reply via the same method you contacted it: /msg, /notice, .dcc, or in-chan)
+2014-11-17 06:31:18 UTC: #368 [note] Upgraded NOTE (updated the tag used when reading notes: clarify ''always private'' vs ''private'')
+2014-11-17 06:26:24 UTC: #367 [tail] Added DATA [ARRAY] LREMOVE
+2014-11-17 06:21:03 UTC: #366 [tail] Fixed LDESTROY (resorted to a two-pass system to record all the possibilities, due to the -MULTIPLE option. Also, the resultant lists were being reversed)
+2014-11-17 05:52:38 UTC: #365 [botsend] Fixed BOTSEND SEND & QUICK (only try to AUTOLOAD the following: core SB7 files, and, SB7 beads. Originally, it was trying to load text files also)
 2014-11-15 09:58:27 UTC: #364 [botsend] Fixed BOTSEND (typo: ''error while suto-loading ...'')
-2014-11-15 09:24:06 UTC: #363 [-] tai lixed DATA ARRAY LIST (same issue as CHANGELOG #362 re: when blank args were considerd instead of automatically checking for blank args and replacing with ''*'')
+2014-11-15 09:24:06 UTC: #363 [tail] Fixed DATA ARRAY LIST (same issue as CHANGELOG #362 re: when blank args were considerd instead of automatically checking for blank args and replacing with ''*'')
 2014-11-15 09:18:29 UTC: #362 [tail] Fixed DATA [ARRAY] CLEAR (when no secondard item was provided (the wildcard), the code would try to match ... the blank, which, when used with ARRAY NAMES, returns an empty list. This would then clear ... nothing)
 2014-11-15 09:07:53 UTC: #361 [tail] Fixed LDESTROY again (backwards logic: the wrong items were being tracked to the list / not variables, causing the opposite result to be returned. Exposed by LMATCH (synonym for LDESTROY -NOT))
 2014-11-15 08:52:48 UTC: #360 [tail] Fixed LDESTROY -BOTH (wasn't returning the match list properly (the first element of the two-element list); was return a blank list ('''') sometimes)
 2014-11-14 09:25:24 UTC: #359 [tail] Fixed WHOIS lookup (''FINDONCHANS nick'' should have been ''FINDONCHANS handle'' for determining mode #4 (see previous CHANGELOG entry))
-2014-11-14 09:07:53 UTC: #358 [who] Fixed WHO (when calculating each user's access, the LOGGED-IN handle was being used for looking up access levels. Obviously this was wrong (but accidentally exposed who as not logged-in). I might make this a flag option in the future)
+2014-11-14 09:07:53 UTC: #358 [who] Fixed WHO (when calculating each user's access, the LOGGED-IN handle was being used for looking up access levels. Obviously this was wrong (but accidentally exposed who was not logged-in). I might make this a flag option in the future)
 2014-11-14 08:15:58 UTC: #357 [config] Added CONFIG -GLOBAL CSERV (the WHO code already anticipated it, but, I hadn't written it yet)
 2014-11-14 07:45:43 UTC: #356 [tail] Fixed WHOIS user lookup (when a nick matched a known handle, but didn't mask-match, it was returning aconfusing reply (mode #0: known-but-offline); this, in turn, confused the WHO command. Fixed: this situation now reports mode #4 (unknown user even though familiar nick))
 2014-11-14 07:22:15 UTC: #355 [tail] Moved VERSION (put it into TAIL for now; have to evade short-name conflict with sb7_version.txt. But if I do this, then shouldn't MAINTENANCE also be moved here? And LOGIN? Oh, this just got real ...)
@@ -53,7 +59,7 @@
 2014-11-05 14:18:58 UTC: #316 [chanmon] Completed CHANMON (now fully functional; translation complete from SB6)
 2014-11-05 13:36:06 UTC: #315 [tail] Fixed GET RANGE (I forgot to code for ''>#'' ''<#'' ''<=#'' ''>='' which was exposed when working on CHANMON)
 2014-11-05 13:03:51 UTC: #314 [tail] Added DATA RENAME (entire datum) & DATA ARRAY RENAME (individual elements)
-2014-11-05 12:43:44 UTC: #313 [tail] Added SB7 ARRAY SET:ALL [synonym: ''setall''] ( allows setting of multiple array elaments in one sequence; '''' to empty / unset element)
+2014-11-05 12:43:44 UTC: #313 [tail] Added DATA ARRAY SET:ALL [synonym: ''setall''] ( allows setting of multiple array elaments in one sequence; '''' to empty / unset element)
 2014-11-05 11:50:02 UTC: #312 [chanmon] Added CHANMON to ZENKAI distribution
 2014-11-05 11:49:56 UTC: #311 [chanmon] Added CHANMON (not complete yet; only partially translated from SB6)
 2014-11-05 11:49:22 UTC: #310 [tail] Added DATA ARRAY GET:ALL (synonym: GETALL) [LIST elements] var1 var2 var3 ... varN (assign variables from specific data array elements, similar to how LASSIGN works)

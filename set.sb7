@@ -47,6 +47,12 @@ proc @set { nick host handle chan arg } {
 			# Any specific / special considerations?
 			switch -exact -- [string tolower $param] {
 
+				output {
+					set valid [list notice msg chan same]
+					set um [uniquematch $valid $value]
+					if [isempty um] { print -help -return $nick "Invalid OUTPUT option \"${value}\" (valid options: [ajl $valid])" }
+				}
+
 				color {
 					if [left $value 1 \003] { 
 						set value [mid $value 2]

@@ -95,7 +95,7 @@ proc @note { nick host handle chan arg } {
 				if [validflag -unread] { if { $when < $lastread } continue } ; # Must be "<" and not "<=" (new SB7 definition of UNREAD!)
 
 				# Priority order: private, important, urgent
-				if { [lsearch -exact $modes private] != -1 } { set outputflag -private ; set color_header "" ; set color_open [color 15,14] ; set color_close [color] ; lappend tag private }
+				if { [lsearch -exact $modes private] != -1 } { set outputflag -private ; set color_header "" ; set color_open [color 15,14] ; set color_close [color] ; if $alwaysprivate { lappend tag "always private" } { lappend tag private } }
 				if { [lsearch -exact $modes important] != -1 } { set color_header [color 4] ; set color_open [color 4] ; set color_close [color] ; lappend tag important }
 				if { [lsearch -exact $modes urgent] != -1 } { set color_header [color 4,5] ; set color_open [color 8,4] ; set color_close [color] ; lappend tag urgent }
 				if [notempty tag] { set tag " \{${color_header}[join [string toupper $tag] " -- "]${color_close}\}" }
