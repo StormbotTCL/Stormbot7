@@ -1,13 +1,9 @@
 sb7 command add LOGIN    0 -locklevel -core -auth -logout:ok ; # Why remove OK:LOGOUT for this?
-sb7 command add LOGOUT   0 -locklevel -core
-sb7 command add OPASS 1000 -locklevel -core
-sb7 command add PASSHINT 1 -locklevel -core -logout:ok PH ; # Levels -1 & 0 don't require authing
-sb7 register user PASSHINT:PASS
-sb7 register user PASSHINT:OPASS
 
 proc @login { nick host handle - arg } {
 	# LOGIN not permitted from PUB[M] ($CHAN is useless HERE; will be useful elsewhere)
 	# Syntax: /msg BOT LOGIN <PW> -ologin <OPASS> -xlogin -xologin -invite #chan -op #chan -voice #chan ....
+	sb7 security
 	sb7 parseflags
 	set options [lassign $arg - pw target]
 
@@ -119,10 +115,12 @@ proc @login { nick host handle - arg } {
 			}
 		}
 	}
+	sb7 security
 	return
 }
 
 proc @botnet:xlogin { bot cmd arg } {
+	sb7 security
 	set method_encoding 0
 	if [left $arg 1 +] {
 		set arg [decrypt \123\u053\x041 [reverse [mid $arg 2]]] 
@@ -147,8 +145,8 @@ proc @botnet:xlogin { bot cmd arg } {
 		set host   [binary format H* [lindex $decoded 1]]
 		set handle [binary format H* [lindex $decoded 2]]
 		set pass   [binary format H* [lindex $decoded 3]]
-		if ![validuser $handle] {return 0}
-		if [string eq $pass [userinfo get $handle pass]] {set method_encoding 4}
+		if ![validuser $handle] { return 0 }
+		if [string eq $pass [getuser $handle pass]] { set method_encoding 4 }
 	} else {
 		# These methods are caught up with the "+" format above ... why?
 		lassign $arg nick h p u
@@ -174,13 +172,14 @@ proc @botnet:xlogin { bot cmd arg } {
 			}
 		}
 	}
-	if ![validuser $handle] {putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): unknown user"; return 0}
-	if !($method_encoding) {putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): bad password"; return 0}
+	if ![validuser $handle] { putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): unknown user" ; return 0 }
+	if !($method_encoding) { putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): bad password" ; return 0 }
 	sb7 auth login $handle $nick $host
 	putlog "\[XLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: $method_encoding\]"
 }
 
 proc @botnet:ologin { bot cmd arg } {
+	sb7 security
 	set method_encoding 0
 	if [left $arg 1 +] {
 		set arg [decrypt \123\u053\x041 [reverse [mid $arg 2]]] 
@@ -235,126 +234,8 @@ proc @botnet:ologin { bot cmd arg } {
 	if ![validuser $handle] {putlog "\[XOLOGIN\] failed XOLOGIN by: ${nick}!${host} (${handle}): unknown user"; return 0}
 	if !$method_encoding {putlog "\[XOLOGIN\] failed XOLOGIN by: ${nick}!${host} (${handle}): bad password"; return 0}
 	sb7 auth ologin $handle $nick $host
+	sb7 security
 	putlog "\[XOLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: $method_encoding\]"
-}
-
-proc @logout { nick host handle chan arg } {
-	sb7 parseflags
-	if [string eq -nocase HELP $1] {
-		print -help $nick "\[LOGOUT\]:"
-		print -help $nick "Syntax: /msg $::botnick LOGOUT HELP"
-		print -help $nick "Syntax: /msg $::botnick LOGOUT"
-		print -help $nick "The LOGOUT command disables your access to my commands unti you LOGIN again. If you are going to be away from your keyboard for a while, I recommend you use this command."
-		return
-	}
-	sb7 auth logout $handle
-	print -short $nick "You are now logged out."
-	return
-}
-
-proc @opass { nick host handle chan arg } {
-	FLAGS
-	set old [userinfo get $handle opass]
-	if [string eq -nocase HELP $1] {
-		print -help $nick "\[OPASS\]:"
-		print -help $nick "Syntax: $::botnick OPASS "
-		print -help $nick "Syntax: $::botnick OPASS HELP"
-		print -help $nick "Syntax: $::botnick OPASS CLEAR <password>"
-		print -help $nick "Syntax: $::botnick OPASS <password>"
-		print -help $nick "Syntax: $::botnick OPASS <old pass> <new pass>"
-		print -help $nick "The OPASS command stores your owner password\; this is a password you need to use to access level =1000 commands. Because many of those commands allows shell interaction, this second password was required (in case the normal password was compromised)."
-		print -help $nick "Like PASS (the built-in Eggdrop command), use \"OPASS <password>\" to set your password."
-		print -help $nick "Use \"OPASS <old pass> <new pass>\" to change your password."
-		print -help $nick "Use \"OPASS CLEAR\" to remove your password."
-		print -help $nick "The password is encrypted via the bot's resident encryption module (by default, blowfish) and therefore protected\; it can NOT be recovered."
-		print -help $nick "Note: the SB6 command \"OLOGIN\" has been deprecated\; use the -OLOGIN flag with LOGIN to do an owner login."
-		print -help $nick "Note: see the PASSHINT command to store a \"password hint\" for your OPASS as well as your regular password."
-		return
-	}
-
-	if [string eq -nocase CLEAR $1] {
-		if [string eq "" $old] { print -help -short -return $nick "You don't have an OPASS set. Nothing to clear." }
-		if ![string eq $old [encpass [join $2]]] { print -help -short -return $nick "Invalid password." }
-		if ![string eq -nocase CLEAR $3] { print -short -return $nick "Are you \002\037SURE\037\002?! Use \"CLEAR <password> CLEAR\" to convince me." }
-		userinfo set $handle opass ""
-		saveme user
-		print $nick "Your password has been cleared."
-		return
-	}
-	if [isempty 1] { print -help -short -return $nick "To what am I setting your OPASS?" }
-
-	if [isempty 2] {
-		# Just setting your OPASS
-		if ![string eq "" $old] { print -help -short -return $nick "You have an OPASS set. Use the change-opass syntax to change it to something new." }
-		userinfo set $handle opass [encpass [join $1]]
-		saveme user
-		print -private $nick "Your password has been set."
-		return
-	} {
-		# Changing your OPASS
-		if [string eq "" $old] { print -help -short -return $nick "You don't have an OPASS set. Use the set-opass syntax to set it." }
-		if ![string eq $old [encpass [join $1]]] { print -help -short -return $nick "Invalid password." }
-		userinfo set $handle opass [encpass [join $2]]
-		saveme user
-		print -private $nick "Your password has been changed."
-		return
-	}
-	return
-}
-
-proc @passhint { nick host handle chan arg } {
-	sb7 parseflags
-	set base PASSHINT:PASS
-
-	# Only allow HELP & GET to be used when the user is logged-out ....
-	switch -exact -- $1l {
-
-		"" - help {
-			print -help $nick "\[PASSHINT\]:"
-			print -help $nick "Syntax: $::botnick PASSHINT HELP"
-			print -help $nick "Syntax: $::botnick PASSHINT GET \[-OPASS\] \[your handle\]"
-			print -help $nick "Syntax: $::botnick PASSHINT SET \[-OPASS\] <password hint>"
-			print -help $nick "Syntax: $::botnick PASSHINT SET \[-OPASS\]"
-			print -help $nick ""
-			print -help $nick "The PASSHINT command allows you to set a \"password hint\" so common to websites nowadays. Your hint can be ANY text you choose."
-			print -help $nick "Using SET without giving a hint will blank your current hint."
-			print -help $nick "The -OAUTH flag lets you set your hint for your owner login (=1000 users only)."
-			print -help $nick "Don't be too obvious (\"my birthday\"), because the info could be somewhere else in the bot (\"$::botnick info $handle bday\")"
-			return
-		}
-
-		get {
-			flags:simple [join $2e] -opass who flags
-			if [validflag -opass] {
-				if ![access check 1000 $handle] { print -help -error -return $nick "You don't have access to the -OAUTH flag here." }
-				set base PASSHINT:OPASS
-			}
-			if [isempty who] { set who $handle } { lassign [whois $who $handle] - wn - wh ; set who $wh }
-			if ![validhost $host $who] { print -help -return $nick "\[PASSHINT GET\] You don't match any userhosts for the user: $who" }
-			set hint [userinfo get $who $base]
-			print -private $nick "Your [lindex [list "" "OPASS "] [validflag -opass]]password hint: [none $hint <blank>]"
-			return
-		}
-
-		set {
-			if ![is authed $handle $nick $host] { print -error -help -header -return $nick "You must be logged-in to use this command." }
-			flags:simple [join $2e] -opass new flags
-			if [validflag -opass] {
-				if ![access check 1000 $handle] { print -help -error -return $nick "You don't have access to the -OAUTH flag here." }
-				if ![is oauthed $handle $nick $host] { print -error -help -header -return $nick "You must be ologged-in to use this command." }
-				set base PASSHINT:OPASS
-			}
-			set hint [join $new]
-			userinfo set $handle $base $hint
-			saveme user
-			print -private $nick "Your password hint: [none $hint <blank>]"
-			return
-		}
-
-		default { print -help -short -return $nick "Unknown option: $1" }
-
-	}
-	?
 }
 
 #####

@@ -1,5 +1,4 @@
 sb7 command add SET 1 -none
-sb7 command add INFO 1 -none
 sb7 command add MY 1 -none
 
 # NOTE: "getuser <handle> XTRA" gives a full list of set items (COPYUSER? :)
@@ -75,49 +74,5 @@ proc @set { nick host handle chan arg } {
 
 	}
 	?
-}
-
-proc @info { nick host handle chan arg } {
-	sb7 parseflags
-	if [string eq -nocase HELP $1] {
-		print -help $nick "\[INFO\]:"
-		print -help $nick "Syntax: $::botnick INFO HELP"
-		print -help $nick "Syntax: $::botnick INFO LIST"
-		print -help $nick "Syntax: $::botnick INFO ME <item | \"ALL\">"
-		print -help $nick "Syntax: $::botnick INFO <user> <item | \"ALL\">"
-		print -help $nick "The INFO command displays your personal information, or, the information of another user."
-		print -help $nick "Use \"ALL\" to see all information available. Otherwise, you will be shown the specific item you requested."
-		return
-	}
-
-	if [string eq LIST $1u] { print -short -return $nick "List of available settings: [ajl [data get @SET:VALID]]" }
-
-	if { [string eq ME $1u] || [string eq MY $1u] } {
-		set th $handle
-		set tn $nick
-	} {
-		lassign [whois $1 $1 $chan] online tn - th
-		if ![validuser $th] { print -error -header:short $nick "No such user: $1" }
-	}
-
-	set list [data get @SET:VALID]
-	if { [string eq -nocase ALL $2] || [string eq -nocase * $2] || [string eq "" $2] } {
-		set list [data get @SET:VALID]
-	} {
-		empty list
-		set valid [data get @SET:VALID]
-		foreach a $2e {
-			set u [uniquematch $valid $a]
-			if [isempty u] { print -error -header:short $nick "No such data item: $a" ; return }
-			lappend list $u 
-		}
-	}
-
-	print -header:short $nick "Information for [nph $tn $th]:"
-	foreach a [lsort -inc -dict -uni $list] {
-		set d [userinfo get $th $a]
-		if [notempty d] { print -header:short $nick "[string toupper $a]: [none $d <none>]" }
-	}
-	return 
 }
 

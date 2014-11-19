@@ -19,7 +19,7 @@ proc @bmi { nick host handle chan arg } {
 		print -help $nick "[space 5]30.0 - 34.9: obese - stage 1"
 		print -help $nick "[space 5]35.0 - 39.9: obese - stage 2"
 		print -help $nick "[space 5]40.0 +     : morbidly obese"
-		print -help $nick "Formula: ( weight ) ÷ ( height^2 ) \[ X $bmi_imperial2metric if using lbs / inches\]"
+		print -help $nick "Formula: ( weight ) Ã· ( height^2 ) \[ X $bmi_imperial2metric if using lbs / inches\]"
 		print -help $nick "Use of this BMI index does NOT replace the advice of a qualified medical practicioner / professional."
 		return
 	}

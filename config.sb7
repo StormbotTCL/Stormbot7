@@ -3,7 +3,7 @@ sb7 command add CONFIG 501 -chanspec CF CFG
 sb7 register global [concat [data array value @CONFIG global] [data array value @CONFIG chan]]
 
 proc @config { nick host handle chan arg } {
-	set valid_global [list mute color burst pubcmd group rank shortcut debug binds chon backup access]
+	set valid_global [list mute color burst pubcmd group rank shortcut debug binds chon backup access cservice]
 	set valid_chan   [list mute color]
 	set valid_abbr   [list shortcut sc binds bind pubcmd pc]
 
@@ -30,7 +30,7 @@ proc @config { nick host handle chan arg } {
 	set types(integer) [list]
 	set types(boolean) [list mute rank]
 	set types(channel) [list home]
-	set types(text)    [list group backup access]
+	set types(text)    [list group backup access cservice]
 	set types(custom)  [list pubcmd shortcut burst color debug chon]
 	# Custom: Debug(chan), color("",block), shortcut(local,global,owner), burst(allow,all)
 
@@ -115,6 +115,14 @@ proc @config { nick host handle chan arg } {
 				print $nick "[format %${max}s $a]: [none $data <none>]"
 			}
 			return 0
+		}
+
+		cservice - cserv {
+			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -boolean $base cservice]" }
+			set value $2
+			data set $base cservice $value
+			saveme data
+			print -return $nick "\[CONFIG\] Updated setting: $1u (${value})"
 		}
 
 		access {
@@ -327,12 +335,52 @@ proc @config { nick host handle chan arg } {
 			print $nick "Global: [none [ajl $type(global)] <none>]"
 			print $nick "All: [none [ajl $type(all)] <none>]"
 			print $nick "Default: [none [ajl $type(default)] <none>]"
+			print $nick "To change these binds, use: $::botnick CONFIG -GLOBAL SHORTCUT"
 			return
-			
 		}
 
 		burst {
-			#
+			switch -exact -- [string tolower $2] {
+
+				"" { print -return $nick "\[CONFIG -GLOBAL BURST\] Current burst control mode: [none [data array get config burst] <none>]" }
+
+				help {
+					print $nick "\[CONFIG -GLOBAL BURST\] The BURST mode allows you to control the queue-bypass mode of the output parser. This will allow user output to be flushed directly to the IRCd (bypassing Eggdrop's output queues). This can be abused in many ways and can also get the bot flooded off the server."
+					print $nick "The available options are: ALL (force all user output into burst mode, regardless of user preferences)"
+					print $nick "The available options are: USERS (allows users to set their preference, via: [effects "$::botnick SET BURST < OFF | ON >" u])"
+					print $nick "The available options are: OFF (all output goes through the queues as normal. The --BURST flag can override this on a line-by-line basis on the command-line)"
+					print $nick "The available options are: BLOCK (blocks all burst mode options, including the command-line option: --BURST)"
+					print $nick "Note: this does not affect the standard output to the \"home channel\" or output caused by commands like SAY."
+					return
+				}
+
+				all {
+					set mode force
+					set tag "all users will experience burst mode (\"burstforce\" mode)"
+				}
+
+				user - users {
+					set mode user
+					set tag "users can set their own burst mode setting via: $::botnick SET BURSTMODE < OFF | ON > (\"burstallow\" mode)"
+				}
+
+				none - off {
+					set mode off
+					set tag "burst mode is turned off for all users (command-line flag --BURST is available)"
+				}
+
+				kill - block {
+					set mode block
+					set tag "burst mode is administratively off and unavailable to all users (command-line flag --BURST is also disabled)"
+				}
+
+				default { print -help -return $nick "\[CONFIG -GLOBAL BURST\] Unknown option: [join $2]" }
+
+			}
+			data array set config burst $mode
+			saveme data
+			print $nick "\[CONFIG -GLOBAL BURST\] Burst mode is now: $mode ($tag)"
+			return
 		}
 
 		color {

@@ -694,7 +694,10 @@ proc @botmon:interpret args {
 }
 
 proc @botmon:suspend_check args {
-	if ![validtimer @botmon:suspend_check] { utimer 1 @botmon:suspend_check }
+	if ![validutimer @botmon:suspend_check] { 
+		sb7 killtimer -quiet @botmon:suspend_check 
+		utimer 1 @botmon:suspend_check 
+	}
 	set ts [data array get botmon suspend]
 	if [isempty ts] return
 
@@ -713,6 +716,12 @@ proc @botmon:suspend_check args {
 	return
 }
 
+proc @botmon:bootstrap args {
+	sb7 killtimer -quiet @botmon:suspend_check
+	utimer 1 @botmon:suspend_check
+	return
+}
+
 ##### 
 # Bootstrap
 
@@ -723,4 +732,5 @@ bind join - * @botmon:join
 bind sign - * @botmon:sign
 bind part - * @botmon:part
 bind kick - * @botmon:kick
-utimer 1 @botmon:suspend_check
+@botmon:bootstrap
+

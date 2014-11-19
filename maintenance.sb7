@@ -1,5 +1,4 @@
-sb7 command add MAINTENANCE 1000 -locklevel -core MAINT
-sb7 command add VERSION 501 -none VER
+sb7 command add MAINTENANCE 1000 -locklevel -core MAINT MAITN
 
 proc @maintenance { nick host handle chan arg } {
 #debug *
@@ -76,19 +75,3 @@ proc @maintenance { nick host handle chan arg } {
 	}
 }
 
-proc @version { nick host handle chan arg } {
-	sb7 parseflags
-	switch -exact -- $1l {
-
-		help {
-			print -help $nick "\[VERSION\]:"
-			print -help $nick "Syntax: $::botnick VERSION HELP"
-			print -help $nick "Syntax: $::botnick VERSION"
-			print -help $nick "VERSION displays the version information for StormBot.TCL on $::botnick"
-			return
-		}
-
-		default { print -return -short $nick "StormBot.TCL v[data array get @VERSION stormbot] ([data get @VERSION distro]) on $::botnick (Eggdrop v[lindex $::version 0] running TCL v[info patchlevel])" }
-
-	}
-}

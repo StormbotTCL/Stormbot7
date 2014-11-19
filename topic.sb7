@@ -97,7 +97,7 @@ proc sb7:topic:lockcheck chan {
 }
 
 proc sb7:topic:lockcheck:timer { nick host handle chan topic } {
-	sb7 killtimer [list sb7:topic:lockcheck $chan]
+	sb7 killtimer -quiet [list sb7:topic:lockcheck $chan]
 	utimer 1 [list sb7:topic:lockcheck $chan]
 }
 

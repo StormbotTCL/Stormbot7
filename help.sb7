@@ -1,5 +1,4 @@
 sb7 command add HELP -1 -locklevel -core
-sb7 command add HINT -1 -locklevel -core
 
 proc @help { nick host handle chan arg } {
 	sb7 parseflags 
@@ -46,21 +45,9 @@ proc @help { nick host handle chan arg } {
 	}
 
 	# Parse for individual levels / ranges; loop through and PRINT AJL $LEVELS(LOOP).
-}
 
-proc @hint { nick host handle chan arg } {
-	sb7 parseflags 
-	if [isempty 1] {
-		print -help $nick "\[HINT\]:"
-		print -help $nick "Syntax: $::botnick HINT"
-		print -help $nick "Syntax: $::botnick HINT <command>"
-		print -help $nick "Some commands have an additional option: \"HINT\" (for example: some commands have changed syntax since SB3 / SB4 / SB5 / SB6\; \"HINT\" will show you how it is different in SB7.)"
-		print -help $nick "Example: /msg $::botnick \002HINT\002 LOGIN"
-		print -help $nick "Note: HINT will pipe into the individual command, reconfiguring your command as necessary. As such, if you request a HINT from a command that doesn't offer one, you may end up with an unexpected result."
-		print -help $nick "Example: /msg $::botnick SAY \002HINT\002"
-	}
-	# Work for all commands, not just LOGIN-related
-	if [sb7 command check $1] { [sb7 command get $1 proc] $nick $host $handle $arg "$1 hint [lreplace $arg 0 1]"; return }
-	print -help -short $nick "No additional HINT information available."
+	# Otherwise ....
+	print -help -short $nick "Unknown option: [join $1]"
 	return
 }
+

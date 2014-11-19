@@ -1,5 +1,4 @@
 sb7 command add alarm 1 -chanspec
-sb7 command add delay 1 -chanspec
 
 proc @alarm { nick host handle chan arg } {
 	FLAGS
@@ -76,78 +75,6 @@ proc @alarm { nick host handle chan arg } {
 	}
 }
 
-proc @delay { nick host handle chan arg } {
-	FLAGS
-	switch -exact -- [string tolower $1] {
-
-		help {
-			print -help $nick "\[ALARM\]:"
-			print -help $nick "Syntax: $::botnick DELAY HELP"
-			print -help $nick "Syntax: $::botnick DELAY \[-NOCTCP\] ADD <time: date \[time\] | URT> <command>"
-			print -help $nick "Syntax: $::botnick DELAY DEL <alarm #>"
-			print -help $nick "Syntax: $::botnick DELAY LIST"
-			print -help $nick "Syntax: $::botnick DELAY CLEAR"
-			print -help $nick ""
-			print -help $nick "The DELAY command will execute a regular command on the date and time you specify."
-			print -help $nick "The standard caveat with command in previous versions of StormBot.TCL still applies: the command is piped into the normal parser so all normal access checks apply (including LOGIN requirements)."
-			print -help $nick "Remember to include the channel name for your command\; never assume the last channel (in which you used a command) will be the target for a DELAYed command.  Global commands (like REHASH) may not need the channel specified."
-			#print -help $nick "Note: The granularity of DELAYs are minutely, due to the user of the TIME Eggdrop bind. The proper target time will always be calculated but the trigger will always be the next even minute (if the time isn't exactly on the minute)."
-			print -help $nick "Note: The granularity of DELAYs are per-second, due to a simple UTIMER. If this shows to gum the bot up too much, then I'll return it to its original programming: minutely by way of BIND TIME."
-			return
-		}
-
-		add {
-			get time -future $2e time text
-			if [isempty text] { print -short -return $nick "What command are we buffering?" }
-			if { $time == [clock seconds] } { print -help -short -return $nick "That would trigger right now." }
-			if { $time <  [clock seconds] } { print -help -short -return $nick "That would trigger in the past." }
-			data array lappend DELAY $handle [list $time $text]
-			saveme data
-			print -short $nick "I've added your DELAY for: [format:date $time $handle]: [join $text]"
-			return
-		}
-
-		del {
-			set range [join $2e]
-			if [isempty range] { print -help -short -return $nick "What range of DELAYs are we deleting?" }
-			set delays [data array get DELAY $handle]
-			set ll [llength $delays]
-			set range [get range $range 1 $ll]
-			set count [llength $range]
-			foreach item [lsort -int -descending $range] {
-				set index [expr $item - 1]
-				set delays [lreplace $delays $index $index]
-			}
-			data array set DELAY $handle $delays
-			saveme data
-			print -short $nick "Deleted [comma $count] [plural DELAY $count]: [ajl $range]"
-			return
-		}
-
-		list {
-			set delays [data array get DELAY $handle]
-			set ll [llength $delays]
-			if [string eq "" $delays] { print -short -return $nick "You have no DELAYs set." }
-			for { set x 1 } { $x <= $ll } { incr x } {
-				lassign [lindex $delays [expr $x - 1]] ts message
-				print -short $nick "[comma $x]/[comma $ll]) [format:date $ts $handle]: [join $message]"
-			}
-			return
-		}
-
-		clear {
-			if ![string eq -nocase CLEAR $2] { print -help -return $nick "Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." }
-			data array set DELAY $handle ""
-			saveme data
-			print -short $nick "Your DELAYs have been cleared."
-			return
-		}
-
-		default { print -short -help -return $nick "Unknown option: [join $1]" }
-
-	}
-}
-
 proc @alarm:timer args {
 	utimer 0 @alarm:timer
 	zero triggered
@@ -174,35 +101,15 @@ proc @alarm:timer args {
 	return 0
 }
 
-proc @delay:timer args {
-	utimer 0 @delay:timer
-	zero triggered
-	foreach user [userlist -b] { # Bots don't need delays (that they don't already have internally)!
-		set delays [data array get delay $user]
-		empty new
-		foreach delay $delays {
-			lassign $delay ts message
-#putlog "\[@DELAY:TIMER\] TS($ts):MESSAGE($message):=TS>CLOCK([boolean [expr [clock seconds] > $ts]])"
-			if { [clock seconds] > $ts } {
-				lassign:array delayuser [whois \$$user \$$user] online nick host handle chan authhandle authnick
-				one triggered
-				set error [ catch { sb7:dispatch $delayuser(nick) $delayuser(host) $delayuser(handle) $delayuser(chan) [join $message] } cmderror ]
-				if $error { @notes send $user main "#${::botnick}#" [clock seconds] "Your DELAYed command returned an error:||[join $message]||Error: $cmderror" }
-				continue
-			}
-			lappend new $delay
-		}
-		data array set delay $user $new
-	}
-	if $triggered { saveme data }
-	return 0
+proc @alarm:bootstrap args {
+	sb7 killtimer -quiet @alarm:timer
+	utimer 0 @alarm:timer
+	return
 }
 
 #####
 # BootStrap
 
 #bind time - * @alarm:timer
-#bind time - * @delay:timer
-utimer 0 @alarm:timer
-utimer 0 @delay:timer
+@alarm:bootstrap
 

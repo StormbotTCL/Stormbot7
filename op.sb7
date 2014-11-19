@@ -1,14 +1,17 @@
-sb7 command add voice     50 -chanspec 
-sb7 command add halfop    75 -chanspec halfop hop
-sb7 command add op       100 -chanspec 
-sb7 command add prot     400 -chanspec 
-sb7 command add own      500 -chanspec 
-sb7 command add devoice   50 -chanspec 
-sb7 command add dehalfop  75 -chanspec dehop
-sb7 command add deop     100 -chanspec 
-sb7 command add deprot   400 -chanspec 
-sb7 command add deown    500 -chanspec 
-sb7 command add modekill  50 -chanspec mk
+sb7 command add voice     50 -chanspec +v
+sb7 command add devoice   50 -chanspec -v
+
+sb7 command add halfop    75 -chanspec +h halfop hop
+sb7 command add dehalfop  75 -chanspec -h dehop
+
+sb7 command add op       100 -chanspec +o
+sb7 command add deop     100 -chanspec -o
+
+sb7 command add prot     400 -chanspec +a
+sb7 command add deprot   400 -chanspec -a
+
+sb7 command add own      500 -chanspec +q
+sb7 command add deown    500 -chanspec -q
 
 # Next: auto voice/halfop/op/prot/own
 
@@ -45,32 +48,8 @@ proc @op:mode { nick host handle chan polarity mode arg } {
 			lappend bad $user
 		}
 	}
-	if [notempty ok] { print -short $nick "Successful ${0u}s: [ajl -unique $ok]" }
-	if [notempty bad] { print -short $nick "Failed ${0u}s (insufficient access): [ajl -unique $bad]" }
+	if [notempty ok] { print $nick "\[${0u}\] Successful ${0u}s: [ajl -unique $ok]" }
+	if [notempty bad] { print $nick "\[${0u}\] Failed ${0u}s (insufficient access): [ajl -unique $bad]" }
 	return
 }
 
-proc @modekill {nick host handle chan arg} {
-	FLAGS
-	if [string eq -nocase HELP $1] {
-		printh $nick "\[MODEKILL\]"
-		printh $nick "Syntax: $::botnick MODEKILL HELP"
-		printh $nick "Syntax: $::botnick MODEKILL \[list of nicks\]"
-		printh $nick "MODEKILL will remove all chanop flags from you (-qaohv, which ever are permitted by the server)."
-		return 0
-	}
-
-	empty ok bad
-	foreach user [none $1e me] {
-		lassign:array modekill [whois $user $handle] - nick - handle
-		if [access compare -self:ok $handle $modekill(handle) $chan] { 
-			lappend ok $user
-			raw "MODE $chan -vhoaq $modekill(nick) $modekill(nick) $modekill(nick) $modekill(nick) $modekill(nick)" 
-		} {
-			lappend bad $user
-		}
-	}
-	if [notempty ok] { print -short $nick "Successful: [ajl -unique $ok]" }
-	if [notempty bad] { print -short $nick "Failed (insufficient access): [ajl -unique $bad]" }
-	return
-}

@@ -11,6 +11,27 @@ proc sb7 args { # General
 	lassign $args cmd 1 2 3 4 5 6 7 8 9
 	switch -exact -- [string tolower $cmd] {
 
+		sec - security {
+			foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?_[a-z]+[1-9]$} $var] { unset $var } }
+			return
+		}
+
+		log {
+			set data [join [join [lrange [split $args] 1 end]]] ; # Double-JOINted.... :p
+			set level [info level]
+			incr level -1
+			putloglev 7 * "\[[effects [lindex [info level $level] 0] up b]\] $data"
+			return
+		}
+
+		debug {
+# Does not work. :( May have to re-write this custom (or send "UPLEVEL 2" to DEBUG below)
+			data set @temp:debug $args
+			uplevel 1 { debug -log 7 [data get @temp:debug] }
+			data set @temp:debug ""
+			return
+		}
+
 		header {
 			# Used by: GMT:FORMAT
 			set level [info level]
@@ -354,10 +375,13 @@ proc sb7 args { # General
 		}
 
 		auth {
+#putlog "\[AUTH\] 00:CMD($cmd):ARGS($args)"
 			set args [lassign [lrange $args 1 end] cmd user arg1 arg2]
+#putlog "\[AUTH\] 01:ARGS($args)"
 			set auth [data array value @AUTH $user]
 			set outh [data array value @OUTH $user]
 			lassign:array authed $auth handle nick host
+#putlog "\[AUTH\] 04:AUTH($auth):OUTH($outh)"
 			switch -exact -- [string tolower $cmd] {
 		
 				authed - isauth - isauthed - check {
@@ -413,7 +437,7 @@ proc sb7 args { # General
 						host   { set l 2 ; set c [list 0 1] }
 						default { error "\[SB7 AUTH FIND\] Unknown data type: $user" }
 					}
-		
+#putlog "\[SB7 AUTH FIND\] 01:ARG1($arg1):L($l):C($c)"
 					set who $arg1
 					if [isnum -integer $arg1] {
 						switch -exact -- $l {
@@ -493,6 +517,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	set newlevel $cmdinfo(level)
 	foreach a $cmdinfo(extra) { if [isnum -integer $a] { set newlevel $a } }
 	set cmdinfo(level) $newlevel
+#putlog [effects DISPATCH:10.1 11,12 bold]:CMD($cmd):ABBR($abbr)
 
 	# Fixing a forever-old problem: if common hostmask, is this an authed
 	# user (so we can figure out which handle to assign)? Since all PROCs
@@ -502,7 +527,9 @@ proc sb7:dispatch { nick host handle chan arg } {
 	set h [sb7 auth find nick $nick]
 	if [notempty h] { set handle $h }
 
+#putlog [effects DISPATCH:10.2 11,12 bold]:CMD($cmd):ABBR($abbr)
 	# Valid command?
+
 	if [isempty cmdinfo(cmd)] {
 #putlog [effects DISPATCH:10.1 11,12 bold]
 		print -error $nick "\[SB7\] Unknown command: $cmd"
@@ -535,8 +562,8 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 #putlog [effects DISPATCH:11 11,12 bold]
 	# Suspended command?
-	if { [lsearch -exact $cmdinfo(extra) SUSPENDED:GLOBAL] != -1 } { print -error $nick "\[SUSPEND\] [string toupper $cmd] is globally suspended." ; return 0 }
-	if { [lsearch -exact $cmdinfo(extra) SUSPENDED:$chan ] != -1 } { print -error $nick "\[SUSPEND\] [string toupper $cmd] is suspended on ${chan}." ; return 0 }
+	if { [lsearch -exact [string tolower $cmdinfo(extra)] [string tolower SUSPENDED:GLOBAL]] != -1 } { print -error $nick "\[SUSPEND\] [string toupper $cmd] is globally suspended." ; return 0 }
+	if { [lsearch -exact [string tolower $cmdinfo(extra)] [string tolower SUSPENDED:$chan]] != -1 } { print -error $nick "\[SUSPEND\] [string toupper $cmd] is suspended on ${chan}." ; return 0 }
 
 #putlog [effects DISPATCH:12 11,12 bold]
 	# User logged in?
@@ -568,11 +595,19 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 #putlog [effects DISPATCH:16 11,12 bold]
 	# Parse control flags ( --force:chan , et al )
+	set valid_dispatch_flags [list notice msg chan burst mute]
 	empty dispatch_flags
 	# "--?" is needed because of FLAGS ("--" is being stripped here!)
-	foreach a [lsort -int -dec [lsearch -all -glob $arg --?*]] {
-		lappend dispatch_flags [lindex $arg $a]
-		set arg [lreplace $arg $a $a]
+	set check_flags [lsearch -all -glob $arg --?*]
+#putlog "\[SB7:DISPATCH\] CHECK_FLAGS($check_flags)"
+	if [notempty check_flags] {
+		foreach a [lsort -int -dec $check_flags] {
+			set check_flag [lindex $arg $a]
+#putlog "\[SB7:DISPATCH\] CHECK_FLAG($check_flag):STL/TRIM([string tolower [string trimleft $check_flag -]])"
+			if { [lsearch -exact [string tolower $valid_dispatch_flags] [string tolower [string trimleft $check_flag -]]] == -1 } continue
+			lappend dispatch_flags [lindex $arg $a]
+			set arg [lreplace $arg $a $a]
+		}
 	}
 #putlog DISPATCH_FLAGS($dispatch_flags)
 	data array set @OUTPUT:OVERRIDE $nick $dispatch_flags
@@ -702,7 +737,7 @@ proc sb7:dispatch:pubm { nick host handle chan arg } {
 	if ![normalize $active] return
 	if [isempty shortcut] return
 	set len [len $shortcut]
-	set 0 [lindex [lsearch -all -inline -not -exact [split $arg] ""] 0]
+	set 0 [join [lindex [lsearch -all -inline -not -exact [split $arg] ""] 0]]
 	if ![left $0 $len $shortcut] return
 	set test [mid $0 [ expr $len + 1 ]]
 #debug active shortcut len 0 test
@@ -772,6 +807,9 @@ proc sb7:setup_userlevel args {
 
 proc sb7:setup args {
 #logme
+	# Security clean-up
+	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?[a-f]+[1-9]$} $var] { unset $a } }
+
 	global sb7
 
 	# Check all CONFIG:BLAH options; convert to DATA ARRAY
@@ -964,9 +1002,9 @@ proc data args {
 			return $data
 		}
 
-		isempty { data get -isempty [lrange $args 1 end] }
+		isempty { return [data get -isempty $arg1] }
 
-		notempty { data get -notempty [lrange $args 1 end] }
+		notempty { return [data get -notempty $arg1] }
 
 		eq - = - == {
 			flags -simple [lrange $args 1 end] -nocase text flags
@@ -1050,7 +1088,7 @@ proc data args {
 		unset { set sb7($arg1) "" ; unset sb7($arg1) ; return }
 
 		clear {
-			set list [array names sb7 [string tolower $arg1]]
+			set list [array names sb7 [none [string tolower $arg1] *]]
 			if [isempty list] { return "" }
 			foreach element $list { unset sb7($element) }
 			return $list
@@ -1058,7 +1096,7 @@ proc data args {
 
 		load { # RETURN value: count of records processed (0 if fail)
 			set filename ${::nick}.data
-			if [notempty arg1] { append filename ~$arg1 }
+  			if [notempty arg1] { set filename $arg1 }
 			if [is pathchange $filename] { return 0 }
 			if ![file exists $filename] { return 0 }
 			set count 0
@@ -1107,7 +1145,8 @@ proc data args {
 				if [string eq * $arg1] {
 					append filename ~[clock format [clock seconds] -format "%Y%m%d-%H%M%S"]
 				} {
-					append filename ~$arg1
+					#append filename ~$arg1
+					set filename $arg1
 				}
 			}
 			if [is pathchange $filename] { return 0 }
@@ -1216,9 +1255,9 @@ proc data args {
 					return $data
 				}
 
-				isempty { eval data array value -isempty [lrange $args 2 end] }
+				isempty { return [data array value -isempty $arg2 $arg3] }
 
-				notempty { eval data array value -notempty [lrange $args 2 end] }
+				notempty { return [data array value -notempty $arg2 $arg3] }
 
 				data - array:get {
 					if [notempty 3] { putcmdlog [effects "\[DATA GET\] You meant DATA VALUE don't you? (ARG2($arg2):ARG3($arg3) GET returns \[LIST: <name> <value>\]" 4,5] }
@@ -1393,6 +1432,7 @@ proc data args {
 					set arg2 [string tolower $arg2]
 					if ![info exists sb7($arg2)] { return "" }
 					array set data $sb7($arg2)
+					set arg3 [none $arg3 *]
 					foreach loop [lsort -uni -dict -inc [array names data]] { 
 						if [string match -nocase $arg3 $data($loop)] { lappend list [list $loop $data($loop)] } 
 					}
@@ -1404,7 +1444,7 @@ proc data args {
 					set arg3 [string tolower $arg3]
 					if ![info exists sb7($arg2)] { return "" }
 					array set data $sb7($arg2)
-					set list [array names data $arg3]
+					set list [array names data [none $arg3 *]]
 					foreach element $list { unset data($element) }
 					if [string eq "" [array names data]] {
 						set sb7($arg2) ""
@@ -1878,8 +1918,10 @@ proc null args return ; # (:
 proc space { { count 1 } } { string repeat " " $count }
 
 proc plural args {
+	set args [lassign $args word]
 	flags -simple $args [list -show -comma] text flags
-	lassign $text word count ending replacement
+	lassign $text count ending replacement
+	if [validflag -comma] { lappend flags -show }
 
 	set plural $word
 	if { $count != 1 } {
@@ -2509,6 +2551,7 @@ debug =final list
 proc ldestroy args {
 	# Use -COUNT to test number of results (0 = no matches)
 	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
+	set debug [validflag -debug]
 	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
 
 	lassign $temp list text replacewith
@@ -2566,16 +2609,28 @@ proc ldestroy args {
 
 	# First pass
 	foreach item $total {
-		if [validflag -all] { set __ [lsearch -all -inline -${match} $_ $item] } { set __ [lsearch -inline -${match} $_ $item] }
+		if [validflag -all] { 
+			set __ [lsearch -all -inline -${match} $_ $item] 
+			set _n [lsearch -not -all -inline -${match} $_ $item] 
+		} { 
+			set __ [lsearch -inline -${match} $_ $item] 
+			set _n [lsearch -not -inline -${match} $_ $item] 
+		}
 		# Remember: we're trying to REMOVE entries by default, not keep them.
-		if [notempty __] { set temp_not_ [concat $temp_not_ $__] } { set temp_list_ [concat $temp_list_ $item ] }
-#debug x item =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_
+		if [notempty __] {
+			set temp_list_ [concat $temp_not_ $__]
+			set temp_not_ [concat $temp_list_ $_n]
+		} { 
+			set temp_not_ [concat $temp_list_ $__] ; # $item
+			set temp_list_ [concat $temp_list_ $_n]
+		}
+if $debug { debug item _ __ match =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_ }
 	}
 
 	# Second pass
 	set do_second_pass 0
 	if $do_second_pass {
-debug temp_list_ temp_not_ _
+if $debug { debug temp_list_ temp_not_ _ }
 		foreach a $_ {
 			set m [lsearch -exact $temp_list_ $a]
 			if { $m == -1 } { lappend temp_list [lindex $list $m] } { lappend temp_not $a }
@@ -2593,6 +2648,8 @@ debug temp_list_ temp_not_ _
 		foreach a [list temp_list temp_not] { set $a [lsort -$direction [set $a]] }
 	}
 	if [validflag -replacewith] { set temp_list $replacewith }
+
+if $debug { debug temp_list temp_not }
 	if [validflag -both] { if [validflag -count] { return [list [llength $temp_list] [llength $temp_not]] } { return [list $temp_list $temp_not] } }
 	if [validflag -not] { if [validflag -count] { return [llength $temp_not] } { return $temp_not } }
 	if [validflag -count] { return [llength $temp_list] }
@@ -3262,7 +3319,7 @@ proc userflag { cmd handle flags { chan "" } } {
 }
 
 proc whois { who { who2 "" } { chan "" } } {
-	# RETURN: [LIST online?:-1/0/1/2(DCCONLY)/3(BOT:LINKED) nick host handle chan authed:handle authed:nick] ("" for any unknowns)
+	# RETURN: [LIST online?:-1(unknown)/0(known:offline)/1(known:online)/2(DCCONLY)/3(BOT:LINKED)/4(unknown handle/nick matches known handle) nick host handle chan authed:handle authed:nick] ("" for any unknowns)
 	# Not needed? :: if [isempty who2] { set who2 $who }
 	if [string eq * $chan] { empty chan }
 
@@ -3340,6 +3397,14 @@ proc whois { who { who2 "" } { chan "" } } {
 			return [list 1 $nick $host $handle $chan $authed_nick $authed_hand]
 		}
 	}
+
+	# Let's look for a user whose nick matches a known handle, but, doesn't mask-match it (user needing an ADDMASK)
+	lassign [findonchans handle $who] nick host handle chan
+	if [isempty handle] {
+		set authed_nick ""
+		set authed_hand ""
+		return [list 4 $nick $host "" $chan $authed_nick $authed_hand]
+	}	
 
 	# Let's try a handle
 	lassign [findonchans handle $who] nick host handle chan
@@ -3664,7 +3729,7 @@ proc printctcr { nick ctcp { message "" } } { print -ctcr -strip $nick "\001[str
 
 # All-inclusive PRINT command (including line-splitting)
 proc print args {
-	set validflags [list -none -strip -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
+	set validflags [list -none -strip -mute -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
 	# -DUMMY is for a variable to hold a "-private" or "-dummy" flag (based on need) within a variable
 	flags -simple $args $validflags text flags
 	if [validflag -none] { empty flags } ; # For use with NOTE and others that need to swap "-private" with "-none"
@@ -3682,22 +3747,15 @@ if $debug { debug =-1 target message }
 		set target [home]
 	}
 
-	if { [isempty message] && [notempty target] } {
-		## SOMEONE forgot to include the target $NICK again! *Shame, shame*
-		#set message $target
-		#upvar 1 nick oops!
-		#set target ${oops!}
-
-		# Shit!! Can't do this. When the message is an intentionally blank
-		# line, this condition will still be met. No way to differentiate!
-		set message [space]
-	}
+	# Blank message?
+	if { [isempty message] && [notempty target] } { set message [space] }
 
 	set output $target
 if $debug { debug =0 flags target }
 
 	# Inject override flags (yes, trump: BURSTALL -noburst -NORMAL)
 	set override [data array value @OUTPUT:OVERRIDE $target]
+	if $debug { debug =0.5 override }
 	if [notempty override] {
 		regsub -all -- {\-\-} $override - override
 		foreach o $override {
@@ -3705,12 +3763,13 @@ if $debug { debug =0 flags target }
 			if [notempty um] { lappend flags $um }
 		}
 	}
+
 if $debug { debug =1 flags }
-	set burstall [data array value CONFIG BURSTALL]
-	if [istrue $burstall] { lprepend flags -burst }
+	# Removed burst-related code here; now handled by the SWITCH below ....
 
 if $debug { debug =2 flags target }
 	empty pre post
+	set user_setting_burst 0
 	if [validchan $target] {
 		set type PRIVMSG
 		set intended_user 0
@@ -3723,14 +3782,18 @@ if $debug { debug =2 flags target }
 		# OPMSG / WALLOPS might need this :p
 	} {
 		# Valid user
+
+		# No output? Bail out! (Only for user output ~ do NOT affect output from direct-output commands like SAY)
+		if [validflag -mute] return
+
 		set type [data array value -default CONFIG OUTPUT NOTICE]
 		set intended_user 1
 		lassign [data array value @OUTPUT $target] - host handle chan
 		if [validuser $handle] {
-			set temp_type [userinfo get $handle OUTPUT]
-			set temp_burst [userinfo get $handle BURST]
+			if [boolean -integer [userinfo get $handle BURST]] { set:all burst_ok user_setting_burst 1 ; lprepend flags -burst }
 			set pre [userinfo get $handle prefix]
 			set post [userinfo get $handle postfix]
+			set temp_type [userinfo get $handle OUTPUT]
 			switch -glob -- [string tolower $temp_type] {
 
 				notice { set output $target ; set type NOTICE }
@@ -3745,7 +3808,6 @@ if $debug { debug =2 flags target }
 
 			}
 
-			if [istrue $temp_burst] { lprepend flags -burst }
 		}
 		set color [userinfo get $handle COLOR]
 		if ![validflag -nouserdata] { if [notempty color] { set open $color } }
@@ -3760,7 +3822,6 @@ if $debug { debug =3 flags target }
 		# Presume -RESET was before other flags that should be the only survivors
 		set m [lsearch -exact $flags -reset]
 		set flags [lreplace $flags 0 $m]
-		#set flags [ldestroy -all -nonulls -error -debug -multiple $flags [list -normal -help -quick -burst -private -msg -notice -next]]
 	}
 
 if $debug { debug =4 flags }
@@ -3768,10 +3829,21 @@ if $debug { debug =4 flags }
 	if [validflag -normal] { set flags [ldestroy -all -nonulls -multiple $flags [list -normal -help -quick -burst -private -msg -notice -next]] ; set output $target ; set type NOTICE }
 	if [validflag -channel] { set output $chan ; set type PRIVMSG }
 
-if $debug { debug =5 flags target }
-	set burstavail [data array value CONFIG BURST:ALLOW]
-	if [isfalse $burstavail] { set flags [ldestroy -all -nonulls $flags -burst] ; # [lsearch -inline -all -not $flags -burst] }
+if $debug { debug =5 flags target =CONFIG:BURST[data array get config burst] burst_user_setting }
+	switch -exact -- [string tolower [data array get config burst]] {
 
+		all - force { set burst_ok 1 }
+
+		user - users { set burst_ok $user_setting_burst }
+
+		"" - none - off { if $user_setting_burst { set burst_ok 0 } { set burst_ok [validflag -burst] ; # Respects -NOBURST } }
+
+		blocked - block { set burst_ok 0 }
+
+		default { error "\[PRINT\] Unknown CONFIG -GLOBAL BURST mode: [data array get config burst]" }
+
+	}
+if $debug { debug burst_ok user_setting_burst =CONFIG:BURST([data array get config burst]) target =USER:SETTING([userinfo get $target burst]) message }
 	# In priority order ....
 	empty remote
 
@@ -3786,7 +3858,7 @@ if $debug { debug =6 flags }
 	# $INTENDED_USER). Or, will the new -WALLOPS flag cover it? It
 	# might be a better solution because of how unique the situation is.
 
-	if [validflag -msg] { set type PRIVMSG }
+	if [validflag -msg] { set type PRIVMSG ; if $intended_user { set output $target } }
 	if [validflag -notice] { set type NOTICE ; if $intended_user { set output $target } }
 	if [validflag -wallops] { set type NOTICE ; set output $chan }
 
@@ -3825,11 +3897,11 @@ if $debug { debug =7 flags }
 	regsub -all -- \t $message [space $tab] message
 
 	empty buffer
-	# 1399240763: Tests indicate that the most the testbed's IRCd (UnrealIrcd) can handle is: 490 chars-per-line (including header)
+	# 1399240763: Tests indicate that the most the test bed's IRCd (UnrealIrcd) can handle is: 490 chars-per-line (including header)
 	# This includes all "control codes" used (bold, reverse, color, et cetera)
 
-	# What about NOTICE (or just sacrifice the single character?)
-	# Reduced to 484 to account for 6 color code characters ("\00399,99")
+	# What about NOTICE [vs PRIVMSG] (or just sacrifice the single character?)
+	# Reduced to 484 to account for 6-characters color codes ("\00399,99")
 	set limit 475 ; # Let's just be safe (RSS keeps clipping characters if we try to hit the limit exactly)
 	set max_length [expr $limit - ([string length $::botname] + 1 + [string length "PRIVMSG $target :"]) ]
 
@@ -3882,7 +3954,7 @@ if $debug { debug nick handle chan flags output queue type speedflag }
 		set buffer_line "$type $output :$line"
 		set buffer_full [expr ( [string length "$type $output :$line"] >= $max_length ) ? 1 : 0]
 		set buffer_spacer "$type $output :"
-		if [validflag -burst] { rawprint $buffer_line ; if $buffer_full { rawprint $buffer_spacer } ; continue }
+		if $burst_ok { rawprint $buffer_line ; if $buffer_full { rawprint $buffer_spacer } ; continue }
 		set error [ catch { 
 			$queue $buffer_line -$speedflag 
 			if $buffer_full { $queue $buffer_spacer -$speedflag }
@@ -4239,6 +4311,57 @@ proc shell:whereis cmd {
 }
 
 # --- Other commands ---
+
+proc path:relative { path { root . } { use_home false } } {
+	set path [file normalize $path] ; # /a/b/c/d/e.txt
+	set root [file normalize $root] ; # /a/b/c
+	if [string eq [file dirname $path] $root] { return ./[file tail $path] }
+#debug path root home
+	if $use_home {
+		set home [file normalize ~/] ; # /a/b
+		if [left $path [len $home] $home] { return ~[string range $path [string length $home] end] }
+	}
+
+	if [left $path [len $root] $root] { return .[string range $path [string length $root] end] }
+
+	# Back-step?
+	# 1: /home/user/dir1/dir2/file.txt
+	# 2: /home/user/dir1/dir3/dir4
+	set s1 [file split $path]
+	set s2 [file split $root]
+	set count 0
+	while 1 {
+		if { ( $count > [llength $s1] ) || ( $count > [llength $s2] ) } { incr count 1 ; break }
+		if ![string eq [lrange $s1 0 $count] [lrange $s2 0 $count]] { incr count -1 ; break }
+		incr count
+	}
+	# Nothing in common ... dammit ....
+	# FILE SPLIT uses "/" as the first LIST element, so if *only* that matches, don't calculate a bunch of "../"s for it; just return the path
+#	if { $count < 1 } { return $path } 
+#debug =S2([lrange $s2 0 $count]) =S1([lrange $s1 [expr $count + 1] end])
+	set return [string repeat ../ [expr [llength $s2] - $count - 1]][join [lrange $s1 [expr $count + 1] end] /]
+#debug return
+	return $return
+}
+
+proc random args {
+	flags:simple $args [list -all -nospaces -lower -upper -explode -implode -reverse] text flags
+	set text [join $text]
+	if [validflag -nospaces] { set text [lsearch -all -inline -not $text " "] }
+	if [validflag -implode] { set text [join $text ""] }
+	if [validflag -explode] { set text [split $text ""] }
+	if [validflag -lower] { set text [string tolower $text] }
+	if [validflag -upper] { set text [string toupper $text] }
+	if [validflag -reverse] { set text [reverse $text] }
+	empty random
+	while { [notempty text] } {
+		set index [rand [llength $text]]
+		lappend random [lindex $text $index]
+		set text [lreplace $text $index $index]
+		if ![validflag -all] break
+	}
+	return $random
+}
 
 proc stack:trace args {
 	if [isnum -integer $args] { set deep $args } { set deep [info level] }
@@ -5005,7 +5128,7 @@ proc is { cmd args } {
 		cserv - cservice {
 			set cserv [data array value CONFIG CSERVICE]
 			if [isempty cserv] { return 0 }
-			return [string eq -nocase [lindex $args 1] $cserv]
+			return [string eq -nocase [lindex $args 0] $cserv]
 		}
 
 		auth - authed {
@@ -5156,6 +5279,28 @@ proc debug args {
 	set l [info level]
 	incr l -1
 	if $l { set command [lindex [info level $l] 0] } { set command global }
+	set loglevel ""
+	set quiet 0
+
+	set args [split $args] ; # Will rejoin after flag check
+	while { [left [lindex $args 0] 1 -] } {
+		set um [uniquematch [list -quiet -log] [lindex $args 0]]
+		switch -exact -- [string tolower $um] {
+
+			-log { # When using STRING MAP, put longest-length strings first to prevent false matches on smaller "in common" strings
+				set loglevel [string map [list cmdlog c cmd c log o bots b bot b] [lindex $args 1]]
+				set args [lreplace $args 0 1]
+				set valid [list mpjkcobrxsdwvth123456789]
+				if { [lsearch -exact [explode $valid] $loglevel] == -1 } { error "\[DEBUG\] Bad log level: \"-LOG ${loglevel}\" (valid = [explode $valid])" }
+			}
+
+			-quiet { set quiet 1 } 
+
+			default break
+
+		}
+	}
+	set args [join $args]
 
 	set sort 0
 	if [is wildcard $args] {
@@ -5215,10 +5360,18 @@ proc debug args {
 		}
 		append o ${arg}[iff ![instr $arg =] $data] ; # [iff ![isnull v] (${v})]
 	}
-	prepend o "\026\[DEBUG\]\026 \[[string toupper $command]\] "
-	set home [home]
-	if [botonchan $home] { catch { print -home $o ; if 0 { msg $home $o } } } { putlog $o } ; # rawhome -> msg [home]
-	return $o
+
+	if [notempty loglevel] {
+		prepend o "\026\[DEBUG\]:${loglevel}\026 \[[string toupper $command]\] "
+		putloglev $loglevel * $o
+	} {
+		prepend o "\026\[DEBUG\026 \[[string toupper $command]\] "
+		set home [home]
+		if !$quiet {
+			if [botonchan $home] { catch { print -home $o ; if 0 { msg $home $o } } } { putlog $o } ; # rawhome -> msg [home]
+		}
+	}
+	return $o ; # -QUIET may be used just to get this RETURN value
 }
 
 proc procdef proc {
@@ -5660,7 +5813,7 @@ proc timeval { value { convert_to s } } {
 
 proc angle args {
 	flags:simple $args [list -dms -decimal -help] value flags
-	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0° 0' 0\"" }
+	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0Â° 0' 0\"" }
 	set degree_mark \xB0
 	if [validflag -decimal] {
 		catch { set value [join $value] }
@@ -5773,6 +5926,13 @@ proc sb7:005 { server code arg } {
 	return 0 ; # Must be RETURN 0 (due to the BIND RETURN rules for RAW)
 }
 
+# --- Event binds ---
+
+proc @event:sigterm args { save ; data save ; print -home -raw "\[SIGTERM\] Shutting down ...." ; after 1000 ; die "SIGTERM received: shutting down ...." }
+proc @event:sigquit args { print -home -raw "\[SIGQUIT\] RESTARTing ...." ; restart }
+proc @event:sighup  args { print -home -raw "\[SIGHUP\] REHASHing ...." ; rehash }
+proc @event:sigill  args { print -home -raw "\[SIGILL\] SIGILL received: saving data and RESTARTing ...." ; save ; data save ; restart }
+
 # --- Command aliases ---
 
 interp alias {} =  {} expr
@@ -5796,6 +5956,7 @@ interp alias {} userflags {} userflag
 interp alias {} getflags {} sb7 parseflags
 interp alias {} FLAGS {} sb7 parseflags ; # Case sensitive!
 interp alias {} lmatch {} ldestroy -not
+interp alias {} path:rel {} path:relative 
 
 # --- Deprecated commands ---
 
@@ -5819,10 +5980,35 @@ bind time - *   sb7:bugsiebug_check
 bind raw  - 004 sb7:004
 bind raw  - 005 sb7:005
 bind raw  - 351 sb7:351
+catch { bind evnt - sighup  @event:sighup }
+catch { bind evnt - sigterm @event:sigterm }
+catch { bind evnt - sigill  @event:sigill }
+catch { bind evnt - sigquit @event:sigquit }
 
 utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
 
 sb7:setup ; # Last thing to be executed!
+
+# --- VERSION command ---
+
+##### Install the VERSION command here (can't be a separate bead: file name match conflict with "sb7_version.txt") #####
+
+sb7 command add VERSION 501 -none VER
+
+proc @version { nick host handle chan arg } {
+	if [string eq -nocase HELP [lindex [split $arg] 1]] {
+		print -help $nick "\[VERSION\]:"
+		print -help $nick "Syntax: $::botnick VERSION HELP"
+		print -help $nick "Syntax: $::botnick VERSION"
+		print -help $nick "VERSION displays the version information for StormBot.TCL on $::botnick"
+		return
+	}
+
+	print -short $nick "StormBot.TCL v[data array get @VERSION stormbot] ([data get @VERSION distro]) on $::botnick (Eggdrop v[lindex $::version 0] running TCL v[info patchlevel])"
+	return
+}
+
+#####
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
 
