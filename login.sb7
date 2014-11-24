@@ -1,4 +1,4 @@
-sb7 command add LOGIN    0 -locklevel -core -auth -logout:ok ; # Why remove OK:LOGOUT for this?
+sb7 command add LOGIN 0 -locklevel -core -auth -logout:ok ; # Why remove OK:LOGOUT for this?
 
 proc @login { nick host handle - arg } {
 	# LOGIN not permitted from PUB[M] ($CHAN is useless HERE; will be useful elsewhere)
@@ -119,7 +119,7 @@ proc @login { nick host handle - arg } {
 	return
 }
 
-proc @botnet:xlogin { bot cmd arg } {
+proc @login:xlogin { bot cmd arg } {
 	sb7 security
 	set method_encoding 0
 	if [left $arg 1 +] {
@@ -178,7 +178,7 @@ proc @botnet:xlogin { bot cmd arg } {
 	putlog "\[XLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: $method_encoding\]"
 }
 
-proc @botnet:ologin { bot cmd arg } {
+proc @login:ologin { bot cmd arg } {
 	sb7 security
 	set method_encoding 0
 	if [left $arg 1 +] {
@@ -238,8 +238,25 @@ proc @botnet:ologin { bot cmd arg } {
 	putlog "\[XOLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: $method_encoding\]"
 }
 
+proc @login:join { nick host handle chan } {
+	# Force log-out (in case this is a REJOIN from a netsplit that has otherwise timed-out
+#	sb7:logout $handle $nick
+	return 0
+}
+
+proc @login:bootstrap args {
+	bind BOT - xlogin @login:xlogin
+	bind BOT - ologin @login:ologin
+	bind join - * @login:join
+	bind part - * @login:part
+	bind sign - * @login:sign
+	bind splt - * @login:splt
+	bind rejn - * @login:rejn
+	return
+}
+
 #####
 # Bootstrap:
 
-bind BOT - XLOGIN @botnet:xlogin
-bind BOT - OLOGIN @botnet:ologin
+@login:bootstrap
+

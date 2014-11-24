@@ -1,7 +1,22 @@
-# StormBot.TCL 7 version Changelog -- 2014-11-19 04:39:22 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-11-20 03:05:51 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2014-11-20 03:00:54 UTC: #385 [who] Fixed WHO (list of nicks was unsorted (I was always under the impression that CHANLIST sorted, but, it doesn't))
+2014-11-20 02:34:38 UTC: #384 [tail] Fixed GET OPSYMBOL (using newly-created controls for +qaohv users)
+2014-11-20 02:30:34 UTC: #383 [tail] Fixed WHOIS (mode #4 was still giving fits when a user matched a handle's name but not by host. Also, when a completely unknown user was encountered, it resorted to mode #4 as well)
+2014-11-20 01:58:47 UTC: #382 [tail] Added CHANOWNERS, CHANADMINS, CHANOPS, CHANHALFOPS, & CHANVOICES [-ONLY] (lists who has a given mode (or above) on a channel; -ONLY restricts the check to just that mode only)
+2014-11-20 01:57:26 UTC: #381 [tail] Added ISCHANOWNER, ISCHANADMIN, ISCHANOP, ISCHANHALFOP, & ISCHANVOICE [-ONLY] (determines if a user has a given mode ... or any above it that auto-grants it. -ONLY restricts the check to just that mode only)
+2014-11-20 01:23:28 UTC: #380 [tail] Upgraded EFFECTS (added ESCAPE)
+2014-11-20 01:21:17 UTC: #379 [tail] Added IS DCCNICK
+2014-11-20 01:21:02 UTC: #378 [tail] Fixed IS OAUTHED (wasn't allowing .DCC usage because $NICK (the idx) doesn't matched the authed nick)
+2014-11-19 08:15:17 UTC: #377 [tree] Renamed BOTNET.SB7 to TREE.SB7 (in keeping with the file splitting from last week, this was the only command in the botnet bead)
+2014-11-19 08:07:13 UTC: #376 [tail] Updated SIG* signal event code (ported recent changed to SB6 version of same code)
+2014-11-19 07:37:49 UTC: #375 [login] Fixed @LOGIN:JOIN (hadn't updated it for the reverted change from a few days ago)
+2014-11-19 07:27:49 UTC: #374 [tail] Fixed DATA [ARRAY] LREMOVE (variable is a pointer (ByRef), not $VARIABLE (ByVal))
+2014-11-19 06:57:39 UTC: #373 [tail] Added FLAGS:ORDER [-ALL] (sorts flag order; mainly useful for DATA ARRAY SEARCH where the match-type used in LSEARCH needs to be ordered in priority: -glob -exact -regexp)
+2014-11-19 06:37:38 UTC: #372 [tail] Added DATA ARRAY SEARCH
+2014-11-19 06:31:05 UTC: #371 [tail] Fixed DATA SEARCH (forgot to RETURN the $LIST of found names)
 2014-11-18 12:56:56 UTC: #370 [tail] Fixed NPH (when $NICK is an integer (DCC index), just return $HANDLE)
 2014-11-18 12:44:17 UTC: #369 [set & tail] Upgraded PRINT & SET OUTPUT (created a new output mode: ''same'' where the bot will reply via the same method you contacted it: /msg, /notice, .dcc, or in-chan)
 2014-11-17 06:31:18 UTC: #368 [note] Upgraded NOTE (updated the tag used when reading notes: clarify ''always private'' vs ''private'')
@@ -55,7 +70,7 @@
 2014-11-07 22:17:15 UTC: #320 [tail] Upgraded DEBUG (added -LOG <level> option)
 2014-11-07 21:26:32 UTC: #319 [login & tail] Fixed LOGIN (fixed [compensated for] security issue found in Eggdrop: #D20141107212300-01. SB6 and all previous versions of SB are being patched for this (SB4 seems to be patched with an older fix))
 2014-11-05 14:29:24 UTC: #318 [findport] Fixed FINDPORT (cosmetic: error message for invalid port needed a JOIN)
-2014-11-05 14:22:15 UTC: #317 [botnet] Fixed TREE (renamed from BOTTREE, in case errors polluted the original command; also forgot to change one of the sub-routined from SB:TREE_GETCHILDREN to TREE:GETCHILDREN)
+2014-11-05 14:22:15 UTC: #317 [core] Fixed TREE (renamed from BOTTREE, in case errors polluted the original command; also forgot to change one of the sub-routined from SB:TREE_GETCHILDREN to TREE:GETCHILDREN)
 2014-11-05 14:18:58 UTC: #316 [chanmon] Completed CHANMON (now fully functional; translation complete from SB6)
 2014-11-05 13:36:06 UTC: #315 [tail] Fixed GET RANGE (I forgot to code for ''>#'' ''<#'' ''<=#'' ''>='' which was exposed when working on CHANMON)
 2014-11-05 13:03:51 UTC: #314 [tail] Added DATA RENAME (entire datum) & DATA ARRAY RENAME (individual elements)
@@ -63,8 +78,8 @@
 2014-11-05 11:50:02 UTC: #312 [chanmon] Added CHANMON to ZENKAI distribution
 2014-11-05 11:49:56 UTC: #311 [chanmon] Added CHANMON (not complete yet; only partially translated from SB6)
 2014-11-05 11:49:22 UTC: #310 [tail] Added DATA ARRAY GET:ALL (synonym: GETALL) [LIST elements] var1 var2 var3 ... varN (assign variables from specific data array elements, similar to how LASSIGN works)
-2014-11-05 11:13:23 UTC: #309 [botnet] Added BOTNET (currently: only BOTTREE) to ZENKAI
-2014-11-05 11:13:04 UTC: #308 [botnet] Added BOTTREE
+2014-11-05 11:13:23 UTC: #309 [core] Added BOTNET (currently: only BOTTREE) to ZENKAI
+2014-11-05 11:13:04 UTC: #308 [core] Added BOTTREE
 2014-11-04 16:11:39 UTC: #307 [access, tail, & textpad] Fixed multiple beads (completed fixen re: where access levels are stored: USERLEVEL:* vs ACCESS:* (winner: ACCESS:*))
 2014-11-04 16:10:06 UTC: #306 [tail] Added SB7 LOG (generic logging of SB7-specific stuff. Currently goes to PUTCMDLOG)
 2014-11-04 15:50:38 UTC: #305 [access & tail] Fixed ACCESS (two data streams were being created for tracking channel & global access: USERLEVEL:* and ACCESS:*. The intention was to change to ACCESS:* but it wasn't changed everywhere, breaking backwards-compatibility)

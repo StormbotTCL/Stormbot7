@@ -1,0 +1,115 @@
+sb7 command add WHO 100 -none
+
+proc @who { nick host handle chan arg } {
+	sb7 setvars -unknown -global
+
+	if [string eq -nocase HELP $1] {
+		set b ${::botnick} ; # Too many reverences to the global variable
+		print -help $nick "\[WHO\]:"
+		print -help $nick "Syntax: $::botnick WHO HELP"
+		print -help $nick "Syntax: $::botnick WHO"
+		print -help $nick "Syntax: $::botnick WHO -UNKNOWN"
+		print -help $nick
+		print -help $nick "The WHO command identifies all persons on the channel by the following parameters:"
+		print -help $nick "(1) handle, (2) authorized as whom, (3) channel level, & (4) global level"
+		print -help $nick "If a user has access to the bot due to global levels (but NOT through channel-level access), the WHO command will identify the user by their global rank. This will expose \"global runners\" (those who interfere with \[and abuse\] channels with their global access)."
+		print -help $nick "Note: colors are used to identify the different access levels. A future option will allow a -NOCOLOR flag to change colors to other options (such as bold / underline / reverse). This will be attempted when StormBot.TCL v7 is out of alpha testing."
+		print -help $nick ""
+		print -help $nick "Examples:"
+		print -help $nick "\"${b}\" -- the user is either: (1) not authed, (2) is authed as the same handle as their nick, or (3) a bot"
+		print -help $nick "\"${b} (me!)\" -- it's me! :)"
+		print -help $nick "\"${b} (IAm${b})\" -- the user is known to me as \"IAm${b}\" but is currently using the nick \"${b}\""
+		print -help $nick "\"${b} (IAm${b} -> Little${b})\" -- The user \"appears\" to mask-match \"IAm${b}\" but the user, in fact, used LOGIN to log in as Little${b} instead. All internal StormBot.TCL v7 references will be to \"Little${b}.\" This will be common with overly-open hostmasks on users, or, \"+c\" common user accounts (which are used for \"internet cafe\" type accounts)."
+		return
+	}
+
+	empty o
+	foreach user [lsort -increasing -unique -dictionary [chanlist $chan]] {
+		lassign [whois $user $user $chan] wonline wnick whost whandle wchan wauthedh wauthedn
+		if !$wonline { error "\[WHO:WHOIS\] Somehow, \$WONLINE = 0 , yet , the user is listed in CHANLIST ([highlight:list [chanlist $chan] $user bold reverse])" }
+		lappend o [list [get opsymbol $wnick $chan] $user $whandle $wauthedh]
+	}
+	# Sort list by channel rank (~&@%+), then, nick
+#	set o [lsort -inc -uni -dict -command lsort:chanop $o]
+	array set totals [list * 0 ~ 0 & 0 @ 0 % 0 + 0 "" 0 -bot 0 -cserv 0 -known 0 -unknown 0 -human 0 - 0]
+
+	array set colors [list 1001 11,12 =1000 0,1 501-999 11 500 4 400-499 7 100-399 8 75-99 3 50-74 12 1-49 6 <=0 1,0 @bot 14 @cserv 5] ; # In order
+	array set list [list]
+	foreach chunk $o {
+		lassign $chunk loop_symbol loop_nick loop_handle loop_authed
+		if [string eq $loop_handle $loop_authed] { set user $loop_handle } { set user "$loop_handle -> $loop_authed" }
+		empty color
+		regexp -- {^([\~\&\@\%\+])} $loop_symbol - op
+		if [is cserv $loop_handle] {
+			set color $colors(@cserv)
+			incr totals(-cserv)
+			set access 0
+			set text "${op}[nph $loop_nick $loop_handle]"
+		} elseif [isbotnick $loop_nick] {
+			set color $colors(@bot)
+			incr totals(-bot) 
+			set access 0
+			set text "${op}[nph $loop_nick me!]"
+		} elseif [is bot $loop_handle] {
+			set color $colors(@bot)
+			incr totals(-bot) 
+			if [string eq -nocase $loop_handle $::botnick] { set a "$loop_nick (me!)" }
+			set access 0
+			set text "${op}[nph $loop_nick $loop_handle]"
+		} else {
+			# Check for GLOBAL levels if local levels isn't set?
+			# Global flag to override?
+			if [validuser $loop_authed] { # }
+			if [validuser $loop_handle] {
+				incr totals(-human)
+				set al [access get $loop_handle $chan] ; # $LOOP_AUTHED
+				set ag [access get $loop_handle] ; # $LOOP_AUTHED
+				if [validflag -global] {
+					# Let local level through if no global access
+					set access [access highest $loop_handle $chan] ; # $LOOP_AUTHED
+				} {
+					if !$al {
+						if { $ag > 500 } { set access $ag } { set access $al }
+					} {
+						set access $al
+					}
+				}
+				if { $access == 1000 } { if [is permowner $loop_authed] { set access 1001 } }
+			} {
+				set access -1
+			}
+			foreach c [array names colors] {
+				if [inrange $c $access] { set color $colors($c) }
+			}
+			set text "${op}[nph $loop_nick [iff [string eq $loop_handle $loop_authed] $loop_handle "$loop_handle -> $loop_authed"]]"
+		}
+		if { $access == -1 } { incr totals(-unknown) } { incr totals(-known) }
+		lappend list($op) [color $color]${text}[color]
+	}
+	# Create legend
+	empty o
+	foreach { g a b c } [list 1 1001 11,12 "permanent owner" 1 =1000 0,1 "bot owner" 1 501-999 11 "global staff" 0 500 4 "channel owner" 0 400-499 7 "channel master" 0 100-399 8 "channel op" 0 75-99 3 "channel halfop" 0 50-74 12 "channel voice" 0 1-49 6 "channel friend" 0 <=0 1,0 "channel visitor" 0 @bot 14 "known bot" 0 @cserv 5 "cservice bot"] {
+		if $g { if ![validflag -global] continue }
+		lappend o "[color $b][stt $c][iff ![left $a 1 @] " ($a)"][color]"
+	}
+
+	# Print results
+	print $nick "\[WHO\] Channel members for ${chan}:"
+	print $nick "Legend: \[[join $o " | "]\]"
+	foreach { a b } [list ~ owner & admin @ op % halfop + voice "" visitor] {
+		if [info exists list($a)] {
+			set ll [llength $list($a)]
+			incr totals(*) $ll
+			incr totals($a) $ll
+			print $nick "[comma [llength $list($a)]] [plural [string totitle $b] [llength $list($a)]][iff [notempty a] " (${a})"]: [ajl -nosort $list($a) " , "]"
+		}
+	}
+	print $nick [string repeat - 50]
+	set total [ expr $totals(-known) + $totals(-unknown) ]
+	print $nick "[comma $total] $chan [plural member $total]:"
+	print $nick "[comma $totals(-known)] known [plural user $totals(-known)] ([comma $totals(-human)] [plural human $totals(-human)], [comma $totals(-bot)] known [plural bot $totals(-bot)], [comma $totals(-cserv)] cserv [plural bot $totals(-cserv)])"
+	print $nick "[comma $totals(-unknown)] unknown [plural user $totals(-unknown)]"
+# Superceded by counts above -- print $nick "~:$totals(~) &:$totals(&) @:$totals(@) %:$totals(%) +:$totals(+)"
+	return
+}
+

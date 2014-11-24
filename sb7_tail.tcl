@@ -1065,7 +1065,7 @@ proc data args {
 
 		llength { return [llength [data get $arg1]] }
 
-		lremove { set data [data get $arg1] ; lremove $data $arg2 ; data set $arg1 $data ; return $data }
+		lremove { set data [data get $arg1] ; lremove data $arg2 ; data set $arg1 $data ; return $data }
 
 		in - inlist {
 			flags -simple [lrange $args 1 end] -nocase text flags
@@ -1098,6 +1098,7 @@ proc data args {
 			foreach a [array names sb7] {
 				if [string match $arg1 [data get $a]] { lappend list $a }
 			}
+			return $list
 		}
 
 		ren - rename {
@@ -1354,7 +1355,7 @@ proc data args {
 
 				len - length { return [string length [data array value $arg2 $arg3]] }
 
-				lremove { set data [data array get $arg2 $arg3] ; lremove $data $arg4 ; data array set $arg2 $arg3 $data ; return $data }
+				lremove { set data [data array get $arg2 $arg3] ; lremove data $arg4 ; data array set $arg2 $arg3 $data ; return $data }
 
 				llength { return [llength [data array value $arg2 $arg3]] }
 
@@ -1402,6 +1403,38 @@ proc data args {
 					set arg3 [none $arg3 *]
 					foreach loop [lsort -uni -dict -inc [array names data]] { 
 						if [string match -nocase $arg3 $data($loop)] { lappend list [list $loop $data($loop)] } 
+					}
+					return $list
+				}
+
+				search {
+					flags:simple [lrange $args 2 end] [list -list -nocase -glob -exact -regexp] text flags
+					set matchme [lassign $text arg2 arg3]
+					set arg2 [none [string tolower $arg2] *]
+					set arg3 [none [string tolower $arg3] *]
+					set list ""
+					set type glob
+					foreach a [list regexp exact glob] { if [validflag -$a] { set type $a } }
+					foreach a [array names sb7 $arg2] {
+						array set data $sb7($a)
+						foreach b [array names data $arg3] {
+							if [validflag -list] {
+								# -GLOB -EXACT -REGEXP only matter here
+								if [validflag -nocase] {
+									set m [lsearch -${type} [string tolower $data($b)] [string tolower $matchme]]
+								} {
+									set m [lsearch -${type} $data($b) $matchme]
+								}
+								if { $m != -1 } { lappend list [list $a $b] }
+							} {
+								if [validflag -nocase] {
+									if [string match -nocase $matchme $data($b)] { lappend list [list $a $b] }
+								} {
+									if [string match $matchme $data($b)] { lappend list [list $a $b] }
+								}
+							}
+						}
+						unset data
 					}
 					return $list
 				}
@@ -1942,12 +1975,12 @@ proc plural args {
 
 proc ajl args {
 	if [string eq $args -] { return - }
-	flags:simple $args [list -nosort -empty -unique -increasing -decreasing] list flags
+	flags:simple $args [list -nosort -strip -empty -unique -increasing -decreasing] list flags
 	if [validflag -empty] { lassign $list list comma and oxford_comma } { lassign [ldefault $list [list $list ", " & false]] list comma and oxford_comma }
 	set direction increasing
 	if [validflag -decreasing] { set direction decreasing }
 	if ![validflag -nosort] {  # -command -lsort:strip
-		set list [lsort -$direction -dictionary $list]
+		if [validflag -strip] { set list [lsort -command lsort:strip -$direction -dictionary $list] } { set list [lsort -$direction -dictionary $list] }
 		# if [validflag -unique] { set list [lunique $list] } ; # Moved below out of -NOSORT check
 	}
 	if [validflag -unique] { set list [lunique $list] }
@@ -3321,8 +3354,10 @@ proc userflag { cmd handle flags { chan "" } } {
 
 proc whois { who { who2 "" } { chan "" } } {
 	# RETURN: [LIST online?:-1(unknown)/0(known:offline)/1(known:online)/2(DCCONLY)/3(BOT:LINKED)/4(unknown handle/nick matches known handle) nick host handle chan authed:handle authed:nick] ("" for any unknowns)
-	# Not needed? :: if [isempty who2] { set who2 $who }
 	if [string eq * $chan] { empty chan }
+
+	# Bot?
+	if { [isbotnick $who] || [isbotnick $who2] } { return "1 [findonchans nick $::botnick] {} {}" }
 
 	# Me?
 	if [notempty who2] {
@@ -3400,11 +3435,11 @@ proc whois { who { who2 "" } { chan "" } } {
 	}
 
 	# Let's look for a user whose nick matches a known handle, but, doesn't mask-match it (user needing an ADDMASK)
-	lassign [findonchans handle $who] nick host handle chan
-	if [isempty handle] {
-		set authed_nick ""
-		set authed_hand ""
-		return [list 4 $nick $host "" $chan $authed_nick $authed_hand]
+	lassign [findonchans nick $who] nick host handle chan
+	if { [isempty handle] && [validuser $who] } {
+#debug who host handle chan authed_nick authed_hand
+		empty authed_nick authed_hand
+		return [list 4 $who $host "" $chan $authed_nick $authed_hand]
 	}	
 
 	# Let's try a handle
@@ -3603,6 +3638,80 @@ proc userinfo { cmd handle args } {
 	?
 }
 
+# --- Channel Commands ---
+
+proc chanrank { op nick chan { above false } } {
+	set above [istrue $above] ; # Assure boolean
+	set op [ldestroy -replacewith $op admin prot]
+	set list [list voice halfop op prot own]
+	set m [lsearch -exact [string tolower $list] [string tolower $op]]
+	if { $m == -1 } { return 0 }
+
+	set chanrank 0
+	for { set x $m } { $x < [llength $list] } { incr x } {
+		set cmd [lindex $list $x]
+		if [validcmd is$cmd] { set chanrank [ expr $chanrank | [is$cmd $nick $chan] ] }
+		if !$above break
+	}
+	return $chanrank
+}
+
+proc chanmode { cmd chan mode { arg "" } } {
+#debug cmd chan mode arg
+	switch -exact -- [string tolower $cmd] {
+
+		add { # "ADD" just means: add on to, or remove from, the list (+ or - respectively)
+			lassign [split $mode ""] polarity mode
+			if [isempty arg] { error "\[MODECHANGE\] Missing target for: ${polarity}$mode" }
+#debug cmd chan polarity mode arg
+			if [string eq + $polarity] {
+				data array lappend @chanmode ${chan}:$mode $arg
+			} {
+				data array lremove @chanmode ${chan}:$mode $arg
+			}
+#debug =RETURN
+			return [data array get @chanmode ${chan}:$mode]
+		}
+
+		set { # "SET" just means: create the mode (with a value of "1" or the included value) or clear it (remove it completely)
+			lassign [split $mode ""] polarity mode
+			if [string eq + $polarity] {
+				data array set @chanmode ${chan}:$mode [none $arg 1]
+			} {
+				data array set @chanmode ${chan}:$mode ""
+			}
+			return [data array get @chanmode ${chan}:$mode]
+		}
+
+		get { return [data array get @chanmode ${chan}:$mode] }
+
+		default { error "\[MODECHANGE\] Unknown command type: CMD($cmd). Should be: add or set" }
+
+	}
+	?
+}
+
+proc ischanowner args { flags:simple $args -only text flags ; lassign $text user chan ; ischanmode $user $chan q ; # -ONLY flag is irrelevant here }
+proc ischanadmin args { flags:simple $args -only text flags ; lassign $text user chan ; if [validflag -only] { return [ischanmode $user $chan a] } { return [ischanmode $user $chan qa] } }
+proc ischanop args { flags:simple $args -only text flags ; lassign $text user chan ; if [validflag -only] { return [ischanmode $user $chan o] } { return [ischanmode $user $chan qao] } }
+proc ischanhalfop args { flags:simple $args -only text flags ; lassign $text user chan ; if [validflag -only] { return [ischanmode $user $chan h] } { return [ischanmode $user $chan qaoh] } }
+proc ischanvoice args { flags:simple $args -only text flags ; lassign $text user chan ; if [validflag -only] { return [ischanmode $user $chan v] } { return [ischanmode $user $chan qaohv] } }
+proc ischanmode { user chan modes } { 
+	foreach mode [explode $modes] { if [expr ( [lsearch -exact [string tolower [data array get @chanmode ${chan}:${mode}]] [string tolower $user]] == -1 ) ? 0 : 1] { return 1 } }
+	return 0
+}
+
+proc chanowners args { flags:simple $args -only chan flags ; return [chanstaff $chan q] ; # -ONLY flag is irrelevant here }
+proc chanadmins args { flags:simple $args -only chan flags ; return [chanstaff $chan [iff [validflag -only] a qa]] }
+proc chanops args { flags:simple $args -only chan flags ; return [chanstaff $chan [iff [validflag -only] o qao]] }
+proc chanhalfops args { flags:simple $args -only chan flags ; return [chanstaff $chan [iff [validflag -only] h qaoh]] }
+proc chanvoices args { flags:simple $args -only chan flags ; return [chanstaff $chan [iff [validflag -only] v qaohv]] }
+proc chanstaff { chan modes } {
+	empty chanstaff
+	foreach mode [explode $modes] { set chanstaff [concat $chanstaff [data array get @chanmode ${chan}:$mode]] }
+	return $chanstaff
+}
+
 # --- Output commands ---
 
 proc raw { type { target "" } { message "" } } {
@@ -3655,10 +3764,6 @@ proc effects { text args } {
 
 	foreach a $args {
 		# Let DEFAULT handle the error ....
-		if ![regexp -- {^\d{1,2}(,\d{1,2})?$} $a] {
-#               set a [uniquematch [list x utf-8 hex:to hex:from bold underline reverse kill upper lower title sentence join split nocolor strip] $a]
-# Non-unique match: "u" to UNDERLINE & UPPER
-		}
 		switch -regexp -- [string tolower $a] {
 
 			{^\d{1,2}(,\d{1,2})?$} { append open [color $a] ; prepend close [color] }
@@ -3678,6 +3783,8 @@ proc effects { text args } {
 			stt - title { set text [stt $text] }
 
 			sts - sent - sentence { set text [string totitle $text] }
+
+			e - esc - escape { set text [escape $text] }
 
 			join { set text [join $text] }
 
@@ -4800,11 +4907,11 @@ proc get { cmd args } {
 		op - ops - opsymbol {
 			lassign $args nick chan
 			empty ops
-			if [validcmd ischanown ] { if [ischanown  $nick $chan] { append ops ~ } }
-			if [validcmd ischanprot] { if [ischanprot $nick $chan] { append ops & } }
-			if [validcmd isop      ] { if [isop       $nick $chan] { append ops @ } }
-			if [validcmd ishalfop  ] { if [ishalfop   $nick $chan] { append ops % } }
-			if [validcmd isvoice   ] { if [isvoice    $nick $chan] { append ops + } }
+			if [ischanowner  $nick $chan] { append ops ~ }
+			if [ischanadmin  $nick $chan] { append ops & }
+			if [ischanop     $nick $chan] { append ops @ }
+			if [ischanhalfop $nick $chan] { append ops % }
+			if [ischanvoice  $nick $chan] { append ops + }
 			return $ops
 		}
 
@@ -5117,7 +5224,7 @@ proc is { cmd args } {
 
 		`own - `prot - `op - `halfop - `voice { lassign $args nick chan above ; return [chanrank $cmd $nick $chan $above] }
 
-		own - prot - op - halfop - voice { flags:simple $args -above text flags ; lassign $text nick chan ; return [chanrank $cmd $nick $chan [validflag -above]] }
+		own - prot - admin - op - halfop - voice { flags:simple $args -above text flags ; lassign $text nick chan ; return [chanrank $cmd $nick $chan [validflag -above]] }
 
 		bot {
 			set bot [lindex $args 0]
@@ -5191,11 +5298,18 @@ proc is { cmd args } {
 			# DCC users are NEVER considered as "ologged-in" by default
 			# Because the OLOGIN command must be used, even in DCC, we might have problem with storing hosts. So, we won't.
 			
-			set data [data array get @OUTH $handle]
-			# New SB7 format (multi-nick authing), backward-compatible to original SB7 format
-
 			if ![is authed $handle $nick $host] { return 0 } ; # Require normal LOGIN as well
-			return [expr { [lsearch -exact [string tolower $data] [string tolower $nick] ] == -1 } ? 0 : 1 ]
+			lassign [data array get @outh $handle] _handle _nick _host
+			if ![string eq -nocase $handle $_handle] { return 0 } ; # Should be automatic
+			if [isnum -integer $nick] { if [is dccnick $nick $handle] { return 1 } { return 0 } }
+			return [string eq -nocase $nick $_nick]
+		}
+
+		dccnick { # Enter with: IS DCCNICK <idx> [handle to match (RETURNs boolean against handle match)]
+			set dcclist [dcclist chat]
+			lassign $args idx handle
+			if [isempty handle] { set is [lsearch -glob $dcclist [list $idx * * * * *]] } { set is [lsearch -glob [string tolower $dcclist] [list $idx [string tolower $handle] * * * *]] }
+			return [expr ( $is == -1 ) ? 0 : 1 ]
 		}
 
 		wildcard { return [regexp -- {[\*\?]} $args] }
@@ -5297,20 +5411,6 @@ proc process { cmd args } {
 		default { ? process default }
 
 	}
-}
-
-proc chanrank { op nick chan { above 0 } } {
-	set above [istrue $above] ; # Assure boolean
-	set list [list voice halfop op prot own]
-	set m [lsearch -exact [string tolower $list] [string tolower $op]]
-	if { $m == -1 } { return 0 }
-
-	set chanrank 0
-	for { set x $m } { $x < [llength $list] } { incr x } {
-		set cmd [lindex $list $x]; if [validcmd is$cmd] { set chanrank [ expr $chanrank | [is$cmd $nick $chan] ] }
-		if !$above break
-	}
-	return $chanrank
 }
 
 proc debug args {
@@ -5595,6 +5695,15 @@ proc flags:simple { list valid { var_text "" } { var_flags "" } { flags2variable
 	return [list $list $flags]
 }
 
+proc flags:order args {
+	# [-c -a] [-a -b -c]: -a
+	# -ALL [-c -a] [-a -b -c]: -a -c
+	flags:simple $args -all text flags
+	lassign $text list priority low 
+	set order [lsort:priority $list $priority $low]
+	if [validflag -all] { return $order } { return [lindex $order 0] }
+}
+
 proc uniquematch { list matchme } {
 	if [string eq "" $list] return
 	if [string eq "" $matchme] return
@@ -5852,7 +5961,7 @@ proc timeval { value { convert_to s } } {
 
 proc angle args {
 	flags:simple $args [list -dms -decimal -help] value flags
-	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0Â° 0' 0\"" }
+	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0° 0' 0\"" }
 	set degree_mark \xB0
 	if [validflag -decimal] {
 		catch { set value [join $value] }
@@ -5899,7 +6008,7 @@ proc getbytesfree:dos { { dir . } } {
 # --- 005 (mode handler) ---
 # VERSION trips 351 and 005 (use 351 to clear 005 data in advance so no leftovers / ghosts remain)
 
-proc sb7:351 { server code arg } { 
+proc sb7:bind:raw:351 { server code arg } { 
 	set arg [lreplace $arg 0 0]
 	data unset @server *
 	data array set @server ircd [lindex $arg 0] ; # Opposite of #004
@@ -5907,7 +6016,28 @@ proc sb7:351 { server code arg } {
 	return 0 ; # RAW requires "0" 
 }
 
-proc sb7:004 { server code arg } { 
+proc sb7:bind:raw:353 { server code arg } {
+	# 353 Santana * #BotHouse :Santana @Minerva &Demon|iDevice +Denora ~Demon|Sleep ~Demonicpagan +Puppy +Rodgrod +Finn ~shade Yong +Monica +Rachel 
+	set users [lassign $arg me - chan]
+#putlog "\[SB7:BIND:RAW:353\] ARG($arg)"
+#putlog "\[SB7:BIND:RAW:353\] USERS($users)"
+	foreach user [mid $users 2] {
+		empty modes
+		regexp -- {^([\~\&\@\%\+]*)(.+)$} $user - flags user
+#putlog "\[SB7:BIND:RAW:353\] CHAN($chan):USER($user):FLAGS($flags)"
+		if [notempty flags] {
+			foreach flag [explode $flags] {
+				set mode [lindex [list q a o h v] [lsearch [list ~ & @ % +] $flag]]
+#debug flags flag user mode
+#putlog "\[SB7:BIND:RAW:353\] USER($user):CHAN($chan):MODE(+$mode)"
+				chanmode add $chan +$mode $user
+			}
+		}
+	}
+	return 0
+}
+
+proc sb7:bind:raw:004 { server code arg } { 
 	set arg [lreplace $arg 0 0]
 	data unset @server *
 	data array set @server ircd [lindex $arg 1] ; # Opposite of #351
@@ -5915,7 +6045,7 @@ proc sb7:004 { server code arg } {
 	return 0 ; # RAW requires "0" 
 }
 
-proc sb7:005 { server code arg } {
+proc sb7:bind:raw:005 { server code arg } {
 	set arg [lreplace $arg 0 0]
 	# Parse this?
 	foreach item $arg {
@@ -5934,9 +6064,14 @@ proc sb7:005 { server code arg } {
 			prefix {
 				if [string match (*)* $value] {
 					regexp -- {^\((.+)\)(.+)$} $value - modes flags
-					foreach a [split $modes ""] b [split $flags ""] {
-						data array set @server chanflag:$a $b
-						data array set @server chanflag:$b $a
+					foreach mode [split $modes ""] flag [split $flags ""] {
+						data array set @server chanflag:$mode $flag
+						data array set @server chanflag:$flag $mode
+						if [string eq q $mode] { data array set @server chanowner 1 }
+						if [string eq a $mode] { data array set @server chanadmin 1 }
+						if [string eq o $mode] { data array set @server chanop 1 }
+						if [string eq h $mode] { data array set @server chanhalfop 1 }
+						if [string eq v $mode] { data array set @server chanvoice 1 }
 					}
 				} {
 					data array set @server $name $value
@@ -5944,6 +6079,11 @@ proc sb7:005 { server code arg } {
 			}
 			chanmodes {
 				lassign [split $value ,] 1 2 3 4
+				if [data array get -boolean @server chanowner] { append 1 q }
+				if [data array get -boolean @server chanadmin] { append 1 a }
+				if [data array get -boolean @server chanop] { append 1 o }
+				if [data array get -boolean @server chanhalfop] { append 1 h }
+				if [data array get -boolean @server chanvoice] { append 1 v }
 				data array set @server chanmodes:1 [split $1 ""]
 				data array set @server chanmodes:2 [split $2 ""]
 				data array set @server chanmodes:3 [split $3 ""]
@@ -5966,12 +6106,207 @@ proc sb7:005 { server code arg } {
 	return 0 ; # Must be RETURN 0 (due to the BIND RETURN rules for RAW)
 }
 
+# --- Binds form BootStrap ---
+
+proc sb7:raw:mode { server cmd arg } {
+	set targets [lassign $arg chan modes]
+#debug chan modes targets
+	set polarity ""
+	foreach mode [explode $modes] {
+		switch -exact -- $mode {
+
+			+ - "-" { set polarity $mode }
+
+			default {
+				set type [data array search -list @server chanmodes:? $mode]
+				set type [lindex [split [lindex $type 0 1] :] 1]
+#debug chan polarity mode targets =@SERVER:CHANMODE([data array get @server chanmode:$mode]) type
+				if { [lsearch -exact [list + -] $polarity] == -1 } { error "\[SB7:RAW:MODE\] Missing polarity for channel mode: $mode (+ or -?)" }
+#[data array get @server chanmode:$mode]
+				switch -exact -- $type {
+
+					1 {
+						if [isempty targets] { error "\[SB7:RAW:MODE\] Missing nick/host target for channel mode: ${polarity}$mode" }
+						chanmode add $chan ${polarity}$mode [join [lindex [split $targets] 0]]
+						set target [join [lreplace [split $targets] 0 0]]
+					}
+
+					2 {
+						if [isempty targets] { error "\[SB7:RAW:MODE\] Missing target for channel mode: ${polarity}$mode" }
+						chanmode add $chan ${polarity}$mode [join [lindex [split $targets] 0]]
+						set target [join [lreplace [split $targets] 0 0]]
+					}
+
+					3 {
+						if [string eq + $polarity] {
+							set target [join [lindex [split $targets] 0] ]
+							if [isempty target] { error "\[SB7:RAW:MODE\] Missing target for channel mode: ${polarity}$mode" }
+							chanmode set $chan ${polarity}$mode $target
+						} {
+							chanmode set $chan ${polarity}$mode
+						}
+					}
+
+					4 { chanmode set $chan ${polarity}$mode }
+
+					default { error "\[SB7:RAW:MODE\] Unknown server data for channel mode: ${polarity}$a (what type is it?)" }
+
+				}
+			}
+
+		}
+	}
+	return 0
+}
+
+proc sb7:bind:join { nick host handle chan } {
+	if [isbotnick $nick] {
+		data array clear @chanmode
+	} {
+		# Nothing for now
+		return 0
+	}
+	return 0
+}
+
+proc sb7:bind:part { nick host handle chan { reason "" } } {
+	if [isbotnick $nick] {
+		data array clear @chanmode
+	} {
+		# Chanmodes
+		foreach a [data array search -list -nocase @chanmode ${chan}:? $nick] {
+			lassign $a root field
+			data array lremove $root $field $nick
+		}
+	}
+}
+
 # --- Event binds ---
 
-proc @event:sigterm args { save ; data save ; print -home -raw "\[SIGTERM\] Shutting down ...." ; after 1000 ; die "SIGTERM received: shutting down ...." }
+proc @event:sigterm args { 
+	set die 0
+	if [info exists ::die-on-sigterm] { if ${::die-on-sigterm} { set die 1 } }
+	if $die { save ; data save ; print -home -raw "\[SIGTERM\] Shutting down ...." ; after 1000 ; die "SIGTERM received: shutting down ...." }
+	set message "\[SIGTERM\] SIGTERM received (config variable set: NOT to die): RESTARTing instead ...."
+	print -home -raw $message
+	putlog $message
+	after 2000
+	restart
+	return 0
+}
+
 proc @event:sigquit args { print -home -raw "\[SIGQUIT\] RESTARTing ...." ; restart }
-proc @event:sighup  args { print -home -raw "\[SIGHUP\] REHASHing ...." ; rehash }
-proc @event:sigill  args { print -home -raw "\[SIGILL\] SIGILL received: saving data and RESTARTing ...." ; save ; data save ; restart }
+
+proc @event:sighup  args {
+	set die 0
+	if [info exists ::die-on-sighup] { if ${::die-on-sighup} { set die 1 } }
+	if $die { 
+		set message "\[SIGHUP\] SIGHUP received: config variable requires me to DIE ...."
+		save
+		data save
+		print -home -raw $message
+		putlog $message
+		after 2000
+		die $message
+	}
+	set message "\[SIGHUP\] REHASHing ...."
+	print -home -raw $message
+	putlog $message
+	rehash
+	return 0
+}
+
+proc @event:sigill args {
+	if 0 {
+		set message "\[SIGILL\] SIGILL received: saving data and RESTARTing ...."
+		print -home -raw $message
+		save
+		data save
+		restart
+	}
+
+	catch { set home [home] }
+	putquick "PRIVMSG $home :\[SIGILL\] Aggressive reset in progess ...." -next
+	catch { after 1000; # Let msg to HOME be seen }
+
+	# Remove BINDs (so nothing can be triggered)
+putquick "PRIVMSG $home :\[SIGILL\] Removing BINDs ...." -next
+	foreach bind [binds] { catch { unbind [lindex $bind 0] [lindex $bind 1] [lindex $bind 2] [lindex $bind 4] } }
+
+	# Clear all queues
+putquick "PRIVMSG $home :\[SIGILL\] Clearing all output queues ...." -next
+	catch { clearqueue all }
+
+	# Kill all LISTEN ports
+putquick "PRIVMSG $home :\[SIGILL\] Killing all LISTEN ports ...." -next
+	catch { foreach dcc [dcclist telnet] { catch { listen [lindex [lindex $dcc 4] 1] off } } }
+
+	# Unlink all bots
+putquick "PRIVMSG $home :\[SIGILL\] Unlinking all bots ...." -next
+	catch { foreach dcc [dcclist bot] { catch { killdcc [lindex $dcc 0] } } }
+	catch { unlink * }
+
+	# Kill all other DCC connections
+putquick "PRIVMSG $home :\[SIGILL\] Killing all DCC CHAT users ...." -next
+	foreach dcclist [dcclist] {
+		set dcc [lindex $dcclist 0]
+		set hand ""
+		catch { set hand [idx2hand $dcc] }
+		if [is permowner $hand] {
+			putquick "PRIVMSG $home :\[SIGILL\][space 5]Protecting DCC CHAT #$dcc with: [idx2hand $dcc]" -next
+		} {
+			catch { killdcc $dcc } 
+		}
+	}
+
+	# Remove timers
+putquick "PRIVMSG $home :\[SIGILL\] Killing all timers" -next
+	catch { putlog "\[SIGILL\] \[U\]TIMERS killed: [sb7 killtimer *]" ; # NOT quiet! }
+
+	# Remove all PROC commands
+putquick "PRIVMSG $home :\[SIGILL\] Removing all PROCs from memory ...." -next
+	set myproc [lindex [info level [info level]] 0]
+	set myproc @event:sigill
+	catch {
+		foreach proc [info procs] {
+			if { [lsearch -exact [list rehash return $myproc] $proc] < 0 } { rename $proc "" }
+		}
+	}
+
+	##### From this point forward, use PUTQUICK only! #####
+
+	# Remove all variables!
+putquick "PRIVMSG $home :\[SIGILL\] Clearing all NAMESPACEs & variables ...." -next
+	set namespaces [namespace children :: *]
+
+	#lappend namespaces ""
+	# [2010-07-18 14:12:12 -0700] <Dumbledore> [14:12] Tcl error [*dcc:tcl]: invalid command name "*dcc:tcl"
+	# [2010-07-18 14:12:26 -0700] <Domino> mental note: never delete the global namespace!
+
+	set var ""; set proc ""; set ::sb7(nocomplain) ""
+	foreach namespace $namespaces {
+#rawprint "PRIVMSG $home :NAMESPACE($namespace):VARS"
+		catch { foreach var [info vars ${namespace}::*] { unset $var } }
+#rawprint "PRIVMSG $home :NAMESPACE($namespace):PROCS"
+		catch { foreach proc [info procs ${namespace}::*] { rename $proc "" } }
+		catch { namespace delete ::$namespace }
+	}
+
+#rawprint "PRIVMSG $home :\[SIGILL\] Clearing all global variables!"
+	#catch { foreach var [info vars ::*] {unset $var} }
+
+	# --- We should just now have EGGDROP core commands left ---
+	putquick "PRIVMSG $home :\[SIGILL\] RESTARTing!" -next
+
+	catch { unset -nocomplain ::sb7 } ; # Not needed (local variables): home var proc
+
+	##### Nothing left but C-coded TCL and EGGDROP core commands #####
+	after 5000
+	set error [ catch { after 500 restart } ohshit ]
+	if $error restart
+	return 0
+
+}
 
 # --- Command aliases ---
 
@@ -6011,15 +6346,20 @@ proc sb7:parseflags args { msghome "\[SB7\] PARSEFLAGS -- FROM(<--[info level [e
 #####
 # Bootstrap:
 
-bind DCC  t dcc *dcc:dccstat
-bind DCC  - /w  *dcc:whois
-bind DCC  - q   *dcc:quit
-bind DCC  - ""  @dcc:null
-bind pubm - *   sb7:dispatch:pubm
-bind time - *   sb7:bugsiebug_check
-bind raw  - 004 sb7:004
-bind raw  - 005 sb7:005
-bind raw  - 351 sb7:351
+bind DCC  t dcc  *dcc:dccstat
+bind DCC  - /w   *dcc:whois
+bind DCC  - q    *dcc:quit
+bind DCC  - ""   @dcc:null
+bind join - *    sb7:bind:join
+bind part - *    sb7:bind:part
+bind kick - *    sb7:bind:kick
+bind pubm - *    sb7:dispatch:pubm
+bind time - *    sb7:bugsiebug_check
+bind raw  - 004  sb7:bind:raw:004
+bind raw  - 005  sb7:bind:raw:005
+bind raw  - 351  sb7:bind:raw:351
+bind raw  - 353  sb7:bind:raw:353
+bind raw  - mode sb7:raw:mode
 catch { bind evnt - sighup  @event:sighup }
 catch { bind evnt - sigterm @event:sigterm }
 catch { bind evnt - sigill  @event:sigill }
