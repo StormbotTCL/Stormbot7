@@ -1,7 +1,26 @@
-# StormBot.TCL 7 version Changelog -- 2014-11-20 03:05:51 UTC #
+# StormBot.TCL 7 version Changelog -- 2014-12-23 22:27:08 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2014-12-18 22:24:38 UTC: #404 [tail] Fixed SB7:SETUP (a security measure had a bad REGEXP: the proper name of the variable is created by the loop but the inlaid REGEXP was flawed)
+2014-12-14 01:19:35 UTC: #403 [tail] Fixed WHOIS (the ''$<handle>'' mode test wasn't being handled properly; it was falling through to a lower portion of code that (originally) returned the right information but now does something different)
+2014-12-14 01:04:04 UTC: #402 [note] Upgraded NOTE (added ability to 'flag' notes, similar to E-mail (currently incomplete))
+2014-12-13 23:02:13 UTC: #401 [note] Fixed NOTE SEND (sanity check for blank notes / forgotten note text)
+2014-12-13 22:53:47 UTC: #400 [set] Updated SET (new valid options: cell, work (phone numbers))
+2014-12-12 04:16:41 UTC: #399 [help & login] Fixed LOGIN & HELP (-OLOGIN was not considering if the user hadn't set an OPASS yet. HELP, at the bottom, now has OPASS as part of the 'first timers, see these commands' list)
+2014-11-29 10:43:21 UTC: #398 [tail] Added HEXDUMP
+2014-11-27 00:20:07 UTC: #397 [ban] Fixed BAN LIST & DEL (cosmetic: using ''until'' instead of ''to'' or ''-'' to differentiate the start and end ban times; also, cosmetic re: LIST: better construction of the $MATCHME wildcard)
+2014-11-27 00:13:09 UTC: #396 [snapshot] Fixed SNAPSHOT ((1) FIND was broken because I changed file name formats by including the timezone; REGEXP was failing as a result, (2) SAVE DATA wasn't considering if the file path for the data file name was included, creating a cluster of a file name, & (3) when you typoed the type of file to SNAPSHOT, all kinds of silliness ensued)
+2014-11-26 23:31:54 UTC: #395 [tail] Fixed SB7:BIND:JOIN & SB7:BIND:PART (made sure, if the bot is the one joining / parting, that the chanmode data is cleared. The DATA ARRAY CLEAR was wiping out all channels' data instead of just the specific channels')
+2014-11-26 23:27:13 UTC: #394 [tail] Fixed WHOIS (the patch for mode #4 users from the other day was also being used (not by design) to trap users who were being checked by HANDLE (instead of NICK))
+2014-11-26 22:51:32 UTC: #393 [tail] Fixed DATA ARRAY GET:ALL (UPVARs were wrong: #0 for global (::*) variables, 1 for all others. I put #0 or both, in the last fix a few days ago, causing @CHANMON:ADD & @CHANMON:DEL to break)
+2014-11-26 22:44:34 UTC: #392 [tail] Fixed DATA LIST (wasn't creating a loopable list like DATA ARRAY LIST)
+2014-11-26 22:42:27 UTC: #391 [tail] Fixed DATA ARRAY LIST (wasn't looping through the matched names properly)
+2014-11-26 02:04:51 UTC: #390 [tail] Fixed DATA ARRAY SET:ALL (UPVAR syntax for non-global variables ... forgot the reference to the variable!)
+2014-11-26 02:01:27 UTC: #389 [set] Updated SET (added options: vhost twitter facebook aim tumblr myspace instagram; also affects INFO)
+2014-11-21 10:54:44 UTC: #388 [-] Fixed DEC2FRAC (if a small number (with leading zeroes for the mantissa portion only) was processed, you got the ''looks like an octal number'' error)
+2014-11-21 09:56:13 UTC: #387 [tail] Added SIMPLIFY, FACTORS, SQR, ISPRIME, & ISSQUARE (helper commands for math stuff. Originally only needed for a priavte floating-point script)
+2014-11-20 03:19:37 UTC: #386 [botsend] Fixed BOTSEND (log messages were weird)
 2014-11-20 03:00:54 UTC: #385 [who] Fixed WHO (list of nicks was unsorted (I was always under the impression that CHANLIST sorted, but, it doesn't))
 2014-11-20 02:34:38 UTC: #384 [tail] Fixed GET OPSYMBOL (using newly-created controls for +qaohv users)
 2014-11-20 02:30:34 UTC: #383 [tail] Fixed WHOIS (mode #4 was still giving fits when a user matched a handle's name but not by host. Also, when a completely unknown user was encountered, it resorted to mode #4 as well)

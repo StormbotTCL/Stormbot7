@@ -1086,7 +1086,7 @@ proc data args {
 		list {# 2-element LIST: scalar, array?
 			if [isempty arg1] { return "" }
 			empty list
-			foreach a [lsort -inc -uni -dict [array names sb7 [string tolower $arg1]]] { lappend list $a [data get $a] }
+			foreach a [lsort -inc -uni -dict [array names sb7 [string tolower $arg1]]] { lappend list [list $a [data get $a]] }
 			return $list
 		}
 
@@ -1365,7 +1365,8 @@ proc data args {
 					set arg2 [string tolower $arg2]
 					if [info exists sb7($arg2)] { array set data $sb7($arg2) } { array set data "" }
 					foreach a [string tolower $arg3] b [lrange $args 4 end] {
-						if [left $b 2 ::] { upvar #0 [mid $b 3] local } { upvar $b local }
+						# 2014-11-26 14:49:40 -0800: Global variables (::*) need to be UPVAR #0; all others should be UPVAR 1
+						if [left $b 2 ::] { upvar #0 [mid $b 3] local } { upvar 1 $b local }
 						if [info exists data($a)] { set local $data($a) } { set local "" }
 					}
 					return
@@ -1400,10 +1401,8 @@ proc data args {
 					set arg2 [string tolower $arg2]
 					if ![info exists sb7($arg2)] { return "" }
 					array set data $sb7($arg2)
-					set arg3 [none $arg3 *]
-					foreach loop [lsort -uni -dict -inc [array names data]] { 
-						if [string match -nocase $arg3 $data($loop)] { lappend list [list $loop $data($loop)] } 
-					}
+					set arg3 [none [string tolower $arg3] *]
+					foreach loop [lsort -uni -dict -inc [array names data $arg3]] { lappend list [list $loop $data($loop)] }
 					return $list
 				}
 
@@ -3071,6 +3070,205 @@ proc lsort:chanop { 1 2 } {
 	string compare $_1n $_2n
 }
 
+# --- Math helpers ---
+
+proc simplify args {# Get FACTORS of both number, get the common ones, run through a FOREACH of them.
+
+	set expression [join $args ""]
+
+	lassign [split $expression /] e1 e2
+
+
+
+	# Syntax checks
+
+	if ![regexp -- {^[\+\-]?\d+?(\.\d+)?$} $e1] { return $expression }
+
+	# Don't check $E2: this disallows "0.24" to be passed through
+
+
+
+	# Upgrade fraction if numerator or denominator is a decimal 
+
+	# Can this be collected, choose the highest-needed push, apply to both?
+
+	if [instr $e1 .] { set e1 [dec2frac $e1] }
+
+	if [instr $e2 .] { set e2 [dec2frac $e2] }
+
+
+
+	# A lonely floating point number was given
+
+	if [isempty e2] { lassign [split $e1 /] e1 e2 }
+
+
+
+	# Let's do a cheat first: can the fraction be directly reduced?
+
+
+
+	set d1 [ expr $e2 / $e1 ]; # Will truncate to integer answer
+
+	set d2 [ fixmath $e2 / $e1 ]; # Will force the mantissa is necessary
+
+	if { $d1 == $d2 } { return 1/[ expr $e2 / $e1 ] }
+
+
+
+	# Reduce fraction by GCM
+
+	zero c
+
+	do {incr c ; if {$c > 1000} { error "\[SIMPLIFY\] Endless loop: C($c)" }
+
+		set f1 [factors $e1] 
+
+		set f2 [factors $e2]
+
+		if [isempty f1] break
+
+		if [isempty f2] break
+
+		set gcm [le [lcommon $f1 $f2]]
+
+		if [isempty gcm] break
+
+		set e1 [ expr $e1 / $gcm ]
+
+		set e2 [ expr $e2 / $gcm ]
+
+	}
+
+
+
+	if { $e2 == 1 } { set simplify $e1 } { set simplify ${e1}/$e2 }
+
+	return $simplify
+
+}
+
+proc dec2frac number {
+	lassign [split $number .] i m
+	if [notempty m] {
+		set m [normalize $m]
+		set l [len $m]
+		set p 1[string repeat 0 $l]
+		set number [expr ( [normalize $i] * $p ) + $m]/$p
+	}
+	return $number
+}
+
+proc factors { args } {
+
+	set arg "* [join $args]"
+
+	flags:simple $args [list -prime -square -all] 1 flags
+
+
+
+	if { $1 > 1e12 } { error "\[FACTORS\] Error in FACTORS: value ($misc1) exceeds 999,999,999,999 limit (based on default 12-bit TCL precision)." }
+
+	if ![isnum -integer $1] { error "\[FACTORS\] I need an integer, not: $1" }
+
+
+
+	zero neg
+
+	if [left $1 1 -] { one neg ; set 1 [mid $1 2] }
+
+
+
+	empty f
+
+	set s [expr $1 / 2] ; # set s [sqr $1]
+
+	for { set loop 2 } { $loop <= $s } { incr loop } {
+
+		if { [lsearch -exact $f $loop] != -1 } continue
+
+		set d [normalize [expr $1 / ${loop}.0]]
+
+		if [isnum -integer $d] { lappend f $loop $d }
+
+	}
+
+	set f [lsort -int -inc $f]
+
+	if [validflag -prime] {
+
+		empty t
+
+		foreach a $f { if [isprime $a] { lappend t $a } }
+
+		set f $t
+
+	}
+
+	if [validflag -square] {
+
+		empty t
+
+		foreach a $f { if [issquare $a] { lappend t $a } }
+
+		set f $t
+
+	}
+
+
+
+	if [validflag -all] { lappend f 1 $1 } ; # Must precede $NEG check
+
+	if $neg { foreach a $f { lappend f -$a } }
+
+	set f [lsort -unique -real -increasing $f]
+
+	return $f
+
+}
+
+proc isprime { number } {
+
+	if ![regexp -- {^[\+\-]?\d+$} $number] { error "\"${number}\" is not an integer: ISPRIME <integer>" }
+
+	if { $number < 2 } { return 0 }
+
+	float number
+
+
+
+	set half [ expr ( $number / 2 ) ]
+
+	int half
+
+	incr half; # These lines needed to evade "integer too large" error.
+
+
+
+	one list
+
+	for {set i 2} {$i < $half} {incr i} {
+
+		if { ( $number / $i ) == int( $number / $i ) } { lappend list $i }
+
+	}
+
+	int number
+
+	lappend list $number
+
+	string eq -n "1 ${number}" $list
+
+}
+
+proc issquare number {
+	set s [sqr $number]
+	if [right $s 2 .0] { set s [left $s -2] }
+	regexp -- {^(\+\-)?\d+$} $s
+}
+
+proc sqr { value } { normalize [expr pow( $value , 0.5 )] }
+
 # --- User information ---
 
 proc alias args {
@@ -3423,7 +3621,10 @@ proc whois { who { who2 "" } { chan "" } } {
 	if [left $who 1 $] {
 		# A forced HANDLE consideration marker (which just bypasses the nick check)
 		set who [mid $who 2]
-		# Fall-through ....
+		lassign [findonchans nick $who] foc_nick foc_host foc_handle foc_chan
+		if [isempty foc_handle] { return [list 0 "" "" $who "" "" ""] }
+		lassign [whois $foc_nick] _online _nick _host _handle _chan _auth_handle _auth_nick
+		return [list $_online $_nick $_host $_handle $_chan $_auth_handle $_auth_nick]
 	} {
 		# Let's try this as an online nick first
 		lassign [findonchans nick $who] nick host handle chan
@@ -3434,13 +3635,23 @@ proc whois { who { who2 "" } { chan "" } } {
 		}
 	}
 
+	# Let's look for a user by handle (whose nick is online)
+	lassign [findonchans handle $who] nick host handle chan
+	if [notempty nick] {
+		set authed_nick [sb7 auth find handle $nick]
+		set authed_hand [sb7 auth find nick $handle]
+#debug -log 7 who nick host handle chan authed_nick authed_hand
+		return [list 1 $nick $host $handle $chan $authed_nick $authed_hand]
+	}
+
 	# Let's look for a user whose nick matches a known handle, but, doesn't mask-match it (user needing an ADDMASK)
 	lassign [findonchans nick $who] nick host handle chan
+#debug -log 7 who nick host handle chan
 	if { [isempty handle] && [validuser $who] } {
 #debug who host handle chan authed_nick authed_hand
 		empty authed_nick authed_hand
 		return [list 4 $who $host "" $chan $authed_nick $authed_hand]
-	}	
+	}
 
 	# Let's try a handle
 	lassign [findonchans handle $who] nick host handle chan
@@ -4440,6 +4651,31 @@ proc shell:whereis cmd {
 }
 
 # --- Other commands ---
+
+proc hexdump { text { size 16 } } {
+	set max [string length [format %X [string length $text]]]
+	set length [expr $size * 2] ; # Double it due to HEX
+	set hexdump ""
+	binary scan $text H* hex 
+	set count 0
+	while { ![string eq "" $hex] } {
+		set line [string range $hex 0 [expr $length - 1]]
+		set hex [string range $hex $length end]
+		empty chars
+		set temp "\[[format %0${max}X $count]\] "
+		for { set x 0 ; set y 1 } { $x < $length } { incr x 2 ; incr y 2 } {
+			set char [string index $line $x][string index $line $y]
+			if [isempty char] { append temp "-- " ; append chars " " ; continue }
+			append temp "[string toupper $char] " ; # Space!
+			regsub -- {^[\000-\037\200-\377]$} [binary format H* $char] . char
+			append chars $char
+		}
+		append temp " | " $chars
+		lappend hexdump $temp
+		incr count $size
+	}
+	return [join $hexdump \n]
+}
 
 proc path:relative { path { root . } { use_home false } } {
 	set path [file normalize $path] ; # /a/b/c/d/e.txt
@@ -5961,7 +6197,7 @@ proc timeval { value { convert_to s } } {
 
 proc angle args {
 	flags:simple $args [list -dms -decimal -help] value flags
-	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0° 0' 0\"" }
+	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0Â° 0' 0\"" }
 	set degree_mark \xB0
 	if [validflag -decimal] {
 		catch { set value [join $value] }
@@ -6088,7 +6324,7 @@ proc sb7:bind:raw:005 { server code arg } {
 				data array set @server chanmodes:2 [split $2 ""]
 				data array set @server chanmodes:3 [split $3 ""]
 				data array set @server chanmodes:4 [split $4 ""]
-				foreach a [list 1 2 3 4] { foreach b [split [set $a] ""] { putlog "\[SB7:005\] A($a):B($b)" ; data array set @server chanmode:$b $a } }
+				foreach a [list 1 2 3 4] { foreach b [split [set $a] ""] { data array set @server chanmode:$b $a } }
 				data array set @server chanmodes [concat [split $1 ""] [split $2 ""] [split $3 ""] [split $4 ""] ]
 			}
 			cmds {
@@ -6106,9 +6342,20 @@ proc sb7:bind:raw:005 { server code arg } {
 	return 0 ; # Must be RETURN 0 (due to the BIND RETURN rules for RAW)
 }
 
+proc sb7:bind:raw:221 { server cmd arg } { set arg [lreplace $arg 0 0] ; data array set @usermode $::botnick $arg ; putlog "\[221\] $::botnick MODE: $arg" ; return 0 }
+
+proc sb7:bind:raw:008 { server cmd arg } { regexp -nocase -- {([\+\-][a-zA-Z0-9]*)} $arg - snomask ; data array set @snomask $::botnick $snomask ; putlog "\[008\] $::botnick SNOMASK: $snomask" ; return 0 }
+
 # --- Binds form BootStrap ---
 
 proc sb7:raw:mode { server cmd arg } {
+	set check_chan [join [lindex [split $arg] 0]]
+	if ![validchan $check_chan] {
+		if ![isbotnick $check_chan] { return 0 ; # Weird situation where the bot sees another user's mode change }
+		putquick "MODE $::botnick" -next ; # Force mode re-evaluation (let's not try to calculate cancelling modes, shall we?)
+		return 0
+	}
+
 	set targets [lassign $arg chan modes]
 #debug chan modes targets
 	set polarity ""
@@ -6161,7 +6408,7 @@ proc sb7:raw:mode { server cmd arg } {
 
 proc sb7:bind:join { nick host handle chan } {
 	if [isbotnick $nick] {
-		data array clear @chanmode
+		data array clear @chanmode ${chan}:*
 	} {
 		# Nothing for now
 		return 0
@@ -6171,7 +6418,7 @@ proc sb7:bind:join { nick host handle chan } {
 
 proc sb7:bind:part { nick host handle chan { reason "" } } {
 	if [isbotnick $nick] {
-		data array clear @chanmode
+		data array clear @chanmode ${chan}:*
 	} {
 		# Chanmodes
 		foreach a [data array search -list -nocase @chanmode ${chan}:? $nick] {
@@ -6353,12 +6600,17 @@ bind DCC  - ""   @dcc:null
 bind join - *    sb7:bind:join
 bind part - *    sb7:bind:part
 bind kick - *    sb7:bind:kick
+bind sign - *    sb7:bind:sign
+bind splt - *    sb7:bind:splt
+bind rejn - *    sb7:bind:rejn
 bind pubm - *    sb7:dispatch:pubm
 bind time - *    sb7:bugsiebug_check
 bind raw  - 004  sb7:bind:raw:004
 bind raw  - 005  sb7:bind:raw:005
 bind raw  - 351  sb7:bind:raw:351
 bind raw  - 353  sb7:bind:raw:353
+bind raw  - 221  sb7:bind:raw:221
+bind raw  - 008  sb7:bind:raw:008
 bind raw  - mode sb7:raw:mode
 catch { bind evnt - sighup  @event:sighup }
 catch { bind evnt - sigterm @event:sigterm }
