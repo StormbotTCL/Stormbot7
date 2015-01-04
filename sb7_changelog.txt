@@ -1,7 +1,21 @@
-# StormBot.TCL 7 version Changelog -- 2014-12-23 22:27:08 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-01-04 09:19:39 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-01-04 09:14:06 UTC: #418 [tail] Fixed SB7:SETUP (the security checked used the wrong variable: $A instead of $VAR)
+2015-01-04 08:14:54 UTC: #417 [tail] Fixed STR, FIXMATH, LREMOVE, FINDONCHANS, OS, UNROMAN, & UNIQUEMATCH (cosmetic: changed STL* to proper STRING TOLOWER*)
+2015-01-04 06:33:52 UTC: #416 [tail] Added URT (re-written from SB6 version)
+2015-01-04 05:09:12 UTC: #415 [distro] Fixed DISTRO (CLOCK.TCL (included with TCL distributions) does not properly accept ''+0000'' as a valid timezone value; you must use ''-0000'' instead. This affects the GIT-related functions)
+2015-01-04 04:54:04 UTC: #414 [tail] Fixed DATA (changed permitted list of data streams: removed ! # (already permitted) and *)
+2015-01-04 04:43:16 UTC: #413 [core] Fixed core (cosmetic: error message when booting up needed a tweak)
+2015-01-04 04:38:33 UTC: #412 [tail] Fixed DEBUG (cosmetic: closing bracket was missing in some formats)
+2015-01-04 04:34:20 UTC: #411 [tail] Added ANGLE (didn't document it earlier when added on: 2014-12-23 22:26:56 +0000)
+2015-01-04 04:21:01 UTC: #410 [tail] Fixed PRINT (when a user is new or otherwise doesn't have her / his output information buffered (DATA/@OUTPUT $NICK), an illegal-channel error would appear)
+2015-01-02 10:40:22 UTC: #409 [who] Fixed WHO (cosmetic: swapped =1000 / =1001 colors; =1001 should diametrically oppose the colours of <=0)
+2015-01-02 10:38:25 UTC: #408 [who] Fixed WHO (cosmetic: code to show proper color for -GLOBAL mode permowners (1000/1001) was always defaulting to =1001 colors regardless of their [non-]existence)
+2015-01-02 10:35:25 UTC: #407 [who] Fixed WHO (cosmetic: JOIN issue in output of each of the list of chanmodes)
+2015-01-02 10:31:07 UTC: #406 [who] Fixed WHO (when a unknown-and-unopped user was being processed, the previously-looped user's $OP_SYMBOL was carrying through: $OP wasn't being assigned by REGEXP (variable-assignment mode))
+2015-01-02 10:18:26 UTC: #405 [core & readme] Fixed CORE & README (updated copyright date)
 2014-12-18 22:24:38 UTC: #404 [tail] Fixed SB7:SETUP (a security measure had a bad REGEXP: the proper name of the variable is created by the loop but the inlaid REGEXP was flawed)
 2014-12-14 01:19:35 UTC: #403 [tail] Fixed WHOIS (the ''$<handle>'' mode test wasn't being handled properly; it was falling through to a lower portion of code that (originally) returned the right information but now does something different)
 2014-12-14 01:04:04 UTC: #402 [note] Upgraded NOTE (added ability to 'flag' notes, similar to E-mail (currently incomplete))

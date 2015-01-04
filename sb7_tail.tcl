@@ -8,7 +8,7 @@ proc validproc cmd { expr ![string eq "" [info procs $cmd]] }
 
 proc sb7 { args } { # General
 	global sb7
-	lassign $args cmd 1 2 3 4 5 6 7 8 9
+     lassign $args cmd 1 2 3 4 5 6 7 8 9      
 	switch -exact -- [string tolower $cmd] {
 
 		sec - security {
@@ -171,6 +171,25 @@ proc sb7 { args } { # General
 				default { error "\[SB7 ABBR\] Unknown option: $1" }
 
 			}
+		}
+
+		macro {
+			switch -exact -- [string tolower $1] {
+
+				check {
+					array set temp [concat [data array get macro *global] [data array get macro $2]]
+					return [info exists temp([string tolower $3])]
+				}
+
+				get {
+					array set temp [concat [data array get macro *global] [data array get macro $2]]
+					if [info exists temp([string tolower $3])] { return $temp([string tolower $3]) } return
+				}
+
+				default { error "\[SB7 MACRO\] Unknown option: $1" }
+
+			}
+			?
 		}
 
 		register {
@@ -503,6 +522,10 @@ proc sb7:dispatch { nick host handle chan arg } {
 		set cmd $abbr
 		set arg [lreplace $arg 0 0 $abbr]
 	}
+
+	# Handle MACROs
+	sb7:macro_process $nick $host $handle $chan $cmd $arg cmd arg
+
 	# Assign attributes
 	lassign:array cmdinfo [data array value -lower @COMMANDLIST $cmd] cmd source level original flags abbr extra proc
 #debug cmd abbr level =COMMANDLIST([data array get @COMMANDLIST $cmd])
@@ -514,10 +537,14 @@ proc sb7:dispatch { nick host handle chan arg } {
 	set cmdinfo(level) $newlevel
 #putlog [effects DISPATCH:10.1 11,12 bold]:CMD($cmd):ABBR($abbr)
 
-	# Fixing a forever-old problem: if common hostmask, is this an authed
-	# user (so we can figure out which handle to assign)? Since all PROCs
-	# draw the $HANDLE from here (and WHOIS checks by nick first), we can
-	# fix this in one place: here
+	#######################################################################
+	# Fixing a forever-old problem: if common hostmask, is this an authed #
+	# user (so we can figure out which handle to assign)? Since all PROCs #
+	# draw the $HANDLE from here (and WHOIS checks by nick first), we can #
+	# fix this in one place: here                                         #
+	#######################################################################
+
+	# 2014-12-18 14:20:00 -0800: Moved to up here because MACRO may need this clarified before we go any further ....
 
 	set h [sb7 auth find nick $nick] ; # Make sure we use the logged-in handle, not the mask-matched handle!
 	if [notempty h] { set handle $h }
@@ -541,7 +568,9 @@ proc sb7:dispatch { nick host handle chan arg } {
 #msghome @COMMANDLIST([data array value @COMMANDLIST $cmd])
 
 	# Store reference data (needed for PRINT)
-	if [string eq * $tchan] { set tchan [data array get @LAST:CHAN $nick $chan] }
+	if [string eq * $tchan] { set tchan [data array get @LAST:CHAN $nick] } ; # set tchan [data array get @LAST:CHAN $nick $chan]
+	if [string eq # $tchan] { set tchan [data array get @LAST:CHAN $nick] }
+	if [string eq ## $tchan] { set tchan [home] }
 	data array set @LAST:CHAN $nick $tchan
 	# -DEFAULT is needed because the PUB bind, which comes straight here, isn't set into @LASTBIND like the others are
 	data array set @OUTPUT $nick [list $nick $host $handle $tchan [data get -default @LASTBIND pub]]
@@ -740,10 +769,68 @@ proc sb7:dispatch:pubm { nick host handle chan arg } {
 	if ![left $0 $len $shortcut] return
 	set test [mid $0 [ expr $len + 1 ]]
 #debug active shortcut len 0 test
-	if ![sb7 command check [sb7 abbr check $test]] return
+#	if ![sb7 command check [sb7 abbr check $test]] return
+	if { ![sb7 command check [sb7 abbr check $test]] && ![sb7 macro check $handle $test] } return
+
 	data set @LASTBIND PUBM
 	sb7:dispatch $nick $host $handle $chan [mid $arg [incr len]]
 	return 0 ; # "RETURN 0" is needed to allow PUB BIND to trigger on this
+}
+
+proc sb7:macro_process { nick host handle chan cmd arg { var_cmd "" } { var_arg "" } } {
+	if [notempty var_cmd] { upvar 1 $var_cmd new_cmd }
+	if [notempty var_arg] { upvar 1 $var_arg new_arg }
+	# Let local (user) macros override global ones.
+	# 2014-12-18 14:32:00 -0800: How will "blank" (defined) macros survive CONCAT? (Test = "{}" used in proper places; the array integrity will hold)
+	array set macros [concat [data array get macros *global] [data array get macro $handle]] ; # "*global" permitted in DATA to be saved to data file
+	if ![info exists macros([string tolower $cmd])] {
+		set new_cmd $cmd
+		set new_arg $arg
+		return
+	}
+	set macro $macros([string tolower $cmd])
+	foreach a [list nick host handle chan cmd] { regsub -all "\\\$$a" $macro [set $a] macro }
+	set macro [split $macro] ; # REGSUB will be placing LIST elements in to place; anticipate this
+	foreach r [regexp -all -inline -nocase -- {[<\[](\d+\-*|\-*\d+|\d+)[\]>]} $macro] {
+		if [regexp -- {^[<\[][^\]>]+[\]>]$} $r] {
+			set original $r
+			set r [mid $r 2 -1]
+			switch -regexp -- $r {
+				{^\d+$} { set:all begin end $r }
+				{^\d+\-$} { set begin [left $r -1] ; set end [llength $arg] }
+				{^\-\d+$} { set begin 1 ; set end [mid $r 2] }
+				{^\d+\-\d+$} { lassign [split $r -] begin end }
+				default { error "\[SB7:MACRO_PROCESS\] Illegal atom: <${r}>" }
+			}
+#debug original r begin end
+			incr begin -1
+			incr end -1
+			set replace [lrange [split $arg] $begin $end]
+			if [string match <*> $original] { if [isempty replace] { error "\[SB7:MACRO_PROCESS\] No data at position $r (${original}) in \$ARG: $arg" } }
+			regsub -all [escape $original] $macro [lrange [split $arg] $begin $end] macro
+#debug macro
+		}
+		if [regexp -- {^Q\[[^\]]+\]$} $r] {
+			set original $r
+			set r [mid $r 2 -1]
+			switch -regexp -- $r {
+				{^\d+$} { set:all begin end $r }
+				{^\d+\-$} { set begin [left $r -1] ; set end [llength $arg] }
+				{^\-\d+$} { set begin 1 ; set end [mid $r 2] }
+				{^\d+\-\d+$} { lassign [split $r -] begin end }
+				default { error "\[SB7:MACRO_PROCESS\] Illegal atom: \[${r}\]" }
+			}
+debug original r begin end
+			incr begin -1
+			incr end -1
+			set replace [lrange [split $arg] $begin $end]
+			regsub -all [escape $original] $macro [lrange [split $arg] $begin $end] macro
+debug =\[\] r macro
+		}
+	}
+	set macro [join $macro]
+	set new_cmd [join [lindex [split $macro] 0]]
+	set new_arg $macro
 }
 
 proc sb7:check_data_command_integrity args {
@@ -807,10 +894,14 @@ proc sb7:setup_userlevel args {
 proc sb7:setup args {
 #logme
 	# Security clean-up
-	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?[a-f]+[1-9]$} $var] { unset $a } }
+#	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?[a-f]+[1-9]$} $var] { unset $a } } ; # $VAR not $A
+	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?_[a-f]+[1-9]$} $var] { unset $var } }
 
 	global sb7
 
+	sb7 register global macro ; # Array
+
+ 	# Check all CONFIG:BLAH options; convert to DATA ARRAY
 	# Check all CONFIG:BLAH options; convert to DATA ARRAY
 	# MUST COME =BEFORE= DATA FILE LOAD!
 	foreach a [array names sb7 config:*] {
@@ -1189,7 +1280,9 @@ proc data args {
 
 				# SB7 change: allow "#" for channel-based config data ....
 				foreach a [lsort -dictionary -increasing [data names]] {
-					if ![regexp -- {^[\!\@\$\%\^\&\*]} $a] { puts $w [list info $a [data get $a]] }
+#					if ![regexp -- {^[\!\@\$\%\^\&\*]} $a] { puts $w [list info $a [data get $a]] }
+					if ![regexp -- {^[\@\$\%\^\&]} $a] { puts $w [list info $a [data get $a]] } ; # Allow "!" "#" "*" (macro needs "*")
+
 				}
 			} crap ]
 			flush $w
@@ -2166,7 +2259,7 @@ proc str a {
 
 	set temp ""
 	foreach char [split $a ""] {
-		if [string is upper $char] { append temp [stl $char] } { append temp [stu $char] }
+		if [string is upper $char] { append temp [string tolower $char] } { append temp [string toupper $char] }
 	}
 	return $temp
 }
@@ -2286,7 +2379,7 @@ proc addzero { number pad } {
 }
 
 proc fixmath args {
-	set arg [stl [join $args]]
+	set arg [string tolower [join $args]]
 	
 	# Process "PI" first
 	set pi 3.14159265358979323846264338
@@ -2863,7 +2956,8 @@ proc lremove { var args } {
 
 	zero matches
 	foreach arg $args {
-		set m [lsearch -all -glob [stl $local] [stl $arg]]
+#		set m [lsearch -all -glob [stl $local] [stl $arg]]
+		set m [lsearch -all -glob [string tolower $local] [string tolower $arg]]
 		foreach n [lsort -int -dec -uni $m] {
 			incr matches
 			set local [lreplace $local $n $n]
@@ -3742,7 +3836,8 @@ proc findonchans { mode who } {
 
 			nick {
 				if [onchan $who $chan] {
-					set nick [lindex $chanlist [lsearch -exact [stl $chanlist] [stl $who]]]
+#					set nick [lindex $chanlist [lsearch -exact [stl $chanlist] [stl $who]]]
+					set nick [lindex $chanlist [lsearch -exact [string tolower $chanlist] [string tolower $who]]]
 					set handle [nick2hand $who $chan]
 					if ![validuser $handle] { empty handle }
 					return [list $nick [getchanhost $who $chan] $handle $chan]
@@ -3751,7 +3846,8 @@ proc findonchans { mode who } {
 
 			handle {
 				if [handonchan $who $chan] {
-					set handle [lindex $userlist [lsearch -exact [stl $userlist] [stl $who]]]
+#					set handle [lindex $userlist [lsearch -exact [stl $userlist] [stl $who]]]
+					set handle [lindex $userlist [lsearch -exact [string tolower $userlist] [string tolower $who]]]
 					set nick [hand2nick $who $chan]
 					return [list $nick [getchanhost $nick $chan] $handle $chan]
 				}
@@ -4110,7 +4206,8 @@ if $debug { debug =2 flags target }
 		lassign [data array value @OUTPUT $target] - host handle chan
 		if [string eq * $chan] { set chan [data array get @output last:$target] }
 #putlog "\[PRINT\] TARGET($target):CHAN($chan)"
-		if { [lsearch -exact [list "" *] $chan] != -1 } { set flags [ldestroy -replacewith $flags -msg -notice] ; set:all temp temp_type notice ; set output $target }
+#		if { [lsearch -exact [list "" *] $chan] != -1 } { set flags [ldestroy -replacewith $flags -msg -notice] ; set:all temp temp_type notice ; set output $target }
+		if { [lsearch -exact [list "" *] $chan] != -1 } { set chan [lindex [concat [home] [channels]] 0] ; set flags [ldestroy -replacewith $flags -msg -notice] ; set:all temp temp_type notice ; set output $target }
 		if [validuser $handle] {
 			if [boolean -integer [userinfo get $handle BURST]] { set:all burst_ok user_setting_burst 1 ; lprepend flags -burst }
 			set pre [userinfo get $handle prefix]
@@ -4738,7 +4835,7 @@ proc stack:trace args {
 proc os { { checkme "" } } {
 	if [string eq -nocase VERSION $checkme] {
 		set os $::tcl_platform(os)
-		switch -glob -- [stl $os] {
+		switch -glob -- [string tolower $os] {
 			cygwin_nt-* {return [array set temp [list 1.0 "Windows 1.0" 2.0 "Windows 2.0" 3.0 "Windows 3.0" 3.1 "Windows 3.1" 3.11 "Windows 3.11" 4.0 "Windows NT4" 5.0 "Windows 2000" 5.1 "Windows XP" 6.0 "Windows Vista" 7.0 "Windows 7" 8.0 "Windows 8" 8.1 "Windows 8.1"]]$temp([right $os 3])}
 			cygwin*     {return [string trimleft [mid $os 7] _]}
 			windows*    {return $os}
@@ -5094,7 +5191,7 @@ proc roman value {
 
 proc unroman value {
 	if ![regexp -nocase -- {^[mdclxvi]+$} $value] { return 0 }
-	set value [stl $value]
+	set value [string tolower $value]
 	set list [list cm 900 cd 400 xc 90 xl 40 ix 9 iv 4 m 1000 d 500 c 100 l 50 x 10 v 5 i 1] 
 	foreach { a b } $list { regsub -all -nocase -- $a $value " $b " value } 
 	expr [join $value +]
@@ -5740,7 +5837,7 @@ proc debug args {
 		prepend o "\026\[DEBUG\]:${loglevel}\026 \[[string toupper $command]\] "
 		putloglev $loglevel * $o
 	} {
-		prepend o "\026\[DEBUG\026 \[[string toupper $command]\] "
+		prepend o "\026\[DEBUG\]\026 \[[string toupper $command]\] "
 		set home [home]
 		if !$quiet {
 			if [botonchan $home] { catch { print -home $o ; if 0 { msg $home $o } } } { putlog $o } ; # rawhome -> msg [home]
@@ -5945,9 +6042,9 @@ proc uniquematch { list matchme } {
 	if [string eq "" $matchme] return
 	if [string eq * $matchme] { return $list }
 	set list [lsort -uni -dict -inc $list] ; # Might be duplicates: if so, false negatives will occur ):
-	set m [lsearch -all -exact [stl $list] [stl $matchme]]
+	set m [lsearch -all -exact [string tolower $list] [string tolower $matchme]]
 	if { [llength $m] == 1 } { return [lindex $list $m] }
-	set n [lsearch -all -glob [stl $list] [stl $matchme]*]
+	set n [lsearch -all -glob [string tolower $list] [string tolower $matchme]*]
 	if { [llength $n] == 1 } { return [lindex $list $n] }
 	return ""
 }
@@ -6195,10 +6292,25 @@ proc timeval { value { convert_to s } } {
 	normalize $timeval
 }
 
+proc urt { value { joiner "" } { limit 0 } } {
+	set d [duration $value]
+	foreach a [regexp -inline -all -nocase -- {\d+ [A-Z]} $d] { array set t [string tolower [split [lreverse $a]]] }
+	if [info exists t(y)] { 
+		if { $t(y) >= 10 } { 
+			set t(e) [expr int( $t(y) / 10 )]
+			set t(y) [expr int( $t(y) % 10 )] 
+		} 
+	}
+	empty urt
+	foreach a [list e y w d h m s] {  if [info exists t($a)] { lappend urt "$t($a)$a" }  }
+	if $limit { set urt [lrange $urt 0 [expr $limit - 1]] }
+	return [join $urt $joiner] 
+}
+
 proc angle args {
 	flags:simple $args [list -dms -decimal -help] value flags
-	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0° 0' 0\"" }
-	set degree_mark \xB0
+	set degree_mark \xC2\xB0
+	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0\[${degree_mark}\] 0\['\] 0\[\"\]" }
 	if [validflag -decimal] {
 		catch { set value [join $value] }
 		set value [encoding convertfrom utf-8 $value]
@@ -6643,4 +6755,5 @@ proc @version { nick host handle chan arg } {
 #####
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
+
 
