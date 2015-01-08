@@ -1,0 +1,237 @@
+sb7 command add MACRO 0 -none MACROS
+sb7 register global MACRO:!
+
+proc @macro { nick host handle chan arg } {
+	FLAGS -global
+	set macro_type $handle
+	if [validflag -global] {
+		if ![access check 501 $handle] { print -help -short -return $nick "You don't have access to the -GLOBAL flag." }
+		set macro_type *global
+	}
+
+	set macros [data array get macro $macro_type]
+	set get_first [join [get first $macros]]
+
+	switch -exact -- [string tolower $1] {
+
+		"" - help {
+			print -help $nick "\[MACRO\]:"
+			print -help $nick "Syntax: $::botnick MACRO \[-GLOBAL\] ADD <macro name> <command>"
+			print -help $nick "Syntax: $::botnick MACRO \[-GLOBAL\] EDIT <macro name> <new command>"
+			print -help $nick "Syntax: $::botnick MACRO \[-GLOBAL\] REN\[AME\] <old macro name> <new macro name>"
+			print -help $nick "Syntax: $::botnick MACRO \[-GLOBAL\] DEL <macro name>"
+			print -help $nick "Syntax: $::botnick MACRO \[-GLOBAL\] LIST \[macro name | wildcard\]"
+			print -help $nick "Syntax: $::botnick MACRO \[-GLOBAL\] CLEAR"
+			print -help $nick ""
+			print -help $nick "The MACRO command lets you define a 'macro' (like in word processing programs) to execute repeated / routine commands by only using a trigger word. This reduces the amount of typing needed for common commands and tasks. In addition, this command will also allow the use of variables in your macros. StormBot.TCL 5.0 will enable the command through the normal command processor, effectively creating a new, personalized command (just for you)."
+			print -help $nick ""
+			print -help $nick "Example:"
+			print -help $nick "         $::botnick MACRO add virus SAY Hey, <1>, you have a virus or trojan!"
+			print -help $nick "         $::botnick virus Mikey"
+			print -help $nick "         <$::botnick> Hey, Mikey, you have a virus or trojan!"
+			print -help $nick ""
+			print -help $nick "Valid variable patterns: <1> \[5\] <-7> \[2-5\] \[9-13\] <1->"
+			print -help $nick "\[1\] = take the 1st data element (optional)"
+			print -help $nick "<2> = 2nd data element (required - will return error if missing)"
+			print -help $nick "Also accepted: \$BOT \$CHAN \$ME \$NICK \$HANDLE"
+			return 0
+		}
+
+		add {
+			if [isempty 2] { print -help -return $nick "\[MACRO ADD\] Error: macro name not defined" }
+			if [isempty 3] { print -help -return $nick "\[MACRO ADD\] Error: macro definition not given" }
+			set m [lsearch -exact [string tolower [sb7 command list]] [string tolower $2]]
+			if {$m > -1} {print -help -return $nick "\[MACRO ADD\] I'm sorry, but $u2 is a StormBot.TCL command word. Please choose another name for your MACRO." }
+			set m [lsearch -exact [string tolower $get_first] [string tolower $2]]
+			if {$m > -1} {print -help -return $nick "\[MACRO ADD\] I'm sorry, but you already have \"[join $2]\" defined as a MACRO." }
+			lappend macros [list $2 $3e]
+			data array set macro $macro_type $macros
+			saveme data
+
+			set count [llength [regexp -all -inline -nocase -- {\[[0-9\-]+\]} [join $3e]]]
+			incr count [llength [regexp -all -inline -nocase -- {<[0-9\-]+>} [join $3e]]]
+			incr count [llength [regexp -all -inline -nocase -- {\$BOT} [join $3e]]]
+			incr count [llength [regexp -all -inline -nocase -- {\$CHAN} [join $3e]]]
+			incr count [llength [regexp -all -inline -nocase -- {\$ME} [join $3e]]]
+			incr count [llength [regexp -all -inline -nocase -- {\$NICK} [join $3e]]]
+			incr count [llength [regexp -all -inline -nocase -- {\$HANDLE} [join $3e]]]
+			set commandcount [llength [regexp -all -inline -- \\\|\\\| $3e]]
+			incr commandcount
+			print $nick "\[MACRO ADD\] I have added the macro \"[join $2]\" (commands: ${commandcount}, variables: $count)"
+			return
+		}
+
+		del {
+			if [isempty 2] { print -help -return $nick "\[MACRO DEL\]Error: macro name not given" }
+			empty deleteme
+			foreach a $2e { set deleteme [concat $deleteme [lsearch -glob -all -inline [string tolower $get_first] [string tolower $a]]] }
+			if [isempty deleteme] { print -help -return $nick "\[MACRO DEL\]No MACRO matches on: [join $2e]" }
+			set temp ""
+			foreach a $macros {
+				set name [lindex $a 0]
+				# Isn't working with special chars ~ set macros [ldestroy -glob -nocase $macros "$killme *"]
+				set bad 0
+				foreach killme $deleteme {
+					if ![string eq -nocase $killme $name] {
+						incr bad 0
+					} else {
+						incr bad 1
+					}
+				}
+				if !$bad { lappend temp $a }
+			}
+			set macros $temp
+			data array set macro $macro_type $macros
+			saveme data
+			print $nick "\[MACRO DEL\] The following [comma [llength $deleteme]] [plural MACRO [llength $deleteme]] were deleted: [join $deleteme ", "]"
+			return
+		}
+
+		update - ed - edit {
+			if [isempty 2] { print -help -return $nick "\[MACRO EDIT\] What MACRO am I editing?" }
+			if [isempty 3] { print -help -return $nick "\[MACRO EDIT\] What is the new MACRO gonna be?" }
+			set m [lsearch -exact [string tolower $get_first] [join [string tolower $2]]]
+			if { $m < 0 } { print -help -return $nick "\[MACRO EDIT\] There's no such MACRO for you (\"[join $2]\")." }
+			lset macros $m [list $2 $3e]
+			data array set macro $macro_type $macros
+			saveme data
+			print $nick "\[MACRO EDIT\] MACRO \"[join $2]\" edited to: [join $3e]"
+			return
+		}
+
+		ren - rename {
+			if [isempty 2] { print -help -return $nick "\[MACRO RENAME\] What MACRO am I renaming?" }
+			if [isempty 3] { print -help -return $nick "\[MACRO RENAME\] What is the new MACRO name?" }
+			set m [lsearch -exact [string tolower $get_first] [join [string tolower $2]]]
+			if { $m < 0 } { print -help -return $nick "\[MACRO RENAME\] There's no such MACRO for you (\"[join $2]\")." }
+			set macro [lindex $macros $m] ; # $M should work; GETFIRST doesn't sort, so the indeces should still correspond.
+			set n [lsearch -exact [string tolower $get_first] [join [string tolower $3]]]
+			if { $n > -1 } { print -help -return $nick "\[MACRO RENAME\] I'm sorry, but you already have \"[join $3]\" defined as a MACRO." }
+			lset macro 0 $3; # No JOIN here: keep in KILLCODE format
+			lset macros $m $macro
+			data array set macro $macro_type $macros
+			saveme data
+			print $nick "\[MACRO RENAME\] Renamed MACRO \"[join $2]\" to \"[join $3]\""
+			return
+		}
+
+		list - find {
+			set count 0
+			set max [string length [llength $macros]]
+			set max2 [get longest $get_first]
+			set matchme *
+			if { $2 != "" } { set matchme *[join $2e]* }
+			foreach a [lsort -inc -index 0 $macros] {
+				lassign $a macro_name macro_definition
+				if { !( [string match -nocase $matchme $macro_name] || [string match -nocase $matchme $macro_definition] ) } continue
+				incr count
+				print $nick "\[MACRO LIST\] [format %${max}u $count]) [format %-${max2}s [join $macro_name]]: [join $macro_definition]"
+			}
+			if !$count { print -help -return $nick "\[MACRO LIST\] There were no matches." }
+			print $nick "\[MACRO LIST\] End of MACRO LIST."
+			return
+		}
+
+		clear {
+			if ![string eq -nocase CLEAR $2] { print -return $nick "\[MACRO CLEAR\] Are you [effects sure up u b]?! Use \"CLEAR CLEAR\" to convince me." }
+			data array set macro $macro_type
+			saveme data
+			print $nick "\[MACRO CLEAR\] The MACRO list has been cleared for: $macro_type"
+			return
+		}
+
+		default { print -help -short -return $nick "Unknown option: \"[join [string toupper $1]]\"" }
+	}
+	?
+}
+
+# This takes the entire $ARG and replaces it as necessary
+
+proc @macro:process { nick host handle chan arg } {
+#debug -log 5 nick host handle chan arg
+	one failed
+	# SB:DISPATCH now needs "" to be returned if no MACRO is found.
+
+	# Check for global macro, then user's macro (user's overrides global).
+	set macro [join [lindex [split $arg] 0]]
+	foreach level [list *global $handle] {
+		set macros [data array get macro $level]
+		foreach entry $macros {
+			lassign $entry name code
+			if [string eq -nocase $macro [join $name]] { zero failed ; set text $code }
+		}
+	}
+	if $failed return
+	set processme [concat [regexp -all -inline -- {<\d+?(\-(\d+?)?)??>} $text] [regexp -all -inline -- {\[\d+?(\-(\d+?)?)??\]} $text]]
+	foreach a $processme {
+		set param ""
+		set type [string index $a 0][string index $a end]
+		set range [string range $a 1 end-1]
+		set old $range
+		if [regexp -- {^\d+$} $range] { set range ${range}-${range} }
+		if [string match -* $range] { set range 1${range} }
+		if [string match *- $range] { append range [llength $arg] }
+
+		set range [get numlist $range 1 [llength [split $text]]]
+		zero collected
+		foreach item $range {
+			set offset [expr $item - 0]
+			set replacement [lindex $arg $offset]
+			if [string eq "" $replacement] {
+				if !$collected { if [string eq <> $type] { error "\[@MACRO:PROCESS\] missing replacement data for $a" } }
+			}
+			append param $replacement " "
+			one collected
+		}
+		set param [string trimright $param]
+		if ![string eq <> $type] { set a "\\\[${old}\\\]" }
+		set matches [regsub -all -- $a $text $param text]
+	}
+	regsub -all -nocase \\\$chan $text $chan text
+	regsub -all -nocase \\\$me $text $nick text
+	regsub -all -nocase \\\$nick $text $nick text
+	regsub -all -nocase \\\$handle $text $handle text
+	regsub -all -nocase \\\$botnick $text $::botnick text
+	regsub -all -nocase \\\$bot $text $::botnick text
+	regsub -all -- {\|\|} $text \000 text
+	split $text \000
+}
+
+proc macro { 1 { 2 "" } { 3 "" } } {
+	switch -exact -- [string tolower $1] {
+		check {
+			array set temp [concat [data array get macro *global] [data array get macro $2]]
+			return [info exists temp([string tolower $3])]
+		}
+
+		get {
+			array set temp [concat [data array get macro *global] [data array get macro $2]]
+			if [info exists temp([string tolower $3])] { return $temp([string tolower $3]) } return
+		}
+
+		default { error "\[SB7 MACRO\] Unknown option: [join [string toupper $1]]" }
+
+	}
+	?
+}
+
+proc @macro:bootstrap args {
+	sb7 register global macro
+
+	# Convert SB6 data to SB7 format
+	zero changed
+	foreach user [userlist] {
+		if [data get -notempty macro:$user] {
+			one changed
+			data array set macro $user [concat [data array get macro $user] [data get macro:$user]]
+			data set macro:$user
+		}
+	}
+	if $changed { saveme data }
+	return
+}
+
+#####
+# BootStrap:
+
+@macro:bootstrap

@@ -620,7 +620,7 @@ proc @botmon:interpret args {
 
 		# Version 3
 		array set botnet [list list [concat [bots] ${::botnet-nick}] valid [concat ${::botnet-nick} [data array get BOTMON BOTS] [data array get BOTMON OFFLINE]] present "" missing "" ignore [data array get BOTMON IGNORE] extra ""]
-		lassign [ldestroy -all -nocase -multiple -both -not $botnet(valid) $botnet(list)] present missing
+		lassign [ldestroy -all -nocase -multiple -both $botnet(valid) $botnet(list)] missing present 
 		set extra [ldestroy -all -nocase -multiple $botnet(list) [concat $present $botnet(ignore)]]
 		set botnet(present) $present
 		set botnet(missing) $missing
@@ -631,8 +631,9 @@ proc @botmon:interpret args {
 		set botnet(count:extra) [llength $extra]
 
 		array set chanlist [list list [chanlist [home]] valid [concat $::botnick [data array get BOTMON BOTS] [data array get BOTMON FREE]] present "" missing "" ignore [data array get BOTMON IGNORE] extra ""]
-		lassign [ldestroy -all -nocase -multiple -both -not $chanlist(valid) $chanlist(list)] present missing
+		lassign [ldestroy -all -nocase -multiple -both $chanlist(valid) $chanlist(list)] missing present 
 		set extra [ldestroy -all -nocase -multiple $chanlist(list) [concat $present $chanlist(ignore)]]
+
 		set chanlist(present) $present
 		set chanlist(missing) $missing
 		set chanlist(extra) $extra
@@ -649,7 +650,7 @@ proc @botmon:interpret args {
 		foreach bot [lsort -increasing -dictionary -unique [concat $botnet(missing) $chanlist(missing)]] {
 			empty reason 
 			if ![islinked $bot] { append reason B ; set reasons(B) "[effects B 4 b]otnet" }
-			if ![onchan $missing [home]] { append reason # ; set reasons(#) "[effects # 4 b][string range [home] 1 end]" }
+			if ![onchan $bot [home]] { append reason # ; set reasons(#) "[effects # 4 b][string range [home] 1 end]" } ; # ONCHAN $MISSING [HOME]
 			foreach group [data array find BOTMON GROUP:*] {
 				empty key desc bots name
 				lassign [data array get BOTMON $group] key desc bots
@@ -660,7 +661,7 @@ proc @botmon:interpret args {
 					break
 				}
 			}
-			lappend output_missing "$bot ([effects [implode [lsort:priority [explode $reason] [list B #]]] 4 b])"
+			lappend output_missing "[caseall $bot] ([effects [implode [lsort:priority [explode $reason] [list B #]]] 4 b])"
 		}
 		set output_missing "Missing: [ajl $output_missing]"
 		set legend ""

@@ -1,0 +1,142 @@
+sb7 command add JUMP 700 -none servers
+
+# The SB6:SERVERS command has been infused into JUMP
+
+proc @jump { nick host handle chan arg } {
+	FLAGS -ifnot -flee
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[JUMP\]:"
+			print -help $nick "Syntax: $::botnick JUMP HELP"
+			print -help $nick "Syntax: $::botnick JUMP"
+			print -help $nick "Syntax: $::botnick JUMP <server name>"
+			print -help $nick "Syntax: $::botnick JUMP <server within server list (wildcard OK)>"
+			print -help $nick "Syntax: $::botnick JUMP -IFNOT <server name (wildcard OK)>"
+			print -help $nick "Syntax: $::botnick JUMP -FLEE <server name (wildcard OK)>"
+			print -help $nick "*Syntax: $::botnick JUMP ADD <server\[:port\[:password\]\]"
+			print -help $nick "*Syntax: $::botnick JUMP DEL <server | wildcard>"
+			print -help $nick "*Syntax: $::botnick JUMP LIST"
+			print -help $nick "*Syntax: $::botnick JUMP CLEAR"
+			print -help $nick "*Syntax: $::botnick JUMP CURRENT"
+			print -help $nick ""
+			print -help $nick "The JUMP command will either:"
+			print -help $nick "     (1) make the bot jump to the next server, in order, from the server list"
+			print -help $nick "     (2) make the bot jump to a specific server"
+			print -help $nick "     (3) make the bot jump to a specific server from the server list (wildcard matching OK)"
+			print -help $nick "     (4) *manipulate the server list"
+			print -help $nick ""
+			print -help $nick "-IFNOT: if $::botnick is not already on this server, jump to it. If $::botnick is already on that server, do nothing"
+			print -help $nick "-FLEE: if $::botnick is on this server, jump off it to the next servers on the server list"
+			print -help $nick ""
+			print -help $nick "Server name format:"
+			print -help $nick "SERVER NAME\[:PORT\[:PASSWORD\]\]"
+			set default_port "undefined"
+			if [info exists ::default-port] { set default_port ${::default-port} }
+			print -help $nick "If you don't specify the port, the \$DEFAULT-PORT ($default_port) will be used"
+			print -help $nick ""
+			print -help $nick "* = The SB7 version of the JUMP command absorbed the SB6 version of SERVERS\; if you're looking the the SERVERS command, it's now part of JUMP."
+			return
+		}
+
+		add {
+			if [isempty 2] { print -help -return $nick "\[JUMP ADD\] What server am I adding?" }
+			set servers [data get servers]
+			lappend servers $j2
+			data set servers $servers
+			saveme data
+			set ::servers $servers
+			print $nick "\[JUMP ADD\] Added server: $j2"
+			print $nick "Current server list: $servers"
+			return
+		}
+
+		del {
+			if [isempty 2] { print -help -return $nick "\[JUMP ADD\] What server am I deleting?" }
+			set new ""
+			foreach a $1e { if ![instr $a :] { append a :${::default-port} } ; lappend new $a }
+			lassign [ldestroy -nocase -all -glob -multiple [data get servers] $new] new deleted
+			data set servers $new
+			saveme data
+			set ::servers $new
+			print $nick "\[JUMP DEL\] Deleted servers: $deleted" 
+			print $nick "Current server list: $new"
+			return
+		}		
+
+		list {
+			set count 0
+			set current [join [lrange [split $::server :] 0 1] :]
+			if [info exists ::default-port] { set default_port ${::default-port} } { set default_port [lindex [split $::server :] 1] }
+			foreach server $::servers {
+				incr count 1
+				lassign [split [lindex $server 0] :] s1 s2 s3
+				set local [lindex $server 1]
+				if [isempty s2] { set s2 $default_port }
+				set entry [join [list $s1 $s2] :]
+				if [string eq -nocase $entry $current] { set control \037 } { set control "" }
+				print $nick "${count}) ${control}${entry}${control}[none $s3 "" " (password = <hidden>"][none $local "" " (local name: $local)"]"
+			}
+			print $nick "End of list: [comma $count] [plural entry $count]"
+			return
+		}
+
+		clear {
+			if ![string eq -nocase CLEAR $2] { print -help -return $nick "\[JUMP CLEAR\] Are you [effects sure u b up]?! Use \"CLEAR CLEAR\" to convince me." }
+			data set servers
+			saveme data
+			set ::servers ""
+			print $nick "\[JUMP CLEAR\] Servers list cleared."
+			return
+		}
+
+		default {
+			# Jump to next server on list
+			if [isempty 1] { print $nick "\[JUMP\] JUMPing to the next server in my server list ...." ; jump ; return }
+
+			# --- Check for -IFNOT / -FLEE ---
+			set target $j1
+			if ![instr $target :] { append target :${::default-port} }
+			if [validflag -ifnot] {
+				if [is wildcard $target] { set target [lindex [lsearch -glob [string tolower $::servers] [string tolower $target]] 0] }
+				if ![string match -nocase $target $::server] { print $nick "\[JUMP -IFNOT\]" ; eval jump [split $target :] ; return }
+				print $nick "\[JUMP -IFNOT\] I'm already on: [effects $target u b] (not JUMPing)"
+				return
+			}
+
+			if [validflag -flee] {
+				if [is wildcard $target] { set target [lindex [lsearch -glob [string tolower $::servers] [string tolower $target]] 0] }
+				if [string match -nocase $target $::server] { print $nick "\[JUMP -FLEE\]" ; eval jump [split $target :] ; return }
+				print $nick "\[JUMP -FLEE\] I'm not on: [effects $target u b] (not JUMPing)"
+				return
+			}
+
+
+			# Check for wildcard against server list
+			if [is wildcard $target] {
+				set new [lindex [lsearch -glob [string tolower $::servers] [string tolower $target]] 0] 
+				if [isempty target] { print -help -return $nick "\[JUMP\] No match on: $target" }
+				eval jump [split $target :]
+				return
+			}
+
+			# Jump to literal server
+			eval jump [split $target :]
+
+			return
+		}
+
+	}
+}
+
+proc @jump:bootstrap args {
+	set servers [data get servers]
+	if [notempty servers] { set ::servers $servers }
+	return
+}
+
+#####
+# BootStrap
+
+@jump:bootstrap
+

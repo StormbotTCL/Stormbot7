@@ -1,7 +1,16 @@
-# StormBot.TCL 7 version Changelog -- 2015-01-04 09:19:39 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-01-07 13:16:08 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-01-07 11:20:48 UTC: #427 [botsend] Fixed BOTSEND (cosmetic: the ''Successfully saved'' text used FORMAT for the transfer speed but not for the calculated time (seconds vs milliseconds), causing times of ''8.667999999999999 s'' to be displayed)
+2015-01-07 11:14:14 UTC: #426 [macro & tail] Added MACRO (ported from SB6)
+2015-01-07 11:12:17 UTC: #425 [host] Fixed HOST ADD (added nick-based options, including ''!NICK'')
+2015-01-07 11:11:14 UTC: #424 [tail] Fixed TAIL (binds were in place for SPLT & REJN; no code was written / in place yet. Wrote dummy / holder code for now. Same as CHANGELOG #419 for SIGN)
+2015-01-07 11:05:42 UTC: #423 [botmon] Fixed BOTMON (due to changes in LDESTROY's -NOCASE option (when re-coded for -COMMON, the resulting list was forced lowercase. Fixed locally (within BOTMON) with CASEALL)
+2015-01-07 11:04:54 UTC: #422 [tail] Fixed VALIDHOST (don't always presume we're matching a host that needs a ''!'' in it, unless there's a ''@'' in it already. HOST DEL is used for removing ''funky'' hosts but this kept messing it up)
+2015-01-07 09:42:10 UTC: #421 [tail] Fixed LDESTROY (for some reason, when transiting from SB6 to SB7, I changed how LDESTROY works: collect the terms instead of the indeces. The list got bastardized when using -NOCASE. Exposed by BOTMON; reverted to index method)
+2015-01-05 13:39:24 UTC: #420 [jump] Added JUMP (re-written from scratch. Also, incorporated SB6:SERVERS into SB7:JUMP to combine the two commands into one)
+2015-01-05 11:09:10 UTC: #419 [tail] Added SB7:BIND:SIGN (binds aren't all programmed yet)
 2015-01-04 09:14:06 UTC: #418 [tail] Fixed SB7:SETUP (the security checked used the wrong variable: $A instead of $VAR)
 2015-01-04 08:14:54 UTC: #417 [tail] Fixed STR, FIXMATH, LREMOVE, FINDONCHANS, OS, UNROMAN, & UNIQUEMATCH (cosmetic: changed STL* to proper STRING TOLOWER*)
 2015-01-04 06:33:52 UTC: #416 [tail] Added URT (re-written from SB6 version)

@@ -173,25 +173,6 @@ proc sb7 { args } { # General
 			}
 		}
 
-		macro {
-			switch -exact -- [string tolower $1] {
-
-				check {
-					array set temp [concat [data array get macro *global] [data array get macro $2]]
-					return [info exists temp([string tolower $3])]
-				}
-
-				get {
-					array set temp [concat [data array get macro *global] [data array get macro $2]]
-					if [info exists temp([string tolower $3])] { return $temp([string tolower $3]) } return
-				}
-
-				default { error "\[SB7 MACRO\] Unknown option: $1" }
-
-			}
-			?
-		}
-
 		register {
 			if [isempty 2] return
 			set valid [list global user chan block]
@@ -514,6 +495,18 @@ proc sb7:dispatch { nick host handle chan arg } {
 	set arg [split $arg]
 	set arg [lsearch -all -inline -not $arg ""]
 #debug =1 arg
+
+	# Handle MACROs (will return a LIST of commands to execute (will process the "||" splitter internally))
+#if ![string match -nocase *LOGIN* $cmd] { debug =1 cmd arg }
+	if ![string eq "" [info procs @macro:process]] {
+		set macro [@macro:process $nick $host $handle $chan $arg]
+		if ![string eq "" $macro] {
+			foreach new_arg $macro { sb7:dispatch $nick $host $handle $chan $new_arg }
+			return 1
+		}
+	}
+#if ![string match -nocase *LOGIN* $cmd] { debug =2 cmd arg }
+
 	set cmd [string tolower [lindex $arg 0]]
 #putlog [effects DISPATCH:09 11,12 bold]:CMD($cmd)
 	# Check for abbreviations
@@ -522,9 +515,6 @@ proc sb7:dispatch { nick host handle chan arg } {
 		set cmd $abbr
 		set arg [lreplace $arg 0 0 $abbr]
 	}
-
-	# Handle MACROs
-	sb7:macro_process $nick $host $handle $chan $cmd $arg cmd arg
 
 	# Assign attributes
 	lassign:array cmdinfo [data array value -lower @COMMANDLIST $cmd] cmd source level original flags abbr extra proc
@@ -769,15 +759,18 @@ proc sb7:dispatch:pubm { nick host handle chan arg } {
 	if ![left $0 $len $shortcut] return
 	set test [mid $0 [ expr $len + 1 ]]
 #debug active shortcut len 0 test
+
+## 2015-01-07 00:56:58 -0800: Just let the main dispatcher worry about valid command / aliases / macros.
 #	if ![sb7 command check [sb7 abbr check $test]] return
-	if { ![sb7 command check [sb7 abbr check $test]] && ![sb7 macro check $handle $test] } return
+#	if { ![sb7 command check [sb7 abbr check $test]] && ![macro check $handle $test] } return
 
 	data set @LASTBIND PUBM
 	sb7:dispatch $nick $host $handle $chan [mid $arg [incr len]]
 	return 0 ; # "RETURN 0" is needed to allow PUB BIND to trigger on this
 }
 
-proc sb7:macro_process { nick host handle chan cmd arg { var_cmd "" } { var_arg "" } } {
+# Delete me?
+proc `sb7:macro_process { nick host handle chan cmd arg { var_cmd "" } { var_arg "" } } {
 	if [notempty var_cmd] { upvar 1 $var_cmd new_cmd }
 	if [notempty var_arg] { upvar 1 $var_arg new_arg }
 	# Let local (user) macros override global ones.
@@ -898,8 +891,6 @@ proc sb7:setup args {
 	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?_[a-f]+[1-9]$} $var] { unset $var } }
 
 	global sb7
-
-	sb7 register global macro ; # Array
 
  	# Check all CONFIG:BLAH options; convert to DATA ARRAY
 	# Check all CONFIG:BLAH options; convert to DATA ARRAY
@@ -2676,7 +2667,7 @@ debug =final list
 # Note: LMATCH (interp alias) -> "LDESTROY -NOT"
 
 # 2014-09-13 18:05:00 -0700: Replaced with new (fresh re-write) version, specifically to add new function: -COMMON
-proc ldestroy args {
+proc `ldestroy args {
 	# Use -COUNT to test number of results (0 = no matches)
 	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
 	set debug [validflag -debug]
@@ -2691,6 +2682,127 @@ proc ldestroy args {
 	set _ $list
 	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
 
+	if [validflag -common] {
+		empty common fail1 fail2
+		foreach item [lunique [concat $_ $total]] {
+			if [validflag -all] {
+				if [validflag -nocase] {
+					set __1 [lsearch -all -${match} [string tolower $_] $item]
+					set __2 [lsearch -all -${match} [string tolower $total]  $item]
+				} {
+					set __1 [lsearch -all -${match} $_ $item]
+					set __2 [lsearch -all -${match} $total $item]
+				}
+			} {
+				if [validflag -nocase] {
+					set __1 [lsearch -${match} [string tolower $_] $item]
+					set __2 [lsearch -${match} [string tolower $total] $item]
+				} {
+					set __1 [lsearch -${match} $_ $item]
+					set __2 [lsearch -${match} $total $item]
+				}
+			}
+if [validflag -debug] { debug __1 __2 }
+			empty _i _k
+			foreach i $__1 { lappend _i [lindex $list $i] } ; swap _i __1
+			foreach k $__2 { lappend _k [lindex $list $k] } ; swap _k __2
+			switch -exact -- [string eq "" $__1][string eq "" $__2] {
+				11 { error "\[LDESTROY -COMMON\] This should not be possible: \"${item}\" doesn't match either list!" }
+				10 { set fail2 [concat $fail2 $item] }
+				01 { set fail1 [concat $fail1 $item] }
+				00 { set common [concat $common $item] }
+			}
+if [validflag -debug] { debug item common fail1 fail2 }
+		}
+
+		if [validflag -nonulls] { foreach a [list common fail1 fail2] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
+		if [validflag -unique] { foreach a [list common fail1 fail2] { set $a [lunique [set $a]] } }
+		if [validflag -increasing -decreasing] {
+			set direction increasing
+			if [validflag -decreasing] { set direction decreasing }
+			foreach a [list common fail1 fail2] { set $a [lsort -$direction [set $a]] }
+		}
+		if [validflag -replacewith] { set common $replacewith }
+		if [validflag -both] { if [validflag -count] { return [list [llength $common] [llength $fail1] [llength $fail2]] } { return [list $common $fail1 $fail2] } }
+		if [validflag -not] { if [validflag -count] { return [llength [concat $fail1 $fail2]] } { return [concat $fail1 $fail2] } }
+		if [validflag -count] { return [llength $common] }
+		return $common
+	}
+	empty temp_list temp_not temp_list_ temp_not_
+
+if [validflag -debug] { debug _ total }
+	# Version 4
+	set collected ""
+set mm [lsearch -exact $flags -nocase] ; if { $mm != -1 } { set flags [lreplace $flags $mm $mm] }
+	lassign [split [lindex [list : {[string tolower :]}] [validflag -nocase]] :] header footer
+if [validflag -debug] { debug =0 header footer }
+	foreach tot $total {
+		set __ [eval lsearch [lindex [list "" -all] [validflag -all]] -${match} \"${header}${_}${footer}\" \"${header}${tot}${footer}\"]
+		set collected [concat $collected $__]
+if [validflag -debug] { debug __ tot }
+	}
+if [validflag -debug] { debug collected }
+
+	set temp_list ""
+	set temp_not ""
+	for { set x 0 } { $x < [llength $list] } { incr x } { lappend temp_[lindex [list temp not] [expr ( [lsearch -exact $collected $x] != -1 ) ? 0 : 1]] [lindex $list $x] }
+if [validflag -debug] { debug temp_list temp_not }
+if 0 {
+	# First pass
+	set collected ""
+	foreach item $total {
+		if [validflag -all] {
+			set __ [lsearch -all -${match} $_ $item] 
+		} { 
+			set __ [lsearch -${match} $_ $item] 
+		}
+		# Remember: we're trying to REMOVE entries by default, not keep them.
+		if { ( $__ != -1 ) && ![string eq "" $__] } { set collected [concat $collected $__] }
+#if $debug { debug collected item _ __ match =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_ }
+	}
+if [validflag -debug] { debug collected list _ }
+	# Second pass
+	set do_second_pass 1
+	if $do_second_pass {
+if $debug { debug temp_list_ temp_not_ _ }
+		foreach a $collected { lappend temp_not [lindex $list $a] }
+		foreach a [lsort -dec $collected] { set list [lreplace $list $a $a] }
+		set temp_list $list
+	}
+if $debug { debug _ collected temp_list temp_not }
+}
+	if [validflag -nonulls] { foreach a [list temp_list temp_not] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
+	if [validflag -unique] { foreach a [list temp_list temp_not] { set $a [lunique [set $a]] } }
+	if [validflag -increasing -decreasing] {
+		set direction increasing
+		if [validflag -decreasing] { set direction decreasing }
+		foreach a [list temp_list temp_not] { set $a [lsort -$direction [set $a]] }
+	}
+	if [validflag -replacewith] { set temp_list $replacewith }
+
+if $debug { debug temp_list temp_not }
+	if [validflag -both] { if [validflag -count] { return [list [llength $temp_list] [llength $temp_not]] } { return [list $temp_list $temp_not] } }
+	if [validflag -not] { if [validflag -count] { return [llength $temp_not] } { return $temp_not } }
+	if [validflag -count] { return [llength $temp_list] }
+	return $temp_list
+}
+
+# FIX THIS: -NOCASE returns lower-case items!
+proc ldestroy args {
+	# Use -COUNT to test number of results (0 = no matches)
+	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
+	set debug [validflag -debug]
+	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
+ 
+	lassign $temp list text replacewith
+	if [validflag -multiple] { set total $text ; lappend flags -all } { set total [list $text] }
+ 
+	set match glob ; # Default (order (lowest-to-highest: regexp, exact, glob)
+	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
+#debug *
+	set _ $list
+	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
+ 
 	if [validflag -common] {
 		empty common fail1 fail2
 		foreach item [lunique [concat $_ $total]] {
@@ -2719,7 +2831,7 @@ proc ldestroy args {
 			}
 #debug item common fail1 fail2
 		}
-
+ 
 		if [validflag -nonulls] { foreach a [list common fail1 fail2] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
 		if [validflag -unique] { foreach a [list common fail1 fail2] { set $a [lunique [set $a]] } }
 		if [validflag -increasing -decreasing] {
@@ -2734,7 +2846,7 @@ proc ldestroy args {
 		return $common
 	}
 	empty temp_list temp_not temp_list_ temp_not_
-
+ 
 	# First pass
 	set collected ""
 	foreach item $total {
@@ -2752,7 +2864,7 @@ proc ldestroy args {
 		}
 if $debug { debug collected item _ __ match =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_ }
 	}
-
+ 
 	# Second pass
 	set do_second_pass 1
 	if $do_second_pass {
@@ -2764,7 +2876,7 @@ if $debug { debug temp_list_ temp_not_ _ }
 		set temp_list $_
 	}
 if $debug { debug _ collected temp_list temp_not }
-
+ 
 	if [validflag -nonulls] { foreach a [list temp_list temp_not] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
 	if [validflag -unique] { foreach a [list temp_list temp_not] { set $a [lunique [set $a]] } }
 	if [validflag -increasing -decreasing] {
@@ -2773,85 +2885,12 @@ if $debug { debug _ collected temp_list temp_not }
 		foreach a [list temp_list temp_not] { set $a [lsort -$direction [set $a]] }
 	}
 	if [validflag -replacewith] { set temp_list $replacewith }
-
+ 
 if $debug { debug temp_list temp_not }
 	if [validflag -both] { if [validflag -count] { return [list [llength $temp_list] [llength $temp_not]] } { return [list $temp_list $temp_not] } }
 	if [validflag -not] { if [validflag -count] { return [llength $temp_not] } { return $temp_not } }
 	if [validflag -count] { return [llength $temp_list] }
 	return $temp_list
-}
-
-proc ldestroy' args { # LDESTROY
-#rename dummy "" ; # Suicide if used
-#addlog ldestroy.txt -1:[info level [expr [info level] - 1]]
-#addlog ldestroy.txt +0:[info level [info level]]
-#addlog ldestroy.txt ""
-	# This replaces SB6/LDESTROY! (:
-	# This replaces SB6/LMATCH (via -NOT) (:
-
-	flags -simple $args [list -debug -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
-	# We're CONSTANTLY using the -NONULLS flag: let's make it default, shall we?
-	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
-
-	lassign $temp list text replacewith
-	if [validflag -multiple] { set total $text ; lappend flags -all } { set total [list $text] }
-
-	set match glob ; # Default (order (lowest-to-highest: regexp, exact, glob)
-	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
-
-	# Collect INDECES of matches (we'll re-assemble later)
-	set _ $list
-	empty temp_list temp_not
-	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
-	# Ignore -ALL for now, collect all possibilities (we'll limit the results later)
-	foreach text $total {
-		if [validflag -all] {
-			set __ [lsearch -all -${match} $_ $text]
-		} {
-			set __ [lsearch -${match} $_ $text]
-		}
-		set temp_list [concat $temp_list $__]
-	}
-
-	# Re-assemble
-	array set new [list list "" not ""]
-	set ll [llength $list]
-if [validflag -debug] { putlog "\[LDESTROY\] LL($ll):LIST($list):NEW([array get new])" }
-	for { set a 0 } { $a < $ll } { incr a } {
-		if { [lsearch -exact $temp_list $a] != -1 } {
-			if [validflag -replacewith] { lappend new(list) $replacewith } { lappend new(list) "" }
-			lappend new(not) [lindex $list $a]
-		} {
-			lappend new(list) [lindex $list $a]
-			if [validflag -not] {
-				if [validflag -replacewith] { lappend new(not) $replacewith } { lappend new(not) "" }
-			} {
-				lappend new(not) ""
-			}
-		}
-	}
-
-	if [validflag -not] { swap new(list) new(not) }
-
-	# Post-processing (if -BOTH, we also need to do it to "NOT" below!)
-#if [validflag -debug] { putlog "\[LDESTROY\] FLAGS($flags)" }
-	if [validflag -nonulls] { foreach element [array names new] { set new($element) [lsearch -inline -all -not -exact $new($element) ""] } }
-	if [validflag -increasing] { foreach element [array names new] { set new($element) [lsort -increasing $new($element)] } }
-	if [validflag -decreasing] { foreach element [array names new] { set new($element) [lsort -decreasing $new($element)] } }
-	if [validflag -unique] { foreach element [array names new] { set new($element) [lunique $new($element)] } }
-
-	if ![validflag -all] {
-		# The loops above captures all data despite the -ALL flag.
-		# So, let's trim it here with a healthy crop!
-#if [validflag -debug] { putlog "\[LDESTROY\] =01 NEW([array get new])" }
-		foreach a [array names new] { set new($a) [lindex $new($a) 0] }
-#if [validflag -debug] { putlog "\[LDESTROY\] =02 NEW([array get new])" }
-	}
-#if [validflag -debug] { putlog "\[LDESTROY\] =10 NEW([array get new])" }
-
-	# Separated so other things can be checked AFTER sorting options can process (NONULLS, et al)
-	if [validflag -both] { return [list $new(list) $new(not)] }
-	return $new(list)
 }
 
 proc lcommon args {
@@ -3396,7 +3435,7 @@ proc alias args {
 
 proc validhost { host handle } {
 	if ![validuser $handle] { return 0 }
-	if ![instr $host !] { prepend host *! }
+	if [instr $host @] { if ![instr $host !] { prepend host *! } }
 	foreach h [getuser $handle hosts] { if [string match -nocase $h $host] { return 1 } }
 	return 0
 }
@@ -6538,6 +6577,18 @@ proc sb7:bind:part { nick host handle chan { reason "" } } {
 			data array lremove $root $field $nick
 		}
 	}
+}
+
+proc sb7:bind:sign { nick host handle chan { reason "" } } {
+	# Nothing yet ....
+}
+
+proc sb7:bind:splt { nick host handle chan } {
+	# Nothing yet ....
+}
+
+proc sb7:bind:rejn { nick host handle chan } {
+	# Nothing yet ....
 }
 
 # --- Event binds ---
