@@ -255,15 +255,18 @@ debug id direction
 			if [notempty send(bots)] { print $nick "\[BOTSEND\] Sending attention signals to [ajl $send(bots)]: [ajl $send(names)]" }
 			if [notempty status(open)] { print $nick "\[BOTSEND\] Failures (unable to open file): [ajl $status(open)]" }
 #debug =DATA([data list @botsend:${id}*])
+			sb7 killtimer -quiet @botsend:timeout
+			utimer [none [data array get botsend option:timeout] 300] @botsend:timeout
 			return
 		}
 
 		set {
 			if ![access check 1000 $handle] { print -error -header -return $nick "You don't have access to use this option." }
 
-			if [isempty 2] { print -error -header -return $nick "Options: [ajl [data array get botsend options]]" }
-			if { [lsearch -exact [data get botsend options] $2l] == -1 } { print -error -header -return $nick "Illegal option: $2u" }
+			if [isempty 2] { print -error -header -return $nick "Options: help, list\; [ajl [data array get botsend options]]" }
 			switch -exact -- $2l {
+
+				help { print -error -header -return $nick "Options: help, list\; [ajl [data array get botsend options]]" }
 
 				autoshift {
 					if [isempty 3] { print -error -header -return $nick "What value am I setting to $0u ${2u}?" }
@@ -292,7 +295,24 @@ debug id direction
 					return
 				}
 
-				default { ? BOTSEND SET }
+				time - timeout {
+					if [isempty 3] { print -error -header -return $nick "What value am I setting to $0u ${2u}?" }
+					set timeout [join $3]
+					data array set botsend option:timeout $timeout
+					saveme data
+					print -header $nick "New timeout: [plural second -show -comma $timeout][iff { $timeout > 60 } " ([urt $timeout " "])"]"
+					return
+				}
+
+				list {
+					print $nick "\[BOTSEND SET LIST\]"
+					foreach a [data array get botsend options] { print $nick "[space 5]${a}: [data array get botsend option:$a]" }
+					print $nick "End of list."
+					return
+				}
+
+				default { print -error -header -return $nick "\[BOTSEND SET\] Illegal option: $2u" }
+
 			}
 		}
 
@@ -459,7 +479,7 @@ proc @botsend:receiver { bot - arg } {
 #sb7 log =BOTSEND =EOF =6
 			if $error { set m "\[BOTSEND\] Unable to write ${path}/${filename}: $crap" ; putcmdlog $m ; print -home $m ; error $m }
 			set elapsed [expr abs( $milli ) - abs( $1 )]
-			if { $elapsed > 1000 } { set time "[expr $elapsed / 1000.0] s" } { set time "$elapsed ms" }
+			if { $elapsed > 1000 } { set time [expr $elapsed / 1000.0] ; set timeword s } { set time $elapsed ; set timeword ms }
 			set speed [expr ( $size / ( $elapsed / 1000.0 ) ) / 1024 ]
 
 #sb7 log =BOTSEND =EOF =7
@@ -476,7 +496,7 @@ proc @botsend:receiver { bot - arg } {
 			}
 			putbot $bot [list botsend:complete $id]
 #sb7 log =BOTSEND =EOF =8
-			print -home "\[BOTSEND\] Successfully saved${text_autoshift}${text_autoload}: [file tail ${path}/$filename] ([comma $size] bytes / ${time} / [format %.3f $speed] KiB/s)"
+			print -home "\[BOTSEND\] Successfully saved${text_autoshift}${text_autoload}: [file tail ${path}/$filename] ([comma $size] bytes / [format %.3f $time] $timeword / [format %.3f $speed] KiB/s)"
 #sb7 log =BOTSEND =EOF =9
 			return
 		}
@@ -526,7 +546,8 @@ proc @botsend:sender { bot - arg } {
 
 proc @botsend:complete { bot - id } {
 	data array set @botsend $id ""
-	if [string eq "" [data array names @botsend]] { print -home "\[BOTSEND\] All files successfully transferred." }
+	if [string eq "" [data array names @botsend]] { print -home "\[BOTSEND\] [effects "All files successfully transferred" 6 b u]." }
+	sb7 killtimer -quiet @botsend:timeout
 	return
 
 #putlog "\[@BOTSEND:COMPLETE\] BOT($bot):ID($id)"
@@ -576,7 +597,8 @@ proc @botsend:queue args {
 	}
 	if !$found return
 
-sb7 log "Sending data to: ID #$id [data array lrange @botsend $id 0 9]"
+# Damn thing prints every time this is called (multiple times for larger files)
+#sb7 log "[nph [data array lindex @botsend $id 2] [data array lindex @botsend $id 4]] is sending \"[file tail [data array lindex @botsend $id 9]]\" to: [effects [casebot [data array lindex @botsend $id 6]] b] (ID: #$id)"
 	set header [list botsend:receiver data $id]
 	lassign [data array get @botsend $id] direction active nick host handle chan bot seconds milli file data size
 	if $option_chars {
@@ -590,6 +612,8 @@ sb7 log "Sending data to: ID #$id [data array lrange @botsend $id 0 9]"
 	set remainder [right $data -$option_buffer]
 	data array lset @botsend $id 10 $remainder
 
+	sb7 killtimer -quiet @botsend:timeout
+	utimer [none [data array get botsend option:timeout] 300] @botsend:timeout
 	set count 0
 	while { [notempty buffer] } {
 		incr count
@@ -598,7 +622,7 @@ sb7 log "Sending data to: ID #$id [data array lrange @botsend $id 0 9]"
 		putbot $bot $line
 		if [isempty buffer] {
 			if [isempty remainder] {
-				sb7 log "\[BOTSEND\] File send complete: [nph $nick $handle]@${::botnet-nick} --> $file ([comma $size] bytes / [bytes $size 1])"
+				sb7 log "File send complete: [nph $nick $handle]@${::botnet-nick} --> $file ([comma $size] bytes / [bytes $size 1])"
 				data array lset @botsend $id 1 false
 				putbot $bot [list botsend:receiver eof $id [clock seconds] [clock clicks -milli]]
 				break
@@ -670,8 +694,15 @@ proc @botsend:quick { bot cmd arg } {
 	?
 }
 
+proc @botsend:timeout args {
+	sb7 killtimer @botsend:timeout
+	data set @botsend
+	print -home "\[BOTSEND\] Timeout: all active transfers cancelled."
+	return
+}
+
 proc @botsend:bootstrap args {
-	set options [list autoshift:false autoload:false dir:[sb7 target dir ""]/botsend]
+	set options [list autoshift:false autoload:false dir:[sb7 target dir ""]/botsend timeout:300]
 	empty defaults
 	foreach option $options {
 		lassign [split $option :] a b
@@ -685,7 +716,7 @@ proc @botsend:bootstrap args {
 }
 
 #####
-# bootstrap
+# BootStrap
 
 bind bot - botsend:gimme @botsend:gimme
 bind bot - botsend:receiver @botsend:receiver

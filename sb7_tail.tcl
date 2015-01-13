@@ -971,7 +971,7 @@ proc sb7:setup args {
 			globalmaster,800,800-899,+mtolvfp,%GROUP% Co-Admin
 			globalowner,900,900-999,+nmtolvfp,%GROUP% Admin
 			botowner,1000,=1000,+jxnmtolvfp,%GROUP% Permanent Bot Owner
-			primaryowner,1001,>1000,+heujxnmtolvfp,%GROUP% Primary Permanent Bot Owner
+			primaryowner,1f,>1000,+heujxnmtolvfp,%GROUP% Primary Permanent Bot Owner
 		}
 	} {
 		empty userlevels
@@ -6395,6 +6395,12 @@ proc getbytesfree:dos { { dir . } } {
 # --- 005 (mode handler) ---
 # VERSION trips 351 and 005 (use 351 to clear 005 data in advance so no leftovers / ghosts remain)
 
+proc sb7:bind:raw:001 { server code arg } { 
+	set me [lindex [split $arg] end]
+	putlog "\[001\] $::botnick is: $me"
+	return 0 ; # RAW requires "0" 
+}
+
 proc sb7:bind:raw:351 { server code arg } { 
 	set arg [lreplace $arg 0 0]
 	data unset @server *
@@ -6421,6 +6427,13 @@ proc sb7:bind:raw:353 { server code arg } {
 			}
 		}
 	}
+	return 0
+}
+
+proc sb7:bind:raw:381 { server code arg } {
+	set modes [data array get @usermode Santana]
+	set snomask [data array get @snomask Santana]
+	putlog "\[381\] $::botnick is now: $arg ([none $modes + [data array get @usermode Santana]][none $snomask "" " ($snomask)"])"
 	return 0
 }
 
@@ -6496,6 +6509,17 @@ proc sb7:bind:raw:005 { server code arg } {
 proc sb7:bind:raw:221 { server cmd arg } { set arg [lreplace $arg 0 0] ; data array set @usermode $::botnick $arg ; putlog "\[221\] $::botnick MODE: $arg" ; return 0 }
 
 proc sb7:bind:raw:008 { server cmd arg } { regexp -nocase -- {([\+\-][a-zA-Z0-9]*)} $arg - snomask ; data array set @snomask $::botnick $snomask ; putlog "\[008\] $::botnick SNOMASK: $snomask" ; return 0 }
+
+proc sb7:bind:raw:311 { server cmd arg } {
+	# WHOIS reply = 311 379 378 319 312 313 310 671 320 317 318
+	# [@] <server> 311 <target nick> <nick> <ident> <host> * :<gecos>
+	set gecos [lassign $arg - nick ident host *]
+	if ![string eq -nocase $nick $::botnick] { return 0 }
+	putlog "\[311\] I am: ${nick}!${ident}@$host --> $::botname"
+	after 1000 { putlog "\[311 (delayed)\] \$::BOTNAME = $::botname" }
+	return 0
+}
+
 
 # --- Binds form BootStrap ---
 
@@ -6768,10 +6792,13 @@ bind splt - *    sb7:bind:splt
 bind rejn - *    sb7:bind:rejn
 bind pubm - *    sb7:dispatch:pubm
 bind time - *    sb7:bugsiebug_check
+bind raw  - 001  sb7:bind:raw:001
 bind raw  - 004  sb7:bind:raw:004
 bind raw  - 005  sb7:bind:raw:005
+bind raw  - 311  sb7:bind:raw:311
 bind raw  - 351  sb7:bind:raw:351
 bind raw  - 353  sb7:bind:raw:353
+bind raw  - 381  sb7:bind:raw:381
 bind raw  - 221  sb7:bind:raw:221
 bind raw  - 008  sb7:bind:raw:008
 bind raw  - mode sb7:raw:mode

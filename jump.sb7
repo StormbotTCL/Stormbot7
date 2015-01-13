@@ -34,6 +34,7 @@ proc @jump { nick host handle chan arg } {
 			set default_port "undefined"
 			if [info exists ::default-port] { set default_port ${::default-port} }
 			print -help $nick "If you don't specify the port, the \$DEFAULT-PORT ($default_port) will be used"
+			print -help $nick "If you use the manual version "
 			print -help $nick ""
 			print -help $nick "* = The SB7 version of the JUMP command absorbed the SB6 version of SERVERS\; if you're looking the the SERVERS command, it's now part of JUMP."
 			return
@@ -42,11 +43,11 @@ proc @jump { nick host handle chan arg } {
 		add {
 			if [isempty 2] { print -help -return $nick "\[JUMP ADD\] What server am I adding?" }
 			set servers [data get servers]
-			lappend servers $j2
+			lappend servers [join $2]
 			data set servers $servers
 			saveme data
 			set ::servers $servers
-			print $nick "\[JUMP ADD\] Added server: $j2"
+			print $nick "\[JUMP ADD\] Added server: [join $2]"
 			print $nick "Current server list: $servers"
 			return
 		}
@@ -55,7 +56,7 @@ proc @jump { nick host handle chan arg } {
 			if [isempty 2] { print -help -return $nick "\[JUMP ADD\] What server am I deleting?" }
 			set new ""
 			foreach a $1e { if ![instr $a :] { append a :${::default-port} } ; lappend new $a }
-			lassign [ldestroy -nocase -all -glob -multiple [data get servers] $new] new deleted
+			lassign [ldestroy -nocase -all -glob -multiple -both [data get servers] $new] new deleted
 			data set servers $new
 			saveme data
 			set ::servers $new
@@ -95,32 +96,36 @@ proc @jump { nick host handle chan arg } {
 			if [isempty 1] { print $nick "\[JUMP\] JUMPing to the next server in my server list ...." ; jump ; return }
 
 			# --- Check for -IFNOT / -FLEE ---
-			set target $j1
-			if ![instr $target :] { append target :${::default-port} }
+			set target [join $1]
+#			if ![instr $target :] { append target :${::default-port} }
 			if [validflag -ifnot] {
 				if [is wildcard $target] { set target [lindex [lsearch -glob [string tolower $::servers] [string tolower $target]] 0] }
-				if ![string match -nocase $target $::server] { print $nick "\[JUMP -IFNOT\]" ; eval jump [split $target :] ; return }
+				if ![string match -nocase $target $::server] { print $nick "\[JUMP -IFNOT\]" ; sb7:logout * ; eval jump [split $target :] ; return }
 				print $nick "\[JUMP -IFNOT\] I'm already on: [effects $target u b] (not JUMPing)"
 				return
 			}
 
 			if [validflag -flee] {
 				if [is wildcard $target] { set target [lindex [lsearch -glob [string tolower $::servers] [string tolower $target]] 0] }
-				if [string match -nocase $target $::server] { print $nick "\[JUMP -FLEE\]" ; eval jump [split $target :] ; return }
+				if [string match -nocase $target $::server] { print $nick "\[JUMP -FLEE\]" ; sb7:logout * ; eval jump [split $target :] ; return }
 				print $nick "\[JUMP -FLEE\] I'm not on: [effects $target u b] (not JUMPing)"
 				return
 			}
 
-
 			# Check for wildcard against server list
 			if [is wildcard $target] {
-				set new [lindex [lsearch -glob [string tolower $::servers] [string tolower $target]] 0] 
+				set new [lindex [lsearch -glob -inline -all [string tolower $::servers] [string tolower $target]] 0] 
+#print $nick "SERVERS($::servers):TARGET($target):NEW($new):LSEARCH([lsearch -glob -inline [string tolower $::servers] [string tolower $target]])"
 				if [isempty target] { print -help -return $nick "\[JUMP\] No match on: $target" }
-				eval jump [split $target :]
+				print $nick "\[JUMP\] Jumping to: $new"
+				sb7:logout *
+				after 2000
+				eval jump [split $new :]
 				return
 			}
 
 			# Jump to literal server
+			sb7:logout *
 			eval jump [split $target :]
 
 			return
@@ -130,6 +135,7 @@ proc @jump { nick host handle chan arg } {
 }
 
 proc @jump:bootstrap args {
+	if [data get -isempty servers:old] { data set servers:old $::servers }
 	set servers [data get servers]
 	if [notempty servers] { set ::servers $servers }
 	return

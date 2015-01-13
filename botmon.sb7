@@ -538,7 +538,7 @@ proc @botmon:check args {
 
 	# Who's missing? (Don't make the classic "Six Chinese brothers" mistake!)
 	# Botnet first
-	lassign [ldestroy -all -multiple -both -not [concat $me_botnet $bots $free] [concat $me_botnet [bots] $free] ] ok botnet_missing
+	lassign [ldestroy -all -multiple -both -not [concat $me_botnet $bots $free] [concat $me_botnet [bots] $free] ] botnet_missing ok
 
 	# Channel
 	set channel_missing [ldestroy -all -multiple [concat $me_chanlist $bots $offline] [concat [chanlist [home]] $offline]]
@@ -548,7 +548,6 @@ proc @botmon:check args {
 
 	# Reconcile the two sets of missing data
 	set missing [lsort -increasing -unique [concat $botnet_missing $channel_missing]]
-
 	return [list $ok $missing $extra]
 }
 
@@ -588,8 +587,10 @@ proc @botmon:interpret args {
 	# BOTMON:INTERPRET: combine the output sections? (none missing, some missing)
 
 	# NO! -- Manual triggering will get lost this way! -- if [@botmon:deferred] return
+#%#
 	if [isempty args] { lassign [@botmon:check] ok missing extra } { lassign $args ok missing extra }
 	empty output
+
 	if [isempty missing] {
 		set percentage 100%
 		set output_missing "All bots present! (Botnet: [comma [llength $ok]] -- [home]: [comma [llength $ok]])"
@@ -663,13 +664,12 @@ proc @botmon:interpret args {
 			}
 			lappend output_missing "[caseall $bot] ([effects [implode [lsort:priority [explode $reason] [list B #]]] 4 b])"
 		}
-		set output_missing "Missing: [ajl $output_missing]"
 		set legend ""
 		foreach a [lsort:priority [array names reasons] [list B #]] { lappend legend "[effects $a 6 b] ($reasons($a))" }
-		set legend "Legend: [join $legend ", "]"
+		if [notempty legend] { set legend "Legend: [join $legend ", "]" }
 		empty output
 		lappend output $percentage
-		lappend output $output_missing
+		if [notempty output_missing] { lappend output "Missing: [ajl $output_missing]" }
 		set ignoremode [data array get BOTMON IGNOREMODE]
 		if [notempty botnet(extra)] { 
 			switch -exact -- [string tolower $ignoremode] {
@@ -688,7 +688,7 @@ proc @botmon:interpret args {
 
 			}
 		}
-		lappend output $legend
+		if [notempty legend] { lappend output $legend }
 		set output [join $output \n]
 	}
 	return $output

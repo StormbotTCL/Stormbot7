@@ -1,7 +1,15 @@
-# StormBot.TCL 7 version Changelog -- 2015-01-07 13:16:08 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-01-13 11:27:17 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-01-13 10:19:10 UTC: #435 [tail] Added several raw binds (001, 371, & others: try to capture when the bot's host is changed; force a WHOIS to the server so the $::BOTNAME variable will update itself[?]. Still need to add a trap for usermodes +tx)
+2015-01-13 07:15:46 UTC: #434 [botmon] Fixed BOTMON (more LDESTROY-related issues in @BOTMON:CHECK, causing $OK and $MISSING to also be swapped. This was causing the ''all bots present'' message to never trigger because $MISSING always has the list-of-present-bots by mistake)
+2015-01-12 02:40:05 UTC: #433 [jump] Fixed JUMP (not properly deleting servers & wildcard matching when trying to jump servers wasn't working; both fixed)
+2015-01-12 01:09:12 UTC: #432 [tail] Added SB7:BIND:RAW:001 (trying to compensate for a server-level deficiency: when a bot changes its host (VHOST), the bot is only told under limited circumstances; VIDENT isn't reported at all. Both of these issues leave $::BOTNAME out-of-date)
+2015-01-11 12:06:48 UTC: #431 [jump] Fixed JUMP (when jumping, clear all logins)
+2015-01-10 10:25:16 UTC: #430 [botsend] Updated BOTSEND (added transfer timeout control (dynamic limit control, detault value); cosmetic: ''all files transferred'' message made bold to stand-out against text flood)
+2015-01-10 09:44:12 UTC: #429 [botmon] Fixed BOTMON (after the last patch a few days ago, the empty variables weren't deterring blank line output for ''missing'' and ''legend'')
+2015-01-08 08:12:11 UTC: #428 [botmon] Fixed BOTMON (this should have been in last night's Git commit: due to fixen in LDESTROY a few weeks ago, the returned lists for LDESTROY -BOTH were transposed. This was causing BOTMON to report all bots missing ($MISSING & $PRESENT were swapped))
 2015-01-07 11:20:48 UTC: #427 [botsend] Fixed BOTSEND (cosmetic: the ''Successfully saved'' text used FORMAT for the transfer speed but not for the calculated time (seconds vs milliseconds), causing times of ''8.667999999999999 s'' to be displayed)
 2015-01-07 11:14:14 UTC: #426 [macro & tail] Added MACRO (ported from SB6)
 2015-01-07 11:12:17 UTC: #425 [host] Fixed HOST ADD (added nick-based options, including ''!NICK'')
