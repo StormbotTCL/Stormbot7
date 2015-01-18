@@ -546,7 +546,7 @@ proc @botsend:sender { bot - arg } {
 
 proc @botsend:complete { bot - id } {
 	data array set @botsend $id ""
-	if [string eq "" [data array names @botsend]] { print -home "\[BOTSEND\] [effects "All files successfully transferred" 6 b u]." }
+	if [string eq "" [data array names @botsend]] { print -home "[effects "\[BOTSEND\] All files successfully transferred." 6 b u]" }
 	sb7 killtimer -quiet @botsend:timeout
 	return
 

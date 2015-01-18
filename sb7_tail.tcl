@@ -971,7 +971,7 @@ proc sb7:setup args {
 			globalmaster,800,800-899,+mtolvfp,%GROUP% Co-Admin
 			globalowner,900,900-999,+nmtolvfp,%GROUP% Admin
 			botowner,1000,=1000,+jxnmtolvfp,%GROUP% Permanent Bot Owner
-			primaryowner,1f,>1000,+heujxnmtolvfp,%GROUP% Primary Permanent Bot Owner
+			primaryowner,1001,>1000,+heujxnmtolvfp,%GROUP% Primary Permanent Bot Owner
 		}
 	} {
 		empty userlevels
@@ -6524,6 +6524,7 @@ proc sb7:bind:raw:311 { server cmd arg } {
 # --- Binds form BootStrap ---
 
 proc sb7:raw:mode { server cmd arg } {
+putloglev 5 * "[effects "\[SB7:RAW:MODE\] SERVER($server):CMD($cmd):ARG($arg)" 6 b]"
 	set check_chan [join [lindex [split $arg] 0]]
 	if ![validchan $check_chan] {
 		if ![isbotnick $check_chan] { return 0 ; # Weird situation where the bot sees another user's mode change }
