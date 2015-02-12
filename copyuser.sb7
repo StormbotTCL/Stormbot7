@@ -19,9 +19,12 @@ proc @copyuser { nick host handle chan arg } {
 	}
 
 	if [validflag -raw] {
-		empty datapacket
+		empty bad datapacket
+		set count 0
 		foreach user [lsort -inc -uni -dict $1e] {
 			lassign [whois [join $user] $handle] online wn wh who wc wah wan
+			if ![validuser $who] { lappend bad $user ; continue }
+			incr count
 			print $nick "Output piped to /NOTICE (or .DCC) for privacy ...."
 			lappend datapacket ".tcl deluser $who"
 			if [matchattr $who b] {
@@ -90,10 +93,10 @@ proc @copyuser { nick host handle chan arg } {
 					}
 				}
 			}
-
-			lappend datapacket ".save"
 		}
+		if $count { lappend datapacket .save .quit }
 		foreach a $datapacket { print -private $nick $a }
+		if [notempty bad] { print $nick "\[COPYUSER -RAW\] Unknown users: [ajl $bad]" }
 		return
 	}
 

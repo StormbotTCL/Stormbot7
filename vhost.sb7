@@ -1,0 +1,308 @@
+sb7 command add VHOST 0 -loggedoutok -none VH; # =501 ??
+## -LOGGEDOUTOK because bots will never be logged in ....
+
+sb7 register user VHOST VHOST:AUTO
+sb7 register global VHOST ; # Bot's own vhost
+
+#####
+# Set these variables to the command words that your IRCd uses to forcefully
+# change: (1) it's own IDENT, (2) own VHOST, (3) own GECOS [real name],
+# (4) someone else's IDENT, (5) someone else's VHOST, and (6) someone else's
+# GECOS [real name]
+
+data array set @IRCD setident SETIDENT
+data array set @IRCD sethost SETHOST
+data array set @IRCD setname SETNAME
+data array set @IRCD chghost CHGHOST
+data array set @IRCD chgident CHGIDENT
+data array set @IRCD chgname CHGNAME
+
+########################
+##### STOP EDITING #####
+########################
+
+proc @vhost { nick host handle chan arg } {
+
+	FLAGS
+
+	switch -exact -- [stl $1] {
+
+		help {
+			print -help $nick "\[VHOST\]:"
+			print -help $nick "Syntax: $::botnick VHOST SET <new vhost> (this is for you, ${nick})"
+			print -help $nick "Syntax: $::botnick VHOST BOT <new vhost> (this is for $::botnick)"
+			print -help $nick "Syntax: $::botnick VHOST CHSET <handle> <new vhost> (this is for anyone else)"
+			print -help $nick "Syntax: $::botnick VHOST GET \[handle\]"
+			print -help $nick "Syntax: $::botnick VHOST LIST \[wildcard\]"
+			print -help $nick "Syntax: $::botnick VHOST FORCE"
+			print -help $nick "Syntax: $::botnick VHOST ASK <bot>"
+			print -help $nick "Syntax: $::botnick VHOST AUTO < ON | OFF > <bot> \[channel list\]"
+			if [access check 700 $handle] { print -help $nick "Syntax: $::botnick VHOST CMD < SETIDENT | SETHOST | SETNAME | CHGIDENT | CHGHOST | CHGNAME > \[IRCd command word\]" }
+			print -help $nick "A V(irtual )HOST gives you 'vanity' host mask, which has two great advantages: (1) show-off a silly message, for fun, or (2) hide your true host for security reasons."
+			print -help $nick "\002\037OBVIOUSLY\037\002, $::botnick must be an OPER or otherwise priviliged user to set VIDENTs & VHOSTs."
+			print -help $nick "(Generally) available characters for VHOSTS: 0-9 A-Z . _ -"
+			if [string eq -nocase ALL $2] {
+				print -help $nick ""
+				print -help $nick "Please note: when you change VHOSTs, there is \002\x1fNOTHING\x1f\002 to tell the bot,"
+				print -help $nick "nor the rest of the room, that you're on a new host. \[Exception: UNREAL IRCd's SET::force-rejoin option\]"
+				print -help $nick "Therefore, once you switch hosts, your mask won't match what you LOGGED-IN with,"
+				print -help $nick "and $::botnick won't 'recognize' you anymore. Remember: you authed with a different mask than your now-active VHOST."
+				print -help $nick "This is an IRCd-level issue\; $::botnick can't do anything about it, automatically."
+				print -help $nick "You have four solutions: (1) VHOST then cycle the channel, (2) VHOST then LOGIN again, (3) VHOST-RESETCHAN-LOGIN (in that order),"
+				print -help $nick "or (4) make your network admins set the force-rejoin flag (if not just get them to use UNREAL IRCd)."
+				print -help $nick "(ED: this is NOT an official endorsement of UnReal IRCd. :)"
+			} else {
+				print -help $nick "Please use \"$::botnick VHOST HELP ALL\" for \x1fIMPORTANT\x1f information about problems related to the use of this command."
+				print -help $nick "To activate your own VHOST, use: $::botnick $u0 FORCE"
+				print -help $nick "To have a bot give me ($::botnick) my VHOST, use: $::botnick $u0 ASK \[-auto\] <targetbot> \[channel list\] (that bot should be an OPER and capable of setting VHOSTS, and know what your desired VHOST is). The -AUTO flag will make the bot automatically ask whenever it joins any room \[or can restrict the choice of rooms\]"
+			}
+			if [SB:checkaccess 700 $handle] {print -help $nick "See module bead [SB:commandlist source VHOST] for variables that may need setting."}
+			return 0
+		}
+
+		"" {
+			print $nick "Your VHOST: [none [userinfo get $handle VHOST] <none>]"
+			if [access check 501 $handle] {
+				print $nick "My VHOST: [none [data get vhost] <none>]"
+				data array get:all vhost [list auto ask chans] auto ask chans
+				print $nick "Auto ASK([string toupper [boolean -offon $auto]]), target ([none $ask <none>]), valid channels ([none [ajl $chans] <none>])"
+			}
+			return 0
+		}
+
+		force - get {
+			if [isempty 1] {set 1 "get"}
+			set target $handle
+			if ![isempty 2] {set target [whohandle $dccnick $2 $chan]}
+			if [string match -n $::botnick $2] {
+				set target "me"
+				set vhost [sbdget VHOST]
+			} else {
+				set vhost [getdata $target VHOST]
+			}
+			if {[stl $1] == "get"} {
+				if {$vhost == ""} {set vhost "< none >"}
+				print $nick "Current VHOST for $target is: [join $vhost]"
+				return
+			} else {
+				if {$vhost == ""} {print -help $nick "You don't HAVE a VHOST set yet!"; return 0}
+				set ident "*"
+				if [string match *@* $vhost] {
+					set ident [l0 [split $vhost @]]
+					set vhost [l1 [split $vhost @]]
+				}
+
+				# Only make changes if necessary [due to force-rejoin channel cycling]
+				if {($ident != "*") && ([sl0 [split $host @]] != [stl $ident])} { raw "[data get @IRCD:chgident] $dccnick [join $ident]"}
+				if {($vhost != "" ) && ([sl1 [split $host @]] != [stl $vhost])} { raw "[data get @IRCD:CHGHOST] $dccnick [join $vhost]"}
+				SB:setauthhost $handle [join $ident]@[join $vhost]
+				printr $nick "Your host is now: ${ident}@$vhost"
+				return 0
+			}
+			return 0
+		}
+
+		chset - set {
+			array set error [list ok "" unknown "" access ""]
+			regsub -all "," $2 " " new2
+			foreach 2 $new2 {
+				set target $handle
+				set host $2
+				set old $2
+				set word "you"
+				if {[stl $1] == "chset"} {
+					set target [whohandle [join $2] [join $2] $chan]
+					if ![validuser $target] {
+						if ![string match -n $::botnick $target] {
+							lappend error(unknown) [join $2]
+							continue
+						}
+					}
+					set host $3
+					set word $target
+					if ![SB:compareaccess $handle $target $chan 1] {lappend error(access) [join $2]; continue}
+				}
+				if {$host == ""} {print -help $nick "Forgetting something?"; return 0}
+				if [string eq -n none $host] {empty host}
+				if [string eq -n $::botnick $target] {
+					sbdset VHOST [join $host]
+				} else {
+					setdata $target VHOST [join $host]
+				}
+				lappend error(ok) [join $old] ; # $2
+			}
+			if {$error(ok) != ""} {print -help $nick "Successful VHOSTs: [join $error(ok) ", "]"}
+			if {$error(unknown) != ""} {print -help $nick "Failed (unknown user): [join $error(unknown) ", "]"}
+			if {$error(access) != ""} {print -help $nick "Failed (insufficient access): [join $error(access) ", "]"}
+			writedata
+			return 0
+		}
+
+		list {
+			if ![SB:checkaccess 600 $handle] {print -help $nick "You don't have access to do that."; return 0}
+
+			if {$2 != ""} {
+				set temp [userlist]
+				empty list
+				foreach a $temp {
+					if [string match -nocase [join $2] $a] {lappend list $a}
+				}
+			} {set list [userlist] ; # $HANDLE}
+
+			empty new
+			zero maxnicklen
+			set max [len [llength $list]]
+
+			foreach a $list {
+				set vhost [getdata $a VHOST]
+				if [isempty vhost] continue
+				lappend new $a
+				if {[len $a] > $maxnicklen} {set maxnicklen [len $a]}
+			}
+			set list $new
+
+			set count 0
+			foreach a $list {
+				incr count
+				print -help $nick "[using *$max $count]) [using *$maxnicklen $a] - [getdata $a VHOST]"
+			}
+			print -help $nick "> End of VHOST LIST (count: $count)"
+		}
+
+		ask {
+			if ![islinked $j2] { print -help $nick "\[VHOST ASK\] \"${j2}\" is not in the botnet." ; return 0 }
+			print $nick "\[VHOST ASK\] Asking $j2 for my VHOST ...."
+			putbot $j2 [list VHOST:ASK [l0 [ split $::botname !]] $chan]
+			return 0
+		}
+
+		auto {
+			lassign [data get VHOST:AUTO] auto askme chans
+#debug.vars #BotHouse auto askme chans
+			set auto  [istrue $2]
+			if [notempty 3] { # Allow ON / OFF to be set only
+				set askme $3
+				set chans $4e
+				if [isempty chans] { set chans * }
+				if ![string eq  * $chans] {
+					foreach c $chans {
+						if ![validchan $c] { print -help $nick "\[VHOST AUTO\] Invalid channel: $c" ; return 0 }
+					}
+				}
+			}
+
+			if [string eq -nocase $askme $::botnick] { print -help $nick "\[VHOST AUTO\] Seriously?" ; return 0 }
+
+			# LIST: AUTO ASKME CHANS
+			set vhost [ldefault [list 0 "" ""] [data get VHOST]]
+			lset vhost 0 $auto
+			if [notempty 3] {
+				lset vhost 1 $askme
+				lset vhost 2 $chans
+			}
+
+			data set VHOST:AUTO $vhost
+			SB:needsave data
+			print $nick "\[VHOST AUTO\] Active ([noyes $auto upper]), which bot ($askme), when I join which channels ([ajl $chans])"
+			return 0
+		}
+
+		moo. - moo {print -help $nick Cow.}
+
+		default {print -help $nick Moo.}
+
+	}
+	return 0
+}
+
+proc @vhost:ask { bot cmd arg } {
+	lassign $arg nick chan ; # Any other args?
+	if ![botonchan $chan] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (I'm not on the channel yet)" ; return 0 }
+	if [instr $nick !] { set nick [l0 [split $nick !]] }
+	if ![validuser $nick] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (unknown user)" ; return 0 }
+	if ![SB:checkbot $nick] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (not a bot)" ; return 0 }
+	if ![onchan $nick $chan] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (not on chan: ${chan})" ; return 0 }
+	if ![validhost $nick [getchanhost $nick $chan]] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (\"${nick}\" on ${chan} has invalid host: [getchanhost $nick $chan])" ; return 0 }
+	set vhost [getdata $nick VHOST]
+	if [isempty vhost] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (no VHOST set)" ; return 0 }
+	if [instr $vhost !] { set vhost [l1 [split $vhost !]] }
+	if [instr $vhost @] {
+		lassign [split $vhost @] vident vdomain
+	} {
+		empty vident
+		set vdomain $vhost
+	}
+	set ohost [getchanhost $nick $chan]
+	lassign [split $ohost @] oident odomain
+
+	if [string eq * $vident ] { empty vident  }
+	if [string eq * $vdomain] { empty vdomain }
+
+	zero cident cdomain
+#debug.vars #BotHouse ohost oident odomain vhost vident vdomain
+	if [notempty vident] {
+		if ![string eq $oident $vident] {
+			if [sbd:isempty @IRCD:CHGIDENT] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (unknown CHGIDENT command)" ; return 0 }
+			rawoutput "[data get @IRCD:CHGIDENT] $nick $vident"
+			one cident
+		}
+	}
+	if [notempty vdomain] {
+		if ![string eq $odomain $vdomain] {
+			if [sbd:isempty @IRCD:CHGHOST] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (unknown CHGHOST command)" ; return 0 }
+			rawoutput "[data get @IRCD:CHGHOST] $nick $vdomain"
+			one cdomain
+		}
+	}
+	if [string eq 00 ${cident}${cdomain}] { putcmdlog "\[SB:VHOST_ASK\] $nick asked me for a VHOST (VHOST already active: $vident@${vdomain})" ; return 0 }
+	putcmdlog "\[SB:VHOST_ASK\] Requested by: $nick (${chan}): $vident@${vdomain}"
+	return 0
+}
+
+proc @vhost:join { nick host handle chan } {
+	if ![string eq $nick $::botnick] { return 0 }
+	lassign [data get VHOST:AUTO] auto bot chans
+	if [isfalse $auto] { return 0 }
+	if ![string eq * $chans] { # Don't allow "" here (unset values should be considered invalid)
+		set m [lsearch -exact [stl $chans] [stl $chan]]
+		if { $m < 0 } { return 0 }
+	}
+	if ![islinked $bot] { putcmdlog "\[SB:VHOST_JOIN\] $bot is not linked to the botnet" ; return 0 }
+	putcmdlog "\[SB:VHOST_JOIN\] Asking $bot for my VHOST because I joined: $chan"
+	putbot $bot [list VHOST:ASK $::botnick $chan]
+	return 0
+}
+
+proc @vhost:raw:221 { server cmd arg } {
+	lassign $arg nick mode
+	if ![isbotnick $nick] { return 0 }
+#debug mode =INSTR/T([instr $mode t]) =INSTR/X([instr $mode x])
+#	if { ![instr $mode t] && ![instr $mode x] } { return 0 }
+	## Regardless of the polarity of the mode change, and any change of +t/+x, if they're present in the mode, assume a check is needed
+	# Screw it: do it every time 
+	raw "WHOIS $nick"
+	return 0
+}
+
+proc @vhost:bootstrap args {
+	# Sanity / default check
+	foreach mode [list set chg] {
+		foreach cmd [list ident host name] {
+			if [data array get -isempty @IRCD ${mode}${cmd}] { data array set @IRCD ${mode}${cmd} ${mode}${cmd} }
+		}
+	}
+
+	# BINDs
+	bind bot  - vhost:ask @vhost:ask
+	bind join - *         @vhost:join
+	bind rejn - *         @vhost:join
+	bind raw  - 221       @vhost:raw:221
+#	bind raw  - 008       @vhost:raw:008
+	return
+}
+
+#####
+# BootStrap:
+
+@vhost:bootstrap
+

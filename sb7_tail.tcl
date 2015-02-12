@@ -755,6 +755,7 @@ proc sb7:dispatch:pubm { nick host handle chan arg } {
 	if ![normalize $active] return
 	if [isempty shortcut] return
 	set len [len $shortcut]
+	set arg [string trimleft $arg]
 	set 0 [join [lindex [lsearch -all -inline -not -exact [split $arg] ""] 0]]
 	if ![left $0 $len $shortcut] return
 	set test [mid $0 [ expr $len + 1 ]]
@@ -4178,8 +4179,8 @@ proc msghome message {
 
 proc rawhome text { rawprint "PRIVMSG [home] :$text" ; return }
 
-proc printctcp { nick ctcp { message "" } } { print -ctcp -strip $nick "\001[string toupper $ctcp] $message\001" }
-proc printctcr { nick ctcp { message "" } } { print -ctcr -strip $nick "\001[string toupper $ctcp] $message\001" }
+proc printctcp { nick ctcp { message "" } } { print -ctcp -strip $nick "\001[string toupper $ctcp] ${message}\001" }
+proc printctcr { nick ctcp { message "" } } { print -ctcr -strip $nick "\001[string toupper $ctcp] ${message}\001" }
 
 # All-inclusive PRINT command (including line-splitting)
 proc print args {
@@ -4202,7 +4203,7 @@ if $debug { debug =-1 target message }
 	}
 
 	# Blank message?
-	if { [isempty message] && [notempty target] } { set message [space] }
+	if { [isempty message] && [notempty target] } { set message " " }
 
 	set output $target
 if $debug { debug =0 flags target }
@@ -4240,7 +4241,13 @@ if $debug { debug =2 flags target }
 		# No output? Bail out! (Only for user output ~ do NOT affect output from direct-output commands like SAY)
 		if [validflag -mute] return
 
-		set type [data array value -default CONFIG OUTPUT NOTICE]
+		# What if it's the user's first command? (Trac #10)
+		if [data array get -isempty @output $target] {
+			data array set @output $target [list $target * $target [home] PUB]
+			set type NOTICE 
+		} {
+			set type [data array value -default CONFIG OUTPUT NOTICE]
+		}
 		set intended_user 1
 		lassign [data array value @OUTPUT $target] - host handle chan
 		if [string eq * $chan] { set chan [data array get @output last:$target] }

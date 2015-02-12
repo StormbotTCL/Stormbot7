@@ -593,7 +593,7 @@ proc @botmon:interpret args {
 
 	if [isempty missing] {
 		set percentage 100%
-		set output_missing "All bots present! (Botnet: [comma [llength $ok]] -- [home]: [comma [llength $ok]])"
+		set output_missing "All bots present!" ; #" (Botnet: [comma [llength $ok]] -- [home]: [comma [llength $ok]])"
 		lappend output "$output_missing"
 		set ignoremode [data array get BOTMON IGNOREMODE]
 		if [notempty extra] { 

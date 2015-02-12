@@ -1,7 +1,18 @@
-# StormBot.TCL 7 version Changelog -- 2015-01-13 12:30:12 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-02-05 10:37:27 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-02-05 10:16:36 UTC: #447 [copyuser] Fixed COPYUSER -RAW (when no valid users are listed, complain)
+2015-02-05 06:25:09 UTC: #446 [debug & help] Fixed HELP & DEBUG (added a check for null-output; warn the user about this)
+2015-02-05 06:14:01 UTC: #445 [debug] Fixed DEBUG (cosmetic: ''Reporing events'')
+2015-02-03 07:50:07 UTC: #444 [core] Now adding TRAC numbers to all entries (when I remember to do it) to keep things coordinated. All TRAC udpates will list CHANGELOG entries when possible.
+2015-02-03 06:50:35 UTC: #443 [tail] Fixed PRINT (re-visit of CHANGELOG #410; still misbehaving. Trac #10)
+2015-02-03 06:41:09 UTC: #442 [distro] Fixed DISTRO FIND (the count of matches was showing [LLENGTH $INDEX] instead of $MATCHES, thus always showing ''1 of ### listed'' no matter what. Found by ElriC. Trac #13)
+2015-02-03 06:36:42 UTC: #441 [botsend] Fixed BOTSEND (''successfully send'' line had negative times. No idea why; just ran ABS to fix polarity for now. Will investigate further at another time. Trac #9)
+2015-02-03 06:20:03 UTC: #440 [tail] Fixed SB7:DISPATCH:PUBM (the PUBCMD ([usually] single-character trigger) didn't work when there were leading spaces on the line. Trac #11)
+2015-01-29 13:01:58 UTC: #439 [botmon] Fixed BOTMON (when all bots were present, don't show counts: just say they're all present. Mimics SB6 behavior)
+2015-01-14 08:23:29 UTC: #438 [botsend] Fixed BOTSEND (cosmetic: ''all files successfully transferred'' message was improperly enhanced)
+2015-01-14 08:20:11 UTC: #437 [vhost] Fixed VHOST (due to +tx / $::BOTNAME issues addressed yesterday, now VHOST is going to throw a WHOIS every time the bot's modes are exposed / changed. I might move this into TAIL but I'm not sure yet if this is the best way to implement it)
 2015-01-13 12:28:06 UTC: #436 [tail] Fixed SB7:SETUP (a typo I thought I caught earlier: while searching / replacing, highlighted the ''1001'' in the userlevel definition area, typed ''1f'' by accident, ruining the data)
 2015-01-13 10:19:10 UTC: #435 [tail] Added several raw binds (001, 371, & others: try to capture when the bot's host is changed; force a WHOIS to the server so the $::BOTNAME variable will update itself[?]. Still need to add a trap for usermodes +tx)
 2015-01-13 07:15:46 UTC: #434 [botmon] Fixed BOTMON (more LDESTROY-related issues in @BOTMON:CHECK, causing $OK and $MISSING to also be swapped. This was causing the ''all bots present'' message to never trigger because $MISSING always has the list-of-present-bots by mistake)
@@ -359,7 +370,7 @@
 2014-08-25 06:37:03 UTC: #82 [copyuser] Fixed COPYUSER (the parser for data transfer targets (which checks for humans) had a bad variable: $BOT instead of $TARGET)
 2014-08-25 06:23:04 UTC: #81 [login] Fixed LOGIN (yet another PRINT without $NICK, distracted by the flags)
 2014-08-25 04:31:51 UTC: #80 [note] Fixed NOTE SEND (when in DCC, the status flags were still part of the message. Removed. For now, we're gonna call this ''NOTE'' again. Let's see if it 'earns' the title of The Albatross yet again ....)
-2014-08-25 04:23:38 UTC: #79 [login] Fixed LOGIN (re-used a scalar variable as an array target, caused by an erliar update today (using SB7 PARSEFLAGS to assign some standard variables))
+2014-08-25 04:23:38 UTC: #79 [login] Fixed LOGIN (re-used a scalar variable as an array target, caused by an earlier update today (using SB7 PARSEFLAGS to assign some standard variables))
 2014-08-25 04:15:11 UTC: #78 [login] Fixed LOGIN (messages re: missing and bad OLOGIN passwords were missing $NICK. Found by Demonicpagan)
 2014-08-25 04:01:59 UTC: #77 [access] Fixed ACCESS (set up default information for users who have not used WHOAMI yet, and, return default access levels based on flags. Found by Demonicpagan)
 2014-08-25 03:18:55 UTC: #76 [botsend] Upgraded BOTSEND SEND (cosmetic: added speed calculation to final output line)

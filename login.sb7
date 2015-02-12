@@ -244,6 +244,26 @@ proc @login:join { nick host handle chan } {
 	return 0
 }
 
+proc @login:part { nick host handle chan { message "" } } {
+#	sb7:logout $handle $nick
+	return 0
+}
+
+proc @login:sign { nick host handle chan { message "" } } {
+#	sb7:logout $handle $nick
+	return 0
+}
+
+proc @login:splt { nick host handle chan { message "" } } {
+#	sb7:logout $handle $nick
+	return 0
+}
+
+proc @login:rejn { nick host handle chan { message "" } } {
+#	sb7:logout $handle $nick
+	return 0
+}
+
 proc @login:bootstrap args {
 	bind BOT - xlogin @login:xlogin
 	bind BOT - ologin @login:ologin
