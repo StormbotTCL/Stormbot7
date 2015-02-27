@@ -6,8 +6,15 @@ proc @debug { nick host handle chan arg } {
 
 # "> DEBUG: \$ARG ($arg)"
 
+	if [string eq -nocase NULL [userinfo get $handle output]] {
+		userinfo set $handle output notice
+		print $nick "\[HELP\] Your output is currently set to NULL, so, I can't show you anything!"
+		userinfo set $handle output NULL
+		return 1
+	}
+
 	sb7 parseflags
-	set validflags [list -all -internal -eggdrop -dcclist -owners -varegg -validbinds -events -tcl -pwd -files -servers -binds -ban -exempt -invite -modes -stormbot -commands -vartcl -greet -traffic]
+	set validflags [list -all -internal -eggdrop -dcclist -owners -varegg -validbinds -events -tcl -pwd -files -servers -binds -ban -exempt -invite -modes -stormbot -commands -vartcl -greet -sharutils -traffic]
 
 	switch -exact -- [string tolower $1] {
 
@@ -19,12 +26,12 @@ proc @debug { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick DEBUG COMMAND <command> (shows you internal stats on the command)"
 			print -help $nick ""
 			print -help $nick "Kicks-up information to report to the coder, in case you are having problems and can't find the issue(s) on your own."
-			print -help $nick "Report issues to: chat.bothouse.net - #BotHouse :: If no one is there, create a bug ticket at: http://trac.StormBot.org/ (you'll need to paste the \"DEBUG INFO\" data into the \"additional information\" field)."
+			print -help $nick "Report issues to: chat.bothouse.net - #BotHouse :: If no one is there, create a bug ticket at: http://trac.StormBot.org/ (you'll need to paste the \"DEBUG INFO -ALL\" data into the \"additional information\" field)."
 			print -help $nick "[effects WARNING up 4,5]: This produces about 30 ~ 50 lines of text!"
 			return 0
 		}
 	
-		info {
+		i - in - inf - info {
 			flags:simple $2e $validflags text flags
 			if [isempty flags] { set flags -all }
 			set home [home]
@@ -262,6 +269,16 @@ proc @debug { nick host handle chan arg } {
 				set output "All channels have +GREET"
 				if {$temp == ""} { append output " :)" } { append output " except: [join $temp " - "]" }
 				print -help $nick "GREET check: \$use-info(${::use-info}), \$wait-info(${::wait-info}) -- $output"
+			}
+
+			if [validflag -all -sharutils] {
+				array set sharutils_status [list ok "" missing ""]
+				foreach a [list tar gzip gunzip uuencode uudecode] {
+					set findcmd [shell:findcmd $a]
+					lappend sharutils_status([lindex [list ok missing] [isempty findcmd]]) $a
+				}
+				if [notempty sharutils_status(ok)] { print -help $nick "SHARUTILS check successful: [ajl $sharutils_status(ok)]" }
+				if [notempty sharutils_status(missing)] { print -help $nick "SHARUTILS check failed: [ajl $sharutils_status(missing)]" }
 			}
 
 			if [validflag -all -traffic] {

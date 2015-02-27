@@ -549,6 +549,12 @@ proc sb7:dispatch { nick host handle chan arg } {
 	}
 
 	# Target channel?
+	# 1/Check if channel is specified
+	# 2/If not: did the user use a command (targetting a channel) recently?
+	# 3/If not: is command channel-exempt? (-INVALID:OK)
+	# 4/If not: use $HOME / [HOME]
+	# 5/At some stage, $TCHAN should be occupied; it should never be empty
+
 	set tchan [lindex $arg 1]
 	if { [lsearch -exact [explode [data array value -default CONFIG CHAN:VALID #]] [left $tchan 1]] != -1 } {
 		set arg [lreplace $arg 1 1] ; # This or LRANGE?
@@ -4776,7 +4782,14 @@ proc pingpong { { time "" } } {
 
 # --- Shell commands ---
 
-proc shell:findcmd cmd { lindex [concat [shell:which $cmd] [shell:whereis $cmd]] 0 }
+proc shell:findcmd cmd {
+	# 2015-02-23 19:27:00 -0800: WHICH should work just fine; CygWin returns "/blah/cmd.exe" for WHEREIS
+	set which [shell:which $cmd]
+	if [notempty which] { return [lindex $which 0] }
+	set whereis [shell:whereis $cmd]
+	if [notempty whereis] { return [lindex $whereis 0] }
+	return
+}
 
 proc shell:which cmd { 
 	set error [ catch { set which [lindex [exec which [string tolower $cmd]] 0] } null ]
