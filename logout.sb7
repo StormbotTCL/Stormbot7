@@ -1,0 +1,17 @@
+sb7 command add LOGOUT 0 -locklevel -core
+
+proc @logout { nick host handle chan arg } {
+	sb7 security
+	sb7 parseflags
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[LOGOUT\]:"
+		print -help $nick "Syntax: /msg $::botnick LOGOUT HELP"
+		print -help $nick "Syntax: /msg $::botnick LOGOUT"
+		print -help $nick "The LOGOUT command disables your access to my commands unti you LOGIN again. If you are going to be away from your keyboard for a while, I recommend you use this command."
+		return
+	}
+	sb7 auth logout $handle
+	print -short $nick "You are now logged out."
+	return
+}
+

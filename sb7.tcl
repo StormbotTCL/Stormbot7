@@ -1,5 +1,5 @@
 # StormBot.TCL version 7.X series, add-on script for EGGDROP V1.3 - V1.8
-# (C) 2012 - 2014: [V7.0      ] David P. Hansen, Mai Mizuno
+# (C) 2012 - 2015: [V7.0      ] David P. Hansen, Mai Mizuno
 # (C) 2009 - 2012: [V6.0      ] David P. Hansen, Mai Mizuno
 # (C) 2003 - 2010: [V5.0 - 5.2] David P. Hansen, Mai Mizuno
 # (C) 2000 - 2003: [V4.0 - 4.3] David P. Hansen, Mai Mizuno
@@ -310,7 +310,7 @@ if !$sb7(@fullfile) {
 	if $sb7(@boot_error) {
 		putcmdlog "\[SB7\] Boot up error while loading\n\[SB7\] $dammit"
 		if [info exists sb7(@boot_fail_die)] {
-			if $sb7(@boot_fail_die) { die "\[SB7\] Boot failure in: $dammit" }
+			if $sb7(@boot_fail_die) { die "\[SB7\] Boot failure in SB7: $dammit" }
 			return
 		} {
 			die "\[SB7\] Boot failure: $dammit"

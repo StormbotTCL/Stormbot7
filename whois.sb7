@@ -1,0 +1,55 @@
+sb7 command add WHOIS 1 -none WI
+
+# WHOIS
+proc @whois { nick host handle chan arg } {
+	sb7 parseflags
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[WHOIS\]:"
+		print -help $nick "Syntax: $::botnick WHOIS HELP"
+		print -help $nick "Syntax: $::botnick WHOIS <user>"
+		print -help $nick "Syntax: $::botnick WHOIS \$<user>"
+		print -help $nick "Syntax: $::botnick WHOIS <user> \[specific types\]"
+		print -help $nick ""
+		print -help $nick "WHOIS displays information about a given user. I will return the following information:"
+		print -help $nick "User status (online / offline)"
+		print -help $nick "Access level(s)"
+		print -help $nick "Other information (via the SET command)"
+		print -help $nick "If you need to indicate a user's handle, and there's someone using a nick that matches your target handle (causing a false-positive against that user), "
+		print -help $nick "... or ... you're trying to find out why a user isn't seen by $::botnick as their correct handle, use a \"\$\" in front of the handle."
+		print -help $nick "Example: $::botnick WHOIS \$$handle"
+		print -help $nick "You can also request only specific information."
+		print -help $nick "Example: $::botnick WHOIS $handle gmt timezone"
+		return
+	}
+	lassign:array whois [whois [join $1] $handle] online nick host handle channel authhandle authnick
+	if { $whois(online) == -1 } { print -short -return $nick "No such user: $1" }
+	set private -dummy
+	if [none [userinfo get $whois(handle) private] false] { 
+		set private -private
+		if ![isnum -integer $nick] { print $private $nick "Output piped to /NOTICE to protect privacy as requested ...." }
+	}
+	print $private $nick "\[WHOIS\] [caseall [join $1]] ($whois(handle)):"
+	if $whois(online) { print $private $nick "[space 5]Online as: [nph $whois(nick) $whois(handle)]" } { print $nick "[space 5]Currently offline" }
+	print $private $nick "[space 5]Global flags ([chattr $whois(handle)])/[access get $whois(handle)] - $chan flags ([lindex [split [chattr $whois(handle) $chan] |] 1])/[access get $whois(handle) $chan]"
+	set rank [userinfo get $whois(handle) rank]
+	if ![string eq "" $rank] {
+		set local [access get $whois(handle) $chan]
+		set gloval [access get $whois(handle)] ; # GLOVAL! (:
+		print $private $nick "[space 5]Rank ([stt $rank]): [rank -$rank [expr ( $gloval > $local ) ? $gloval : $local]]"
+	}
+	print $private $nick ""
+	set valid [ldestroy -not -all -mult -glob [concat hosts [data get @set:valid]] [none $2e *]]
+	foreach info $valid { 
+		switch -exact -- [string tolower $info] {
+
+			alias { print $private $nick "[space 5][stt $info]: [none [ajl [userinfo get $whois(handle) $info]] <none>]"  }
+
+			default { print $private $nick "[space 5][stt $info]: [none [userinfo get $whois(handle) $info] <none>]"  }
+
+		}
+
+	}
+	print $private $nick "End of WHOIS [join $1]"
+	return
+}
+

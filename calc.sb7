@@ -1,0 +1,822 @@
+# For PI: http://mathworld.wolfram.com/BBPFormula.html
+
+sb7 command add CALC 0 -none MATH
+sb7 command add GRAPH 0 -none
+sb7 command add FORMULAE 0 -none FORM FORMULA FORMULAS
+sb7 command add PASCAL 0 -none
+sb7 command add QUAD 0 -none
+sb7 command add PI -1 -none
+sb7 command add SPEED -1 -none SOL
+
+proc @speed { nick host handle chan arg } {
+	SB:setvariables
+
+	set c 299792458
+	switch -exact -- $l1 {
+		help {
+			print -help $nick "\[SPEED\]:"
+			print -help $nick "Syntax: $::botnick SPEED HELP"
+			print -help $nick "Syntax: $::botnick SPEED TIME <time rate for person #2> \[time interval in years\] \[starting year\]"
+			print -help $nick "Syntax: $::botnick SPEED RATE <%(decimal): speed-of-light> \[time interval in years\] \[starting year\]"
+			print -help $nick "The $u0 command calculates the \"if a person travels near the speed of light\" formula for you."
+			print -help $nick "You must express one of two items: either (1) the speed itself (a fraction of the speed of light), or (2) the timeframe for the \"travel\" itself."
+			print -help $nick "The speed of light is 299,792,458 m/s."
+			print -help $nick "Note: when expressing speed, the range will be: 0.01 ~ 1.00"
+			print -help $nick "The general-form formula is: rate(person #2) = rate(person #1) * squareroot( 1 - (% of c / c)^2 )"
+			print -help $nick "Rate(person #2) will usually be 1 (in other words, normal passage of time for the person DOING the travelling)."
+			print -help $nick "I need either: rate(person #1), or, percentage of speed-of-light."
+			print -help $nick "Example: $::botnick $u0 RATE 0.5 5 (will calculate the rate time will pass for the \"observer\" when the \"traveller\" is travelling at 1/2 the speed of light for 5 years"
+			print -help $nick "Example: $::botnick $u0 TIME 5 7 (will calculate what speed is needed for the observer to pass 5 years of time while a person is travelling at speed-of-light, and show the effects after 7 years"
+			print -help $nick ""
+			print -help $nick "If my explanation doesn't make sense, ask a physics major / student for more clarification."
+			return 0
+		}
+
+		time {
+			# velocity = c * SQR(1-([t(ship)/t(observer)]^2))
+			set rate $2; # Presume factor of "1" for other party
+			set time $3
+			set start [iff [notempty $4] $4 0]
+			if ![isnum $rate] { print -help $nick "\[${u0}\] Illegal value for: rate (${rate})" ; return 0 }
+			if ![isnum $time] { print -help $nick "\[${u0}\] Illegal value for: time (${time})" ; return 0 }
+			if ![isnum $start] { print -help $nick "\[${u0}\] Illegal value for: start (${start})" ; return 0 }
+			#set velocity [== (($c * sqrt( 1 - ((1*1) / ($rate * $rate)))) * $time) + $start]
+			set velocity [== $c * sqrt( 1 - ((1*1) / ($rate * $rate)))]
+			print $nick "\[${u0}\] The speed-of-light factor necessary to make that journey: $velocity ([decimal [= 100.0 * $velocity] 3 1]%)"
+			return 0
+		}
+
+		rate {
+			set percent $2
+			set time $3
+			set start [iff [notempty $4] $4 0]
+			if ![isnum $percent] { print -help $nick "\[${u0}\] Illegal value for: percent of speed-of-light (${percent})" ; return 0 }
+			if ![isnum $time] { print -help $nick "\[${u0}\] Illegal value for: time (${time})" ; return 0 }
+			if ![isnum $start] { print -help $nick "\[${u0}\] Illegal value for: start (${start})" ; return 0 }
+
+			# dilation = time / SQR(1-(v^2/c^2))
+debug.vars #BotHouse time =[== pow((($percent * $c) / $c),2)] =[== 1 - (pow((($percent * $c) / $c),2))] =SQR:[== sqrt(1 - (pow((($percent * $c) / $c),2)))])
+			set dilation [== $time / sqrt(1-(pow( (($percent * $c)/$c) , 2 )))]
+			set new [== $start + ($time * $dilation)]
+			print $nick "\[${u0}\] Time dilation factor: $dilation (traveller = [== $time + $start], observer = $new)"
+			return 0
+		}
+
+		default { print -help $nick "\[${u0}\] You didn't select a valid option. Read the HELP again (I know it's kinda confusing), and see if it makes sense. If not, come ask the coder." ; return 0 }
+
+	}
+	?
+	return 0
+}
+
+proc @calc { nick host handle chan arg } {
+	FLAGS -comma
+	set threshhold 100
+
+	if [string eq HELP $u1] {
+		print -help $nick "\[CALC\]:"
+		print -help $nick "Syntax: $::botnick CALC HELP"
+		print -help $nick "Syntax: $::botnick CALC \[-COMMA\] <math calculation to perform>"
+		print -help $nick "Does the basic math requested. -COMMA forces commas into the final answer if necessary."
+		print -help $nick "Example: $::botnick CALC pow((3.2 + (15/3) * sin(PI / 2)) , 2)"
+		print -help $nick "(Yes, \"PI\" is a valid substitute for 3.14....)"
+		print -help $nick "Note: math functions available are: [and [join [lsort -inc -dict -uni [info functions]] ", "] &]"
+		print -help $nick "Each of the above-listed function words is used parenthetically: \037pow(10,5)\037 or \037sqrt(100)\037"
+		print -help $nick ""
+		print -help $nick "Syntax: $::botnick CALC ROOT <value> <exponent>"
+		print -help $nick "Example: $::botnick CALC ROOT 256 2 \[result = 16, since 16² = 256\]"
+		print -help $nick "Does the basic math root calculation."
+		print -help $nick "Note: CALC ROOT can handle decimal bases and negative numbers (if the exponent is an odd number), and any positive exponent."
+		print -help $nick ""
+		print -help $nick "Syntax: $::botnick CALC EXPONENT <base> <result>"
+		print -help $nick "Example: $::botnick CALC EXPONENT 10 100 \[result = 2, since 10² = 100\]"
+		print -help $nick "Does the basic exponent calculation."
+		print -help $nick "Note: CALC EXPONENT can handle decimal bases, but not negative numbers (this is a limitation of the EXP function's domain)."
+		print -help $nick ""
+		print -help $nick "Note: a custom parser was written to handle TCL's internal issues with integer math (value too big error). It APPEARS to work properly. Let me know if it doesn't."
+		return 0
+	}
+
+	if {[lsearch [list EXP EXPONENT] $u1] > -1} {
+		# Syntax: CALC EXPONENT 10 100 --> 2 (because you're asking: 10^X = 100)
+		if ![regexp -- {^[+\-]?\d+(\.\d+)?([Ee][+\-]?\d+)?$} $2] {print -help $nick "\[CALC EXPONENT\] Invalid number: $2"; return 0}
+		if ![regexp -- {^[+\-]?\d+(\.\d+)?([Ee][+\-]?\d+)?$} $3] {print -help $nick "\[CALC EXPONENT\] Invalid number: $3"; return 0}
+		set error [ catch { set exponent [ fixmath log( $3 ) / log( $2 ) ] } shit ]
+		if $error {print -help $nick "\[CALC EXPONENT\] error: $shit"; return 0}
+		set return [ expr pow( $2, $exponent ) ]
+		empty tag
+		if {[left $return $::tcl_precision] != [left $3 $::tcl_precision]} {set tag ", with an IEEE rounding error (decimal precision= ${::tcl_precision}) to: $return"}
+		print $nick "\[CALC EXPONENT\] $2 ^ \002\037${exponent}\037\002 = ${3}${tag}"
+		return 0 
+	}
+
+	if [string eq ROOT $u1] {
+		set target $2
+		set root   $3
+		negone final
+		if ![regexp -- {^[0-9\.\-]+$} $target] {
+			if [isint -even $root] {print -help $nick "Illegal base."; return 0}
+		}
+		if ![regexp -- {^[0-9\.\-]+$} $root] {print -help $nick "Illegal root."; return 0}
+
+		# OLD: 1 , NEW: (number / 20) : 2014-11-03 04:01:37 -0800
+		set newguess 1
+		set oldguess 0
+		if {$newguess == $oldguess} {return -code error "You can't make the default values \$NEWGUESS and \$OLDGUESS the same!"}
+
+		set count 0
+		while {$oldguess != $newguess} {
+			incr count
+			if {$count > $threshhold} {
+				set average [ fixmath ( $guess + $newguess ) / 2 ]
+				set final $average
+				break
+				return -code error "Shit.... [comma $threshhold] loops: GUESS($guess):NEWGUESS($newguess)"
+			}
+			set guess $newguess
+			set newguess [ fixmath $guess - ( ( pow( $guess , $root ) - $target ) / ( $root * ( pow( $guess , ( $root - 1 ) ) ) ) ) ]
+debug.print "> ROOT: \$GUESS ($guess), \$NEWGUESS ($newguess), FORMULA: $guess - ( pow( $guess , $root ) - $target ) / ( $root * ( pow( $guess , ( $root - 1 ) ) ) ) "
+			if {$guess == $newguess} {set final $newguess; break}
+		}
+		if {$final == -1} {print $nick "Unable to calculate the $root root of ${target}: operation is too complex for TCL to handle."; return 0}
+		if [string match *.0 $final] {set final [left $final -2]}
+		print $nick "Result: [ordinal $root] root of $target = $final (\002${final} ^ $root = ${target}\002)"
+		return 0
+	}
+
+	set error [ catch { set calc [ fixmath [join $1e ""] ] } ohcrap ]
+	# When there are spaces, the result is the literal string duplicating $1E.
+
+	if ($error) {print -help $nick "Error in expression \002[join $1e]\002: $ohcrap"; return 0}
+	set calc [nozero $calc]
+	if [validflag -comma] {set calc [comma $calc]}
+	print $nick "\[CALC\] \002[join $1e]\002 = $calc"
+	return 0
+}
+
+proc @graph { nick host handle chan arg } {
+	SB:setvariables	   
+
+	if [string eq HELP $u1] {
+		print -help $nick "\[GRAPH\]:"
+		print -help $nick "Syntax: $::botnick GRAPH HELP"
+		print -help $nick "Syntax: $::botnick GRAPH Y = X"
+		print -help $nick "The GRAPH command will \037\002ATTEMPT\002\037 to create a scalable, visual representation of a Cartesian Coordinate System (CCS) grid. This is \037NOT\037 scientific in any way."
+		print -help $nick "The GRAPH command will attempt to plot the calculated numbers (based on the ranges you select \[WITHIN REASON\]) on a grid system. You need to view this output with a \002MONOSPACED\002 (non-proportional) font for it to make visual sense."
+		print -help $nick "The GRAPH command can only handle simple equations for now (\"Algebra I\" level and below) until I can master parsing math strings into components, such as: how to isolate and convert the \"^2\" (when X = 8) in the sequence: (((5.2 + 3^(X-6)) / 12) + 1. Therefore, for now, provide equations in slope-intercept format: y = mx + b (just isolate \"Y\" on the left side of the equation for me)."
+		print -help $nick "More syntax examples:"
+		print -help $nick "Syntax: $::botnick GRAPH \002Y = X\002 , X = -2 to 5 (run grid X axis range from -2 to 5)"
+		print -help $nick "Syntax: $::botnick GRAPH \002Y = 2X\002 , Y = -5 to -1 (run grid Y axis range from -5 to -1)"
+		print -help $nick "Syntax: $::botnick GRAPH \002Y = 3X + 5\002 , SX = 10 (run grid points in 10 even steps: if X = -10 to 10, then mark the X axis in 10 even points: -10, -8, -6, -4, -2, 0 (a freebie), 2, 4, 6, 8, 10)"
+		print -help $nick "Syntax: $::botnick GRAPH \002Y = X*X - 12X\002 , SY = 5 (run grid points in 5 even steps: if X = 0 to 1, then mark the Y axis in 5 even points: 0 (a freebie), 0.2, 0.4, 0.6, 0.8, 1.0)"
+		print -help $nick "Syntax: $::botnick GRAPH \002Y = (X*X*X - X*X + X) / 10\002 , E = 0 (set EMPATHY to 0: don't shift any results (add offset of 0) to make them appear on the grid due to precision used. If you size your grid by even numbers, and an answer comes-up as \"5.2\" then it won't appear because \".2\" isn't an even number. An EMPATHY of .2 would shift the answer to plot at \"5.0\")"
+		print -help $nick "This command was just a random thought while I was trying to create CALC -EXPONENT."
+		print -help $nick "NOTE: when defining the range of the variables (X, Y above), use the literal \"TO\" since declaring negative values within a range is otherwise legal. Also, use commas (\",\") between the range definitions."
+		print -help $nick "NOTE: I'd recommend using BURSTMODE to look at graphs\; they can be slow to print out. See \"SET HELP\" for more information."
+		print -help $nick "Note: SX = ScaleX, SY = ScaleY. Scale includes \"0\" for free if it's in the requested range (giving you 11 points, not just 10, by default)."
+		print -help $nick "Example: $::botnick GRAPH \002Y = ( int( X ) & 1 )\002 , X = -10 to 10 , Y = -10 to 10 , SX = 20 , SY = 20 (will graph against bit #0 of the value of X :)"
+		print -help $nick "Example: $::botnick GRAPH \002Y = sin(X * PI)\002 , X = 0 to 2 , Y = -1 to 1 , SX = 20 , SY = 20 , E = 1 (graph a SINE wave)"
+		return 0
+	}
+
+	# I can't believe I'm actually gonna try this ....
+
+	# Syntax checking
+
+	if [isempty 1] {print -help $nick "What the hell am I graphing?! [jtext anta]"; return 0}
+	set split [split $1e ,]
+	emptyarray ranges variables
+	
+	# Version 1.0: let's try assembling an array for each variable
+
+	# Do REGEXP for \d+(.\d)+^\d+(.\d) [and allow for spaces]
+
+	# Let's program the grid first (using test values) ....
+
+	emptyarray points
+
+	# Let's try using dynamic values now ....
+
+	# Defaults:
+	set domain_x [list -5 5]
+	set domain_y [list -5 5]
+	set domain_r [list -5 5]
+	set length_x 10
+	set length_y 10
+	set empathy 0
+
+	set parseme $1e
+	set split [split $parseme ,]
+#print $nick SPLIT($split)
+	set equation [l0 $split]
+	foreach parse [lrange $split 1 end] {
+		set parse [join $parse ""]
+		set parse_equal [l1 [split $parse =]]
+#print $nick PARSE_EQUAL($parse_equal)
+		switch -glob -- [stu $parse] {
+
+			X=* {
+				if ![regexp -nocase -- {^[+\-]?\d+(\.\d+)?TO[+\-]?\d+(\.\d+)?$} $parse_equal] {print -help $nick "\[GRAPH\] ?Syntax error.\n$parse"; return 0}
+				regsub -all -nocase -- TO $parse_equal [space] domain_fragment
+				set domain_x $domain_fragment
+			}
+
+			Y=* {
+				if ![regexp -nocase -- {^[+\-]?\d+(\.\d+)?TO[+\-]?\d+(\.\d+)?$} $parse_equal] {print -help $nick "\[GRAPH\] ?Syntax error.\n$parse"; return 0}
+				regsub -all -nocase -- TO $parse_equal [space] domain_fragment
+				set domain_y $domain_fragment
+			}
+
+			SX=* {
+				if ![regexp -- {^\d+(\.\d+)?$} $parse_equal] {print -help $nick "\[GRAPH\] ?Illegal value (unable to set X axis size): $parse_equal (Real number required)"; return 0}
+				set length_x $parse_equal
+			}
+
+			SY=* {
+				if ![regexp -- {^\d+(\.\d+)?$} $parse_equal] {print -help $nick "\[GRAPH\] ?Illegal value (unable to set X axis size): $parse_equal (Real number required)"; return 0}
+				set length_y $parse_equal
+			}
+
+			E=* {
+				if [left [stu $parse_equal] 2 MC] {print -help $nick "Okay, Einstein .... We already knew that one."; return 0}
+				if ![regexp -- {^\d+(\.\d+)?$} $parse_equal] {print -help $nick "\[GRAPH\] ?Illegal value (unable to set empathy value): $parse_equal (Real number required)"; return 0}
+				set empathy $parse_equal
+			}
+
+			default {print -help $nick "\[GRAPH\] ?Syntax error.\n$parse"; return 0}
+
+		}
+	}
+
+#print $nick DOMAIN_X($domain_x):DOMAIN_Y($domain_y):LENGTH_X($length_y):LENGTH_Y($length_y):EMPATHY($empathy)
+
+	set range(grid) [join [concat [join $domain_x :] [join $domain_y :]] ,]
+#print $nick RANGE(GRID)\[$range(grid)\]
+
+	if ![regexp -nocase -- {^Y[ ]?=.*$} $1e] {print -help $nick "I need the equation to be in slope-intercept form: \"Y = <whatever>\" (isolate Y on LEFT side of the equation)."; return 0}
+
+	# Allow for boolean / equality comps
+	set equation [join [lrange [split $equation =] 1 end] =]
+
+	# Check for Algebraic multiplication: "2X + 5"
+	#set mults [regexp -inline -all -nocase -- {\0?[\.]?d+[A-Z]|\d+(\.\d+)?[A-Z]} $equation]
+	set pi [ fixmath pi ]
+	regsub -all -nocase -- PI $equation $pi equation
+	regexp -all -nocase -- {\0?[\.]?d+[A-Z]|\d+(\.\d+)?[A-Z]} $equation mults
+	if [notempty mults] {
+		foreach mult $mults {
+			if [isempty mult] continue
+			set mult_replace [left $mult -1]*[right $mult 1]
+#print $nick MULT($mult):MULT_REPLACE($mult_replace)
+			regsub -all -- $mult $equation $mult_replace equation
+		}
+	}
+
+	# Setup ranges
+	lassign [split $range(grid) ,] split_x split_y
+	lassign [split $split_x :] split_x0 split_x1
+	lassign [split $split_y :] split_y0 split_y1
+	set range_x [sequence $split_x0 .. $split_x1]
+	set range_y [sequence $split_y0 .. $split_y1]
+	set points_x [ fixmath ( $split_x1 - $split_x0 ) / $length_x ]
+	set points_y [ fixmath ( $split_y1 - $split_y0 ) / $length_y ]
+
+	# Set up grid
+	zero max_x max_y integer_x integer_y mantissa_x mantissa_y
+	for {set x $split_x0} {$x <= $split_x1} {add x $points_x} {
+		set abs_x [abs $x]; set int_x $abs_x; int int_x; set mant_x [mantissa $abs_x]
+
+		if {[len [abs $x]] > $max_x} {set max_x [len [abs $x]]}; # Deprecated
+
+		if {[len $int_x] > $integer_x} {set integer_x [len $int_x]}
+		if {[len $mant_x] > $mantissa_x} {set mantissa_x [len $mant_x]}
+
+		for {set y $split_y0} {$y <= $split_y1} {add y $points_y} {
+			set abs_y [abs $y]; set int_y $abs_y; int int_y; set mant_y [mantissa $abs_y]
+			if {[len [abs $y]] > $max_y} {set max_y [len [abs $y]]}; # Deprecated
+			if {[len $int_y] > $integer_y} {set integer_y [len $int_y]}
+			if {[len $mant_y] > $mantissa_y} {set mantissa_y [len $mant_y]}
+			set point .
+			if !($x) {set point |}
+			if !($y) {set point -}
+			if {!($x) && !($y)} {set point +}
+			set points([nozero $x],[nozero $y]) $point
+		}
+	}
+
+	# To calculate EMPATHY offsets, I need to create a list of plotted points
+	# and put them in a LIST of some kind. Have that done before here!
+
+	# Calculate points
+	empty values
+	lassign [split [l0 [split $range(grid) ,]] :] x_domain_start x_domain_end
+	for {set x $x_domain_start} {$x <= $x_domain_end} {add x $points_x} {# INCR X
+		set error [ catch { eval set y [noscinot [expr [regsub -all -nocase -- X $equation $x]]] } shit ]
+		if $error {
+			# Asymtote?
+			for {set asymtote $split_y0} {$asymtote <= $split_y1} {add asymtote $points_y} {
+				set asymtote [decimal $asymtote $empathy 1]
+#msghome X($x):ASYMTOTE($asymtote)
+				set points(${x},${asymtote}) :
+			}
+			continue
+		}
+		if $empathy {
+			# Somehow, calculate the nearest printable Y value to the
+			# current value of Y.
+
+			# ... Do something! ...
+
+			# for now, let EMPATHY = # of digits in the mantissa
+#msghome Y($y)
+			set y [decimal [nozero $y] $empathy 1]; # round it!
+		}
+		lappend values ${x},${y}
+	}
+
+	# Plot the points on the grid
+	foreach value $values {
+		lassign [split $value ,] x y
+		#set x [decimal $x $empathy 1]
+		#set y [decimal $y $empathy 1]
+		set points([nozero $x],[nozero $y]) X
+	}
+
+	# Correct MANTISSA offsets (counts the decimal point)
+	decr mantissa_x
+	decr mantissa_y
+
+	# Print the grid: use HELP queue
+	print -help $nick "Graph of: Y = $equation"
+
+	# Print by Y, decending
+	empty line_x
+	zero lines_x
+	for {set y $split_y1} {$y >= $split_y0} {sub y $points_y} {
+		set y [nozero $y]
+		#set line "\[[lindex [list - \261 +] [ expr [ sgn $y ] + 1 ]][using A>*$mantissa_y [abs $y]]\] "
+		set line "\[[lindex [list - \261 +] [ expr [ sgn $y ] + 1 ]][using A>*[ expr $integer_y + $mantissa_y + 1 ] [decimal [abs $y] $mantissa_y 1] ]\][space]"
+
+		# Assemble line by X, ascending
+		for {set x $split_x0} {$x <= $split_x1} {add x $points_x} {
+			if !($lines_x) {lappend line_x [decimal $x $mantissa_x 1]}
+			set x [nozero $x]
+			if ![info exists points(${x},${y})] {set points(${x},${y}) .}
+			append line $points(${x},${y})[space]
+		}
+		print -help $nick $line
+		one lines_x
+	}
+
+	# Print X axis legend
+	print -help $nick "[space][space $max_y][space 3][string repeat ^[space] [llength $line_x]]"
+	for {set scan 0} {$scan <= $max_x} {incr scan} {
+		one flip
+		set line "[space][space $max_y][space 3]"
+		foreach item $line_x {
+			if {$flip || !($scan)} {append line [string index [lindex [list - \261 +] [ expr [ sgn $item ] + 1 ]][using A>*$max_x [abs $item]] $scan][space]} {append line [space 2]}
+			set flip [not $flip]
+		}
+		print -help $nick $line
+	}
+	return 0
+}
+
+proc @formulae { nick host handle chan arg } {
+	SB:setvariables
+
+	set formulae [list pythagorean]
+	emptyarray formula
+	set formula(pythagorean) [list "X^2 + Y^2 = Z^2" "sqrt( pow( %X% , 2 ) + pow( %Y% , 2 ) )"]
+
+	if [string eq HELP $u1] {
+		print -help $nick "\[FORMULAE\]:"
+		print -help $nick "Syntax: $::botnick $u0 HELP"
+		print -help $nick "Syntax: $::botnick $u0 <formula name> <any needed values, space-delimited>"
+		print -help $nick "The FORMULAE command takes a given formula, plugs in the data, then returns the calculation for you."
+		print -help $nick "This is just a little helper command for the more common formulae in basic Algebra and Geometry."
+		print -help $nick "Example: $::botnick $u0 pythagorian 3 4 (will return the formula, and the answer: 5)"
+	}
+
+	set match [uniquematch $formulae $j1]
+	if [isempty match] {print -help $nick "\[${u0}\] I don't know that formula. The ones I know are: [ajl $formulae]"; return 0}
+	lassign $formula($match) text math
+
+	switch -exact -- $match {
+
+		pythagorean {
+			#
+		}
+
+	}
+
+	regsub -all % [regexp -all -inline -- {%[a-zA-Z]%} $math] "" variables
+	set variables [lsort -uni -dict -inc $variables]
+	set ll [llength $variables]
+	print $nick "For the $match formula, I need $ll [plural variable $ll]: [ajl $variables]"
+	emptyarray vars
+	set values $2e
+	foreach variable $variables {
+		set vars($variable) [l0 $values]
+		set values [lreplace $values 0 0]
+	}
+	foreach variable $variables {
+		regsub -all -nocase -- %${variable}% $math $vars($variable) math
+	}
+	print $nick VARIABLES($variables):MATH($math)
+	return 0
+}
+
+proc @pascal { nick host handle chan arg } {
+	FLAGS -debug -calculate -double
+
+	if [string eq HELP $u1] {
+		print -help $nick "\[PASCAL\]:"
+		print -help $nick "Syntax: $::botnick PASCAL HELP"
+		print -help $nick "Syntax: $::botnick PASCAL \[-DOUBLE\] <integer>"
+		print -help $nick "Syntax: $::botnick PASCAL \[-CALCULATE\] <integer> <binomial term>"
+		print -help $nick "Calculates the row of coefficients from Pascal's Triangle for a binomial sequence to the power of <integer>."
+		print -help $nick "Example: $::botnick PASCAL 5"
+		print -help $nick "[space 5]\[5\] 1 5 10 10 5 1"
+		print -help $nick ""
+		print -help $nick "Example: $::botnick PASCAL 3 (X + 5)"
+		print -help $nick "[space 5]\[3\]1 3 3 1"
+		print -help $nick "[space 5]\002(implied 1)\002X^3 + \0023\002X^2Y + \0023\002XY^2 + \002(1)\002Y (the co-efficients are: 1, 3, 3, 1)"
+		print -help $nick ""
+		print -help $nick "-DOUBLE: double-space the integers (2 spaces between numbers, minimum)"
+		return 0
+	}
+
+	if ![isint $1] {print -help $nick "\[PASCAL\] I expect an integer."; return 0}
+	zero counter bit
+	emptyarray row
+
+	# Seed value
+	set row($counter) [list 1]; # Make sure it's a proper LIST
+	empty junk
+
+	for {one pascal} {$pascal <= $1} {incr pascal} {
+		set new [list 1]
+		for {zero index} {$index < [llength $row($counter)]} {incr index} {
+			set x [ifemptyval [lindex $row($counter)        $index      ] 0]
+			set y [ifemptyval [lindex $row($counter) [ expr $index + 1 ]] 0]
+			# Using EXPR causes signed intergers;
+			# FIXMATH causes element-too-big errors ("*")
+			lappend new [ fixmath $x + $y ]
+			lappend junk [ fixmath $x + $y ]
+		}
+		set bit [not $bit]
+		incr counter
+		set row($counter) $new
+	}
+
+	zero max
+	set max_row [getlongest [sequence 1 .. $counter]]
+	foreach a [array names row] {set max [highest $max [getlongest $row($a)]]}
+	set max [len [highest $junk]]
+	if [validflag -double] {incr max 2}
+	if [isnum -even $max] {incr max}
+	if [validflag -debug] {print $nick MAX($max)}
+
+	set template [join [lrepeat [ expr $counter + 1 ] [string repeat + $max]] |]
+	foreach a [lsort -int -inc [array names row]] {
+		empty line
+		foreach element $row($a) {
+			#set element [SB:padcenter $element $max]
+			set element [using =*$max $element]
+			if [validflag -debug] {
+				regsub -all [space] $element _ element
+				lappend line $element
+			} {
+				if [notempty line] {append line [space]}
+				append line $element
+			}
+		}
+		print $nick "\[[SB:padright $a $max_row]\][space][string trimright [SB:padcenter $line [len $template]]]"
+	}
+	if [isempty 2] {return 0}
+
+	empty expansion
+	zero count X
+	set comma [instr $j2e ,]
+	if $comma {
+		set X   [mid  $j2e [ expr $instr + 1 ]]
+		set j2e [left $j2e [ expr $instr - 1 ]]
+	}
+
+	lassign [split $j2e ,] j2e X
+	foreach coefficient $row($counter) {
+		set binomial [string trim $j2e ()]
+		if ![left $binomial 1 -] {prepend binomial +}
+		#set sign [regexp -inline -- {[\+\-]} $binomial]
+		regexp -- {([\+\-]).+?([\+\-])} $binomial -> sign1 sign2
+		lassign [split $binomial +-] null s1 s2
+#msghome S1($s1):S2($s2):SIGN1($sign1):SIGN2($sign2)
+		set little $coefficient
+#msghome BINOMIAL($binomial):SIGN1($sign1):SIGN2($sign2):S1($s1):S2($s2):LITTLE($little)
+		if {$little == 1} {empty little}
+		if [notempty expansion] {append expansion [space]}
+		append expansion "+ ${little}"
+		set x [ expr $counter - $count ]
+		set y $count
+
+		set sign1 [string trimleft $sign1 +]
+		set sign2 [string trimleft $sign2 +]
+
+		if {$x == 1} {append expansion (${sign1}${s1})} elseif {$x > 1} {append expansion (${sign1}${s1}^${x})} else {#}
+		if {$y == 1} {append expansion (${sign2}${s2})} elseif {$y > 1} {append expansion (${sign2}${s2}^${y})} else {#}
+
+		incr count
+	}
+
+	if [validflag -calculate] {
+		# This should be fun ....
+		empty new
+		regsub -all -- {\^} $expansion @ temp_expansion
+		foreach element $temp_expansion {
+			foreach a [lsort -decreasing -command lsort:len [regexp -all -inline -- {[\+\-]?\d+@\d+} $element]] {
+				set split [split $a @]
+				set b [ expr pow([l0 $split] , [l1 $split])]
+				int b
+#msghome 1:A($a):B($b):ELEMENT($element)
+				regsub -all -- $a $element $b element
+				set element [string trim $element ()]
+#msghome 2:A($a):B($b):ELEMENT($element)
+			}
+			regsub -- \\\(\d+\\\) $element "" element
+			regsub -- \\\(${s1}\\\) $element $s1 element
+			if [regexp -nocase -- {\d+(\.\d+)?[A-Z]} $element] {
+				set element "( [left $element -1] * [right $element 1] )"
+			}
+			if [string match -nocase (*@*) $element] {
+				set temp_split [split [mid $element 2 -1] @]
+				set element "pow( [l0 $temp_split] , [l1 $temp_split] )"
+			}
+			lappend new $element
+#msghome NEW($new)
+		}
+		if [notempty X] {
+			#msghome EXPANSION($expansion)
+			#print -help $nick "\[PASCAL\] To do calculations, I need a value for the lead variable."; return 0
+			regsub -all -- $s1 [join $new] $X expansion
+		}
+	}
+
+	set expansion [string trimleft $expansion +]
+	print $nick "Expansion: $expansion"
+
+	print $nick "\[PASCAL\] Complete."
+	return 0
+}
+
+proc @quad { nick host handle chan arg } {
+	FLAGS -debug -calculate
+
+	if [string eq HELP $u1] {
+		print -help $nick "\[QUAD\]:"
+		print -help $nick "Syntax: $::botnick QUAD HELP"
+		print -help $nick "Syntax: $::botnick QUAD <number 1> <number 2> <number 3> (where they satisfy: #1X^2 + #2X + #3 = 0)"
+		print -help $nick "Calculates X based on the quadratic forumla (calculated by setting the equation to = 0)"
+		print -help $nick "Example: $::botnick QUAD 1 2 3 (which represents: \037(1)\037X^2 + \0372\037X + \0373\037)"
+		print -help $nick "Note: if the values given force a square root of a negative number (a complex number), the bead will complain: complex numbers do not enter into the quadratic formula in normal sequences (they do exist in special circumstances only)."
+		return 0
+	}
+	if ![isint $1] {print -help $nick "\[QUAD\] Expected an integer, not: $1"}
+	if ![isint $2] {print -help $nick "\[QUAD\] Expected an integer, not: $2"}
+	if ![isint $3] {print -help $nick "\[QUAD\] Expected an integer, not: $3"}
+
+	emptyarray solution
+	set part1 [ expr -1 * $2 ]
+	set part2 [ expr pow( $2 , 2 ) ]
+	set part3 [ expr ( 4 * $1 * $3 ) ]
+	set part4 [ expr 2 * $1 ]
+
+	set error [ catch { set part10 [ expr sqrt( $part2 - $part3 ) ] } shit ]
+	if $error {print -help $nick "\[QUAD\] Those values are illogical for the quadratic formula: the square root of a negative number ([ expr $part2 - $part3 ]) is being attempted."; return 0}
+
+	set solution(1) [ expr ( $part1 + $part10 ) / $part4 ]
+	set solution(2) [ expr ( $part1 - $part10 ) / $part4 ]
+
+	#set solution(1) [ expr ( ( -1 * $2 ) + sqrt( pow( $2 , 2 ) - ( 4 * $1 * $3 ) ) ) / ( 2 * $1 )]
+	#set solution(2) [ expr ( ( -1 * $2 ) - sqrt( pow( $2 , 2 ) - ( 4 * $1 * $3 ) ) ) / ( 2 * $1 )]
+
+	empty output
+	if $1 { if { $1 == 1 } { append output "X^2" } { append output "${1}X^2" } }
+	append output [space]
+	if $2 { if { $2 == 1 } { append output "${2}X" } { append output "[addsign $2]X" } }
+	append output [space]$3
+
+	foreach sol [lsort -int -inc [array names solution]] {
+		if { 0 == ( ( $1 * $solution($sol) ) + ( $2 * $solution($sol) ) + $3 ) } {
+			print $nick "\[QUAD\] Valid solution found: $solution($sol) ( $output )"
+		} {
+			print $nick "\[QUAD\] False positive found: $solution($sol)"
+		}
+	}
+
+	return 0
+}
+
+proc @pi { nick host handle chan arg } {
+	FLAGS -calculate -space -line -precision
+
+	if [string eq HELP $u1] {
+		print -help $nick "\[PI\]:"
+		#print -help $nick "Syntax: $::botnick PI exact <integer> (Simply reply the pre-calculated value of PI to the X'th digit)"
+		print -help $nick "Syntax: $::botnick PI \[-CALCULATE\] \[-PRECISION\] \[-SPACE\] \[-LINE\] DIGIT <integer / range> (Try to calculate the X'th digit(s) of PI)"
+		print -help $nick "Syntax: $::botnick PI \[-CALCULATE\] \[-PRECISION\] \[-SPACE\] TO <integer> (Try to calculate the PI to X digits)"
+		print -help $nick "Please note the literal words \"DIGIT\" and \"TO\" in the above syntaces."
+		print -help $nick ""
+		print -help $nick "The -CALCULATE option makes the bead try the math manually\; otherwise, a pre-loaded value is used."
+		print -help $nick "The -SPACE options makes the output put spaces after each 5th decimal place, for easier reading."
+		print -help $nick "The -LINE options makes \"-CALCULATE DIGIT\" show the range of PI from beginning to your specified range, filling gaps in with full-stop (period) characters. \[Example: \"$::botnick PI -CALCULATE -LINE DIGITS 1-3, 8-10, 12\" --> 3.141....535.9\]"
+		print -help $nick ""
+		print -help $nick "This is just for fun and seeing if I can do string approximations of one of the MANY formulas to calculate PI."
+		print -help $nick "Do not rely on the math to be true-and-accurate past $::tcl_precision digits, due to common computer math processor limitations."
+		print -help $nick "( cf: http://en.wikipedia.org/wiki/Pi )"
+		return 0
+	}
+
+	set marker $2e
+	set numberlist [splitnumberlist $marker]
+	if [isempty marker] {print -help $nick "\"${marker}\" is not an integer, nor a valid range."; return 0}
+
+	if [validflag -calculate] {
+		# Do calculations
+
+		# Do we DARE try to string-math this ?!
+		if [validflag -precision] {
+			# Just use regular formula for now
+			set pi [sigma 0 100 " ( 1.0 / pow( 16 , @ ) ) * ( ( 4.0 / ( ( 8 * @ ) + 1 ) ) - ( 2.0 / ( ( 8 * @ ) + 4 ) ) - ( 1.0 / ( ( 8 * @ ) + 5 ) ) - ( 1.0 / ( ( 8 * @ ) + 6 ) ) ) "]
+		} {
+			if {$marker >= $::tcl_precision} {print -help $nick "Due to how integer/mantissa math works (it's \"internal programming stuff\"), I can only calculate up to [ expr $::tcl_precision - 1 ] digits of accuracy. Therefore, your request goes BEYOND what I can calculate. For now, if you want beyond that many digits, use an internally stored value of PI by omitting the -CALCULATE flag."; return 0}
+			set pi [sigma 0 100 " ( 1.0 / pow( 16 , @ ) ) * ( ( 4.0 / ( ( 8 * @ ) + 1 ) ) - ( 2.0 / ( ( 8 * @ ) + 4 ) ) - ( 1.0 / ( ( 8 * @ ) + 5 ) ) - ( 1.0 / ( ( 8 * @ ) + 6 ) ) ) "]
+			#set pi [sigma 0 100 (1.0/pow(16,@))*((4.0/((8*@)+1))-(2.0/((8*@)+4))-(1.0/((8*@)+5))-(1.0/((8*@)+6)))]
+		}
+	} else {
+		set pi [pi:value]
+	}
+	set len [ expr [ len $pi ] - 2 ] ; # Exclude "3."
+	if { ( [ le $numberlist ] + 2 ) > $len } {print -help $nick "I only have PI stored up to [comma $len] digits."; return 0}
+
+	switch -glob -- $l1 {
+
+		t* {
+			incr marker 2; # Account for "3."
+			set pi [left $pi $marker]
+			if [isvalidflag $flags -space] {set pi [left $pi 2][regexp -all -inline -- {[\d]{1,5}} [mid $pi 3]]}
+			print $nick "PI to $2 places is: $pi"
+		}
+
+		d* {
+			if [isint $marker] {
+				incr marker 2; # Account for "3."
+				set result "PI's digit #$2 is: [mid $pi $marker 1]"
+			} else {
+				if [isvalidflag $flags -line] {
+					set nl [splitnumberlist $marker]
+					set result [string repeat . [le $nl]]
+					foreach a $nl {
+						set mark $a
+						incr mark 2
+						set result [left $result [ expr $a - 1 ]][mid $pi $mark 1][mid $result [ expr $a + 1 ]]
+					}
+					prepend result "PI result: 3."
+				} else {
+					incr marker 2; # Account for "3."
+					empty result
+					set nl [makenumberlist $marker [null]]
+					foreach a $nl {
+						set snl [splitnumberlist $a]
+						set pi_start [l0 $snl]
+						set pi_end   [le $snl]
+						set  pi_count [ expr ( $pi_end - $pi_start ) + 1 ]
+						incr pi_start 2
+						lappend result "#$a ([mid $pi $pi_start $pi_count])"
+					}
+					set result "PI [plural digit [llength $nl]]: [ifemptyval [join $result ", "] "< illogical number sequence> "]"
+				}
+			}
+			print $nick $result
+		}
+
+		default {print $nick "Please re-read the options available to you in the HELP."}
+
+	}
+	return 0
+
+	# Calculate PI to the specified place, then decide to print one
+	# digit or the whole thing.
+
+	# \\ sigma 0 5 " ( 1.0 / pow( 16 , @ ) ) * ( ( 4.0 / ( ( 8 * @ ) + 1 ) ) - (2.0 / ( ( 8 * @ ) + 4 ) ) - ( 1.0 / ( ( 8 * @ ) + 5 ) ) - ( 1.0 / ( ( 8 * @ ) + 6 ) ) ) "
+	# All of this can be approximated through string math except the "1/" part.
+}
+
+proc pi args {
+	set pi [join [split {3.
+1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
+8214808651328230664709384460955058223172535940812848111745028410270193852110555964462294895493038196
+4428810975665933446128475648233786783165271201909145648566923460348610454326648213393607260249141273
+7245870066063155881748815209209628292540917153643678925903600113305305488204665213841469519415116094
+3305727036575959195309218611738193261179310511854807446237996274956735188575272489122793818301194912
+9833673362440656643086021394946395224737190702179860943702770539217176293176752384674818467669405132
+0005681271452635608277857713427577896091736371787214684409012249534301465495853710507922796892589235
+4201995611212902196086403441815981362977477130996051870721134999999837297804995105973173281609631859
+5024459455346908302642522308253344685035261931188171010003137838752886587533208381420617177669147303
+5982534904287554687311595628638823537875937519577818577805321712268066130019278766111959092164201989
+3809525720106548586327886593615338182796823030195203530185296899577362259941389124972177528347913151
+5574857242454150695950829533116861727855889075098381754637464939319255060400927701671139009848824012
+8583616035637076601047101819429555961989467678374494482553797747268471040475346462080466842590694912
+9331367702898915210475216205696602405803815019351125338243003558764024749647326391419927260426992279
+6782354781636009341721641219924586315030286182974555706749838505494588586926995690927210797509302955
+3211653449872027559602364806654991198818347977535663698074265425278625518184175746728909777727938000
+8164706001614524919217321721477235014144197356854816136115735255213347574184946843852332390739414333
+4547762416862518983569485562099219222184272550254256887671790494601653466804988627232791786085784383
+8279679766814541009538837863609506800642251252051173929848960841284886269456042419652850222106611863
+0674427862203919494504712371378696095636437191728746776465757396241389086583264599581339047802759009
+9465764078951269468398352595709825822620522489407726719478268482601476990902640136394437455305068203
+4962524517493996514314298091906592509372216964615157098583874105978859597729754989301617539284681382
+6868386894277415599185592524595395943104997252468084598727364469584865383673622262609912460805124388
+4390451244136549762780797715691435997700129616089441694868555848406353422072225828488648158456028506
+0168427394522674676788952521385225499546667278239864565961163548862305774564980355936345681743241125
+1507606947945109659609402522887971089314566913686722874894056010150330861792868092087476091782493858
+9009714909675985261365549781893129784821682998948722658804857564014270477555132379641451523746234364
+5428584447952658678210511413547357395231134271661021359695362314429524849371871101457654035902799344
+0374200731057853906219838744780847848968332144571386875194350643021845319104848100537061468067491927
+8191197939952061419663428754440643745123718192179998391015919561814675142691239748940907186494231961
+5679452080951465502252316038819301420937621378559566389377870830390697920773467221825625996615014215
+0306803844773454920260541466592520149744285073251866600213243408819071048633173464965145390579626856
+1005508106658796998163574736384052571459102897064140110971206280439039759515677157700420337869936007
+2305587631763594218731251471205329281918261861258673215791984148488291644706095752706957220917567116
+7229109816909152801735067127485832228718352093539657251210835791513698820914442100675103346711031412
+6711136990865851639831501970165151168517143765761835155650884909989859982387345528331635507647918535
+8932261854896321329330898570642046752590709154814165498594616371802709819943099244889575712828905923
+2332609729971208443357326548938239119325974636673058360414281388303203824903758985243744170291327656
+1809377344403070746921120191302033038019762110110044929321516084244485963766983895228684783123552658
+2131449576857262433441893039686426243410773226978028073189154411010446823252716201052652272111660396
+6655730925471105578537634668206531098965269186205647693125705863566201855810072936065987648611791045
+3348850346113657686753249441668039626579787718556084552965412665408530614344431858676975145661406800
+7002378776591344017127494704205622305389945613140711270004078547332699390814546646458807972708266830
+6343285878569830523580893306575740679545716377525420211495576158140025012622859413021647155097925923
+0990796547376125517656751357517829666454779174501129961489030463994713296210734043751895735961458901
+9389713111790429782856475032031986915140287080859904801094121472213179476477726224142548545403321571
+8530614228813758504306332175182979866223717215916077166925474873898665494945011465406284336639379003
+9769265672146385306736096571209180763832716641627488880078692560290228472104031721186082041900042296
+6171196377921337575114959501566049631862947265473642523081770367515906735023507283540567040386743513
+6222247715891504953098444893330963408780769325993978054193414473774418426312986080998886874132604721
+5695162396586457302163159819319516735381297416772947867242292465436680098067692823828068996400482435
+4037014163149658979409243237896907069779422362508221688957383798623001593776471651228935786015881617
+5578297352334460428151262720373431465319777741603199066554187639792933441952154134189948544473456738
+3162499341913181480927777103863877343177207545654532207770921201905166096280490926360197598828161332
+3166636528619326686336062735676303544776280350450777235547105859548702790814356240145171806246436267
+9456127531813407833033625423278394497538243720583531147711992606381334677687969597030983391307710987
+0408591337464144282277263465947047458784778720192771528073176790770715721344473060570073349243693113
+8350493163128404251219256517980694113528013147013047816437885185290928545201165839341965621349143415
+9562586586557055269049652098580338507224264829397285847831630577775606888764462482468579260395352773
+4803048029005876075825104747091643961362676044925627420420832085661190625454337213153595845068772460
+2901618766795240616342522577195429162991930645537799140373404328752628889639958794757291746426357455
+2540790914513571113694109119393251910760208252026187985318877058429725916778131496990090192116971737
+2784768472686084900337702424291651300500516832336435038951702989392233451722013812806965011784408745
+1960121228599371623130171144484640903890644954440061986907548516026327505298349187407866808818338510
+2283345085048608250393021332197155184306354550076682829493041377655279397517546139539846833936383047
+4611996653858153842056853386218672523340283087112328278921250771262946322956398989893582116745627010
+2183564622013496715188190973038119800497340723961036854066431939509790190699639552453005450580685501
+9567302292191393391856803449039820595510022635353619204199474553859381023439554495977837790237421617
+2711172364343543947822181852862408514006660443325888569867054315470696574745855033232334210730154594
+0516553790686627333799585115625784322988273723198987571415957811196358330059408730681216028764962867
+4460477464915995054973742562690104903778198683593814657412680492564879855614537234786733039046883834
+3634655379498641927056387293174872332083760112302991136793862708943879936201629515413371424892830722
+0126901475466847653576164773794675200490757155527819653621323926406160136358155907422020203187277605
+2772190055614842555187925303435139844253223415762336106425063904975008656271095359194658975141310348
+2276930624743536325691607815478181152843667957061108615331504452127473924544945423682886061340841486
+3776700961207151249140430272538607648236341433462351897576645216413767969031495019108575984423919862
+9164219399490723623464684411739403265918404437805133389452574239950829659122850855582157250310712570
+1266830240292952522011872676756220415420516184163484756516999811614101002996078386909291603028840026
+9104140792886215078424516709087000699282120660418371806535567252532567532861291042487761825829765157
+9598470356222629348600341587229805349896502262917487882027342092222453398562647669149055628425039127
+5771028402799806636582548892648802545661017296702664076559042909945681506526530537182941270336931378
+5178609040708667114965583434347693385781711386455873678123014587687126603489139095620099393610310291
+6161528813843790990423174733639480457593149314052976347574811935670911013775172100803155902485309066
+9203767192203322909433467685142214477379393751703443661991040337511173547191855046449026365512816228
+8244625759163330391072253837421821408835086573917715096828874782656995995744906617583441375223970968
+3408005355984917541738188399944697486762655165827658483588453142775687900290951702835297163445621296
+4043523117600665101241200659755851276178583829204197484423608007193045761893234922927965019875187212
+7267507981255470958904556357921221033346697499235630254947802490114195212382815309114079073860251522
+7429958180724716259166854513331239480494707911915326734302824418604142636395480004480026704962482017
+9289647669758318327131425170296923488962766844032326092752496035799646925650493681836090032380929345
+9588970695365349406034021665443755890045632882250545255640564482465151875471196218443965825337543885
+6909411303150952617937800297412076651479394259029896959469955657612186561967337862362561252163208628
+6922210327488921865436480229678070576561514463204692790682120738837781423356282360896320806822246801
+2248261177185896381409183903673672220888321513755600372798394004152970028783076670944474560134556417
+2543709069793961225714298946715435784687886144458123145935719849225284716050492212424701412147805734
+5510500801908699603302763478708108175450119307141223390866393833952942578690507643100638351983438934
+1596131854347546495569781038293097164651438407007073604112373599843452251610507027056235266012764848
+3084076118301305279320542746286540360367453286510570658748822569815793678976697422057505968344086973
+5020141020672358502007245225632651341055924019027421624843914035998953539459094407046912091409387001
+2645600162374288021092764579310657922955249887275846101264836999892256959688159205600101655256375678
+} \n] ""]
+	if [isempty args] { set args 100 }
+	if ![regexp -- {^(\d+)$} $args - count] return
+	string range $pi 0 [ expr $count - 1 ]
+}
+

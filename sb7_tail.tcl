@@ -562,12 +562,18 @@ proc sb7:dispatch { nick host handle chan arg } {
 		set tchan $chan
 	}
 #msghome @COMMANDLIST([data array value @COMMANDLIST $cmd])
-
+##putloglev 5 * "\[SB7:DISPATCH\] 1:TCHAN($tchan):DATA/@LAST:CHAN([data array get @LAST:CHAN $nick])"
 	# Store reference data (needed for PRINT)
-	if [string eq * $tchan] { set tchan [data array get @LAST:CHAN $nick] } ; # set tchan [data array get @LAST:CHAN $nick $chan]
-	if [string eq # $tchan] { set tchan [data array get @LAST:CHAN $nick] }
+	set last_chan [data array get @LAST:CHAN $nick]
+	if [string eq * $tchan] { if ![string eq "" $last_chan] { set tchan $last_chan } }
+	if [string eq # $tchan] { if ![string eq "" $last_chan] { set tchan $last_chan } }
 	if [string eq ## $tchan] { set tchan [home] }
+
+	# 2015-02-26 19:14:00 -0800: Default (if nothing else works)
+#	if [string eq "" $tchan] { set tchan [home] }
+
 	data array set @LAST:CHAN $nick $tchan
+##putloglev 5 * "\[SB7:DISPATCH\] 2:TCHAN($tchan)"
 	# -DEFAULT is needed because the PUB bind, which comes straight here, isn't set into @LASTBIND like the others are
 	data array set @OUTPUT $nick [list $nick $host $handle $tchan [data get -default @LASTBIND pub]]
 #putlog "\[SB7:DISPATCH\] NICK($nick):HOST($host):HANDLE($handle):CHAN($chan):TCHAN($tchan):LASTBIND([data get @LASTBIND]):@OUTPUT([data array get @output $nick])"
@@ -1029,8 +1035,13 @@ proc sb7:setup args {
 		}
 	}
 
+
+	# Set up WHOIS-FIELDS
+	set ::whois-fields [string tolower [lsort -unique -increasing [concat ${::whois-fields} vhost]]]
+
 	# Run all "setup" PROCs for each command
 	foreach a [info procs sb7:setup_*] { eval $a } ; # (: I love TCL! :)
+
 	# Done!
 	return 0
 }
@@ -2506,6 +2517,7 @@ if ![iseggcorecmd lassign] {
 if { [string eq *** $list] || [string eq *** $args] } { putlog "\[LASSIGN\] LIST($list):ARGS($args)" }
 		set leftovers [list]
 		foreach a $list b $args {
+			if [string match -nocase *(*) $b] { error "\[LASSIGN\] Target variables must be scalar not array: \"${b}\" looks like an array" }
 			upvar 1 $b local_$b
 			if [string eq "" $a] { set local_$b "" ; continue }
 			if [string eq "" $b] { lappend leftovers $a ; continue }
@@ -2674,7 +2686,7 @@ debug =final list
 # Note: LMATCH (interp alias) -> "LDESTROY -NOT"
 
 # 2014-09-13 18:05:00 -0700: Replaced with new (fresh re-write) version, specifically to add new function: -COMMON
-proc `ldestroy args {
+proc ``ldestroy args {
 	# Use -COUNT to test number of results (0 = no matches)
 	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
 	set debug [validflag -debug]
@@ -2795,7 +2807,7 @@ if $debug { debug temp_list temp_not }
 }
 
 # FIX THIS: -NOCASE returns lower-case items!
-proc ldestroy args {
+proc `ldestroy args {
 	# Use -COUNT to test number of results (0 = no matches)
 	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
 	set debug [validflag -debug]
@@ -2804,7 +2816,7 @@ proc ldestroy args {
 	lassign $temp list text replacewith
 	if [validflag -multiple] { set total $text ; lappend flags -all } { set total [list $text] }
  
-	set match glob ; # Default (order (lowest-to-highest: regexp, exact, glob)
+	set match glob ; # Default order (lowest-to-highest: regexp, exact, glob)
 	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
 #debug *
 	set _ $list
@@ -2824,7 +2836,7 @@ proc ldestroy args {
 			} {
 				if [validflag -nocase] {
 					set __1 [lsearch -inline -${match} [string tolower $_] $item]
-					set __2 [lsearch -inline -${match} [string tolower $total] $item]
+ 					set __2 [lsearch -inline -${match} [string tolower $total] $item]
 				} {
 					set __1 [lsearch -inline -${match} $_ $item]
 					set __2 [lsearch -inline -${match} $total $item]
@@ -2854,6 +2866,23 @@ proc ldestroy args {
 	}
 	empty temp_list temp_not temp_list_ temp_not_
  
+	# Zeroeth pass
+	set collected ""
+	foreach item $total {
+		if [validflag -all] {
+			set __ [lsearch -all -$match $_ $item]
+		} {
+			set __ [lsearch      -$match $_ $item]
+		}
+		set collected [concat $collected $__]
+	}
+	set collected [lsort -real -increasing -unique $collected]
+	for { set x 0 } { $x < [llength $list] } { incr x } {
+		lappend temp_[lindex [list not list] [ expr ( [ lsearch -exact $collected $x ] == -1 ) ? 0 : 1 ]] [lindex $list $x]
+		#if { [lsearch -exact $collected $x] == -1 } { lappend temp_not [lindex $list $x] } { lappend temp_list [lindex $list $x] }
+	}
+putloglev 7 * "\00308\[LDESTROY\] LIST($list):TOTAL($total):COLLECTED($collected):TEMP_LIST($temp_list):TEMP_NOT($temp_not)\00399,99"
+
 	# First pass
 	set collected ""
 	foreach item $total {
@@ -2871,7 +2900,8 @@ proc ldestroy args {
 		}
 if $debug { debug collected item _ __ match =-all([lsearch -all -inline -${match} $_ $item]) =-single([lsearch -inline -${match} $_ $item]) temp_list_ temp_not_ }
 	}
- 
+putloglev 7 * "\00308\[LDESTROY\] COLLECTED($collected):LIST($temp_list_):NOT($temp_not_)\00399,99"
+
 	# Second pass
 	set do_second_pass 1
 	if $do_second_pass {
@@ -2893,6 +2923,90 @@ if $debug { debug _ collected temp_list temp_not }
 	}
 	if [validflag -replacewith] { set temp_list $replacewith }
  
+if $debug { debug temp_list temp_not }
+	if [validflag -both] { if [validflag -count] { return [list [llength $temp_list] [llength $temp_not]] } { return [list $temp_list $temp_not] } }
+	if [validflag -not] { if [validflag -count] { return [llength $temp_not] } { return $temp_not } }
+	if [validflag -count] { return [llength $temp_list] }
+	return $temp_list
+}
+
+proc ldestroy args {
+	# Use -COUNT to test number of results (0 = no matches)
+	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
+	set debug [validflag -debug]
+	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
+ 
+	lassign $temp list text replacewith
+	if [validflag -multiple] { set total $text ; lappend flags -all } { set total [list $text] }
+ 
+	set match glob ; # Default order (lowest-to-highest: regexp, exact, glob)
+	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
+#debug *
+	set _ $list
+	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
+ 
+	if [validflag -common] {
+		###########
+		# -COMMON #
+		###########
+		empty common fail1 fail2
+		foreach item [lunique [concat $_ $total]] {
+			if [validflag -all] {
+				set __1 [lsearch -all -inline -${match} $_ $item]
+				set __2 [lsearch -all -inline -${match} $total $item]
+			} {
+				set __1 [lsearch      -inline -${match} $_ $item]
+				set __2 [lsearch      -inline -${match} $total $item]
+			}
+			switch -exact -- [string eq "" $__1][string eq "" $__2] {
+				11 { error "\[LDESTROY -COMMON\] This should not be possible: \"${item}\" doesn't match either list!" }
+				10 { set fail2 [concat $fail2 $item] }
+				01 { set fail1 [concat $fail1 $item] }
+				00 { set common [concat $common $item] }
+			}
+#debug item common fail1 fail2
+		}
+ 
+		if [validflag -nonulls] { foreach a [list common fail1 fail2] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
+		if [validflag -unique] { foreach a [list common fail1 fail2] { set $a [lunique [set $a]] } }
+		if [validflag -increasing -decreasing] {
+			set direction increasing
+			if [validflag -decreasing] { set direction decreasing }
+			foreach a [list common fail1 fail2] { set $a [lsort -$direction [set $a]] }
+		}
+		if [validflag -replacewith] { set common $replacewith }
+		if [validflag -both] { if [validflag -count] { return [list [llength $common] [llength $fail1] [llength $fail2]] } { return [list $common $fail1 $fail2] } }
+		if [validflag -not] { if [validflag -count] { return [llength [concat $fail1 $fail2]] } { return [concat $fail1 $fail2] } }
+		if [validflag -count] { return [llength $common] }
+		return $common
+	}
+
+	#####################
+	# Normal processing #
+	#####################
+
+	empty temp_list temp_not
+ 
+	# Collect indeces only (to not corrupt case of original list); pick-appart later
+	set collected ""
+	foreach item $total {
+		if [validflag -all] { set __ [lsearch -all -$match $_ $item] } { set __ [lsearch -$match $_ $item] }
+		set collected [concat $collected $__]
+	}
+	set collected [lsort -real -increasing -unique $collected]
+	for { set x 0 } { $x < [llength $list] } { incr x } {
+		lappend temp_[lindex [list list not] [ expr ( [ lsearch -exact $collected $x ] == -1 ) ? 0 : 1 ]] [lindex $list $x]
+	}
+#putloglev 7 * "\00308\[LDESTROY\] LIST($list):TOTAL($total):COLLECTED($collected):TEMP_LIST($temp_list):TEMP_NOT($temp_not)\00399,99"
+
+	if [validflag -nonulls] { foreach a [list temp_list temp_not] { set $a [lsearch -all -inline -not -exact [set $a] ""] } }
+	if [validflag -unique] { foreach a [list temp_list temp_not] { set $a [lunique [set $a]] } }
+	if [validflag -increasing -decreasing] {
+		set direction increasing
+		if [validflag -decreasing] { set direction decreasing }
+		foreach a [list temp_list temp_not] { set $a [lsort -$direction [set $a]] }
+	}
+	if [validflag -replacewith] { set temp_list $replacewith }
 if $debug { debug temp_list temp_not }
 	if [validflag -both] { if [validflag -count] { return [list [llength $temp_list] [llength $temp_not]] } { return [list $temp_list $temp_not] } }
 	if [validflag -not] { if [validflag -count] { return [llength $temp_not] } { return $temp_not } }
@@ -6337,13 +6451,17 @@ proc percent { number total { decimal "" } } {
 }
 
 proc timeval { value { convert_to s } } {
-	array set mult [list l .001 n .01 t .1 s 1 m 60 h 3600 d 86400 w 604800 y 31536000 e 315360000 c 315360000]
+	array set mult [list l .001 n .01 t .1 s 1 m 60 h 3600 d 86400 w 604800 y 31536000 e 315360000 c 3153600000]
 	empty time marker
-	regexp -nocase -- {^([\+\-]?)([\d\.]+)([lntsmhdwyec]?)$} $value - sign time marker
-	if [isempty time] return
+	if ![regexp -nocase -- {^([\+\-]?[\d\.]+[ceywdhmstnl]){1,}$} $value] return
 	if [isempty marker] { set marker s }
-	if ![info exists mult($marker)] return
-	set timeval [expr ${sign}$time * $mult($marker) ]
+	set timeval 0
+	foreach regexp [regexp -inline -all -nocase -- {[\+\-]?[\d\.]+[lntsmhdwyec]} $value] {
+		regexp -nocase -- {^([\+\-]?)([\d\.]+)([lntsmhdwyec]?)$} $regexp - sign time marker
+		if [isempty time] return
+		if ![info exists mult($marker)] return
+		set timeval [expr $timeval + ${sign}$time * $mult($marker)]
+	}
 	if [notempty convert_to] {
 		if ![info exists mult($convert_to)] return
 		set timeval [expr ( ${timeval} / 1.0 ) / $mult($convert_to)]
@@ -6369,7 +6487,7 @@ proc urt { value { joiner "" } { limit 0 } } {
 proc angle args {
 	flags:simple $args [list -dms -decimal -help] value flags
 	set degree_mark \xC2\xB0
-	if { [validflag -help] || [string eq -nocase HELP $value] } { return "-dms 0.0 \[or\] -decimal 0\[${degree_mark}\] 0\['\] 0\[\"\]" }
+	if { [validflag -help] || [string eq -nocase HELP $value] } { set name [lindex [info level [info level]] 0] ; return "\"$name -dms 0.0\" , or , \"$name -decimal 0\[${degree_mark}\] 0\['\] 0\[\"\]\"" }
 	if [validflag -decimal] {
 		catch { set value [join $value] }
 		set value [encoding convertfrom utf-8 $value]

@@ -23,22 +23,31 @@ proc @who { nick host handle chan arg } {
 		return
 	}
 
+	if [validflag -unknown] {
+		# -UNKNOWN mode (-WHY is no longer needed: we'll figure that out anyway)
+print -help -return $nick "\[WHO -UNKNOWN\] Not ready yet."
+		return
+	}
+
 	empty o
 	foreach user [lsort -increasing -unique -dictionary [chanlist $chan]] {
 		lassign [whois $user $user $chan] wonline wnick whost whandle wchan wauthedh wauthedn
 		if !$wonline { error "\[WHO:WHOIS\] Somehow, \$WONLINE = 0 , yet , the user is listed in CHANLIST ([highlight:list [chanlist $chan] $user bold reverse])" }
 		lappend o [list [get opsymbol $wnick $chan] $user $whandle $wauthedh]
 	}
+#debug =1 o
 	# Sort list by channel rank (~&@%+), then, nick
 #	set o [lsort -inc -uni -dict -command lsort:chanop $o]
+#debug =2 o
 	array set totals [list * 0 ~ 0 & 0 @ 0 % 0 + 0 "" 0 -bot 0 -cserv 0 -known 0 -unknown 0 -human 0 - 0]
 
-	array set colors [list 1001 11,12 =1000 0,1 501-999 11 500 4 400-499 7 100-399 8 75-99 3 50-74 12 1-49 6 <=0 1,0 @bot 14 @cserv 5] ; # In order
+	array set colors [list 1001 0,1 =1000 11,12 501-999 11 500 4 400-499 7 100-399 8 75-99 3 50-74 12 1-49 6 <=0 1,0 @bot 14 @cserv 5] ; # In order
 	array set list [list]
 	foreach chunk $o {
 		lassign $chunk loop_symbol loop_nick loop_handle loop_authed
 		if [string eq $loop_handle $loop_authed] { set user $loop_handle } { set user "$loop_handle -> $loop_authed" }
-		empty color
+#debug =1 user loop_symbol loop_nick loop_handle loop_authed
+		empty color op ; # 2015-01-02 02:28:00 -0800: If OP isn't here, the previous user's op symbols are carried-through ....
 		regexp -- {^([\~\&\@\%\+])} $loop_symbol - op
 		if [is cserv $loop_handle] {
 			set color $colors(@cserv)
@@ -74,7 +83,7 @@ proc @who { nick host handle chan arg } {
 						set access $al
 					}
 				}
-				if { $access == 1000 } { if [is permowner $loop_authed] { set access 1001 } }
+				if { $access >= 1000 } { set access [is permowner $loop_authed] }
 			} {
 				set access -1
 			}
@@ -83,16 +92,17 @@ proc @who { nick host handle chan arg } {
 			}
 			set text "${op}[nph $loop_nick [iff [string eq $loop_handle $loop_authed] $loop_handle "$loop_handle -> $loop_authed"]]"
 		}
+#debug =2 user loop_symbol loop_nick loop_handle loop_authed
 		if { $access == -1 } { incr totals(-unknown) } { incr totals(-known) }
 		lappend list($op) [color $color]${text}[color]
 	}
 	# Create legend
 	empty o
-	foreach { g a b c } [list 1 1001 11,12 "permanent owner" 1 =1000 0,1 "bot owner" 1 501-999 11 "global staff" 0 500 4 "channel owner" 0 400-499 7 "channel master" 0 100-399 8 "channel op" 0 75-99 3 "channel halfop" 0 50-74 12 "channel voice" 0 1-49 6 "channel friend" 0 <=0 1,0 "channel visitor" 0 @bot 14 "known bot" 0 @cserv 5 "cservice bot"] {
+	foreach { g a b c } [list 1 1001 0,1 "permanent owner" 1 =1000 11,12 "bot owner" 1 501-999 11 "global staff" 0 500 4 "channel owner" 0 400-499 7 "channel master" 0 100-399 8 "channel op" 0 75-99 3 "channel halfop" 0 50-74 12 "channel voice" 0 1-49 6 "channel friend" 0 <=0 1,0 "channel visitor" 0 @bot 14 "known bot" 0 @cserv 5 "cservice bot"] {
 		if $g { if ![validflag -global] continue }
 		lappend o "[color $b][stt $c][iff ![left $a 1 @] " ($a)"][color]"
 	}
-
+#debug =3 o
 	# Print results
 	print $nick "\[WHO\] Channel members for ${chan}:"
 	print $nick "Legend: \[[join $o " | "]\]"
@@ -101,7 +111,7 @@ proc @who { nick host handle chan arg } {
 			set ll [llength $list($a)]
 			incr totals(*) $ll
 			incr totals($a) $ll
-			print $nick "[comma [llength $list($a)]] [plural [string totitle $b] [llength $list($a)]][iff [notempty a] " (${a})"]: [ajl -nosort $list($a) " , "]"
+			print $nick "[comma [llength $list($a)]] [plural [string totitle $b] [llength $list($a)]][iff [notempty a] " (${a})"]: [join $list($a)]" ; # [ajl -nosort $list($a) " , "]
 		}
 	}
 	print $nick [string repeat - 50]

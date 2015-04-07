@@ -1,0 +1,238 @@
+sb7 command add SNAPSHOT 700 -core SS
+sb7 register global snapshot
+
+proc @snapshot { nick host handle chan arg } {
+	# 2014-11-09: Coder's note: $::USERFILE & $::CHANFILE are read-only variables, thus the scheme used below ....
+	FLAGS
+	set snapshot_dir [data array get -default snapshot dir [file normalize ./snapshots]]
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[SNAPSHOT\]:"
+			print -help $nick "Syntax: $::botnick SNAPSHOT HELP"
+			print -help $nick "Syntax: $::botnick SNAPSHOT SAVE \[-QUIET\] \[all (default) | user | chan | data\]"
+			print -help $nick "Syntax: $::botnick SNAPSHOT LOAD <date> \[all (default) | user | chan | data\]"
+			print -help $nick "Syntax: $::botnick SNAPSHOT FIND <date | \"user\" | \"chan\" | \"data\">"
+			print -help $nick "Syntax: $::botnick SNAPSHOT DIR \[target directory (default: [file normalize ./snapshots])\]"
+			print -help $nick "The bot will save (or load) the requested snapshot files."
+			print -help $nick "The target directory for these files is: $snapshot_dir"
+			print -help $nick "The following files will be created (or loaded), depending on your choice(s):"
+			print -help $nick "[space 5]User file: ${::nick}.user.[clock format [clock seconds] -format "%Y%m%d-%H%M%S"].snapshot"
+			print -help $nick "[space 5]Chan file: ${::nick}.chan.[clock format [clock seconds] -format "%Y%m%d-%H%M%S"].snapshot"
+			print -help $nick "[space 5]Data file: ${::nick}.data.[clock format [clock seconds] -format "%Y%m%d-%H%M%S"].snapshot"
+			print -help $nick "-QUIET: do not display output when this command is executed (useful in MACROs and DELAYs)"
+			print -help $nick "FIND:"
+			print -help $nick "[space 5]To specify a date, use \"YYYYMMDD\" format (4-digit year, 2-digit month, 2-digit day). Wildcards OK"
+			print -help $nick "[space 5]To specify a time, use \"HHMMSS\" (2-digit hour, 2-digit minute, 2-digit second). Wildcards OK"
+			print -help $nick "[space 5]To specify a type, use \"user\" \"chan\" or \"data\""
+			print -help $nick ""
+			return
+		}
+
+		dir {
+			if [isempty 2] { print -help -return $nick "\[SNAPSHOT DIR\] Current SNAPSHOT directory: [data array get snapshot dir]" }
+			if [string eq -nocase HELP $2] {
+				print -help $nick "\[SNAPSHOT DIR\]:"
+				print -help $nick "Syntax: $::botnick SNAPSHOT DIR"
+				print -help $nick "Syntax: $::botnick SNAPSHOT DIR HELP"
+				print -help $nick "Syntax: $::botnick SNAPSHOT DIR <new target directory>"
+				print -help $nick ""
+				print -help $nick "SNAPSHOT DIR sets (or shows) the directory into which the SNAPSHOTs are saved."
+				print -help $nick "Using \"SNAPSHOT DIR\" alone will show you the current directory"
+				print -help $nick "Current directory: [data array get snapshot dir]"
+				return
+			}
+			set dir [join $2e]
+			data array set snapshot dir $dir
+			saveme data
+			print $nick "\[SNAPSHOT DIR\] SNAPSHOT directory is now: $dir"
+			set glob [glob -nocomplain -- ${snapshot_dir}/*.snapshot]
+			if [notempty glob] {
+				set ll [llength $glob]
+				foreach file $glob { file rename -force $file ${dir}/[file tail $file] } 
+				print $nick "[plural file -count -comma $ll] moved: $snapshot_dir --> $dir"
+			}
+			return
+		}
+
+		save {
+			flags:simple $2e -quiet text flags
+			if [isempty text] { if ![validflag -quiet] { print -help -return $nick "\[SNAPSHOT SAVE\] What files am I creating SNAPSHOTs of?" } }
+			set format [clock format [clock seconds] -format %Y%m%d-%H%M%S%z].snapshot
+			empty types
+			foreach a $text {
+				set um [uniquematch [list all user chan data] $a]
+				if [notempty um] { if [string eq -nocase ALL $um] { set types [concat $types user chan data] } { lappend types $um } }
+			}
+			if [isempty types] { print -help -return $nick "\[SNAPSHOT SAVE\] What types of files am I taking a SNAPSHOT of?" }
+			if ![file isdirectory $snapshot_dir] { file mkdir $snapshot_dir }
+			set types [none [lunique $types] all]
+			foreach type $types {
+				switch -exact -- [string tolower $type] {
+
+					user {
+						set filename ${snapshot_dir}/${::nick}.${type}.$format
+						set error [ catch save crap ]
+						if $error { error $crap }
+						set error [ catch { file copy -force $::userfile $filename } crap ]
+						if $error { error $crap }
+						if ![validflag -quiet] { print $nick "\[SNAPSHOT\] SNAPSHOT saved: $type file (${filename})" }
+					}
+
+					chan {
+						set filename ${snapshot_dir}/${::nick}.${type}.$format
+						set error [ catch savechannels crap ]
+						if $error { error $crap }
+						set error [ catch { file copy -force $::chanfile $filename } crap ]
+						if $error { error $crap }
+						if ![validflag -quiet] { print $nick "\[SNAPSHOT\] SNAPSHOT saved: $type file (${filename})" }
+					}
+
+					data {
+						#set filename ${snapshot_dir}/${::nick}.${type}.$format
+						set filename ${snapshot_dir}/[file tail [data filename]]
+						set error [ catch { data save $filename } crap ]
+						if $error { error $crap }
+						if ![validflag -quiet] { print $nick "\[SNAPSHOT\] SNAPSHOT saved: $type file (${filename})" }
+					}
+
+					default ?
+
+				}
+			}
+			if ![validflag -quiet] { print $nick "\[SNAPSHOT\] SNAPSHOTs taken: [ajl $types]" }
+			return
+		}
+
+		load {
+			if [isempty 2] { print -help -return $nick "\[SNAPSHOT SAVE\] What date am I using for reloading SNAPSHOTs?" }
+
+			# Just process the files as listed?
+			zero ok
+			foreach a $2e {
+				if [regexp -nocase -- "${::nick}\\.(user|chan|data)\\.(\\d\{8\}\\-\\d\{6\}\[\\+\\-\]\\d\{4\})\\.snapshot" $a - type date] {
+					one ok
+					[sb7 command get snapshot proc] $nick $host $handle $chan "snapshot load $date $type"
+				}
+				if $ok return
+			}
+
+			if [isempty 3] { print -help -return $nick "\[SNAPSHOT SAVE\] What SNAPSHOTs am I reloading?" }
+			set format ${2}.snapshot
+			empty types
+			set date $2
+			if ![regexp -- {^\d{8}\-\d{6}$} $date] { print -help -return $nick "\[SNAPSHOT LOAD\] Unknown date: $date (standard format: YYYYMMDD-HHMMSS)" }
+			foreach a $3e {
+				set um [uniquematch [list all user chan data] $a]
+				if [notempty um] { if [string eq -nocase ALL $um] { set types [concat $types user chan data] } { lappend types $um } }
+			}
+			set types [lunique $types]
+			empty ok bad
+			foreach type $types {
+				switch -exact -- [string tolower $type] {
+
+					user {
+						set filename ${snapshot_dir}/${::nick}.${type}.$format
+						if ![file exists $filename] { lappend bad $filename ; continue }
+						# Use COPY instead of RENAME (except for the snapshot_temp -> $::userfile) in case of errors
+						# The RENAME effectively deletes the "temp" files (so there's no left-over garbage)
+						set error [ catch { file copy -force $::userfile snapshot_temp_$::userfile } crap ]
+						if $error { error $crap }
+						set error [ catch { file copy -force $filename $::userfile } crap ]
+						if $error { error $crap }
+						set error [ catch reload crap ]
+						if $error { error $crap }
+						set error [ catch { file rename -force snapshot_temp_$::userfile $::userfile } crap ]
+						if $error { error $crap }
+						print $nick "\[SNAPSHOT\] SNAPSHOT loaded: $type file (${filename})"
+					}
+
+					chan {
+						set filename ${snapshot_dir}/${::nick}.${type}.$format
+						if ![file exists $filename] { lappend bad $filename ; continue }
+						# Use COPY instead of RENAME (except for the snapshot_temp -> $::chanfile) in case of errors
+						# The RENAME effectively deletes the "temp" files (so there's no left-over garbage)
+						set error [ catch { file copy -force $::chanfile snapshot_temp_$::chanfile } crap ]
+						if $error { error $crap }
+						set error [ catch { file copy -force $filename $::chanfile } crap ]
+						if $error { error $crap }
+						set error [ catch loadchannels crap ]
+						if $error { error $crap }
+						set error [ catch { file rename -force snapshot_temp_$::chanfile $::chanfile } crap ]
+						if $error { error $crap }
+						print $nick "\[SNAPSHOT\] SNAPSHOT loaded: $type file (${filename})"
+					}
+
+					data {
+						set filename ${snapshot_dir}/${::nick}.${type}.$format
+						if ![file exists $filename] { lappend bad $filename ; continue }
+						catch { set lines [data load $filename] }
+						print $nick "\[SNAPSHOT\] SNAPSHOT loaded: $type file (${filename}) ([comma $lines] [plural line $lines])"
+					}
+
+					default ?
+
+				}
+			}
+			if [notempty ok] { print $nick "\[SNAPSHOT LOAD\] Successful reloads: [ajl $ok]" }
+			if [notempty bad] { print $nick "\[SNAPSHOT LOAD\] Files not found: [ajl $bad]" }
+			return
+		}
+
+		find {
+			if [isempty 2] { set match [list user chan data] } { set match $2e }
+			empty o
+			zero count
+#debug match
+			foreach file [glob -nocomplain -directory $snapshot_dir -tails -- ${::nick}.*.*.snapshot] {
+				regexp -nocase -- "^(${::nick})\\.(user|chan|data)\\.(\\d\{8\}\\-\\d\{6\})\\.snapshot\$" $file - bot type date
+#debug file bot type date
+				if ![string match -nocase $::nick $bot] continue
+				zero ok
+				foreach b $match {
+#debug b
+					if [string eq -nocase $b $type] { one ok }
+					if [string eq -nocase $b $date] { one ok }
+					if [string match -nocase ${b}-* $date] { one ok }
+					if [string match -nocase *-${b} $date] { one ok }
+				}
+				if $ok { incr count ; lappend o "[space 5]$file" }
+			}
+			if $count {
+				print $nick "\[SNAPSHOT FIND\] [comma $count] [plural match $count es] found:"
+				foreach a $o { print $nick $a }
+			} {
+				print $nick "\[SNAPSHOT FIND\] No matches found."
+			}
+			return
+		}
+
+		default { print -help -short -return $nick "Unknown option: [join $1]" }
+
+	}
+	?
+}
+
+proc @snapshot:bootstrap args {
+	set dir [data array get snapshot dir]
+	if [isempty dir] {
+		set dir [file normalize ./snapshots]
+		data array set snapshot dir $dir
+		saveme data
+	}
+	if ![file isdirectory $dir] { file mkdir $dir }
+	set glob [glob -n ./*.snapshot]
+	if [notempty glob] {
+		foreach file $glob {
+			putlog "\[SNAPSHOT\] Moving file: [file tail $file] -> ${dir}/"
+			file rename -force $file ${dir}/[file tail $file]
+		}
+	}
+	return
+}
+
+#####
+# BootStrap:
+
+@snapshot:bootstrap
+

@@ -1,0 +1,41 @@
+sb7 command add SAVE 700 -core
+
+proc @save { nick host handle chan arg } {
+	sb7 parseflags -backup
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[SAVE\]:"
+		print -help $nick "Syntax: $::botnick SAVE HELP"
+		print -help $nick "Syntax: $::botnick SAVE"
+		print -help $nick "Syntax: $::botnick SAVE -BACKUP"
+		print -help $nick "Syntax: $::botnick SAVE <fragment name>"
+		print -help $nick "The bot will SAVE it's userfile(s)."
+		print -help $nick "-BACKUP: bot will also do a BACKUP as soon as the SAVE is complete, performing both steps back-to-back"
+		print -help $nick "Fragment name: save a specific data file snapshot (which can be used with RELOAD). The fragment is appended to the base file name."
+		print -help $nick "Example: $::botnick SAVE jan01 (bot will save data file as \"${::nick}.data~jan01\")"
+		print -help $nick "Example: $::botnick SAVE * (bot will save data file with a pre-formatted name: \"${::nick}.data~[clock format [clock seconds] -format "%Y%m%d-%H%M%S"]\")"
+		return
+	}
+
+	if [notempty 1] {
+		if [is pathchange [join $1]] { print -help -short -return $nick "You can not change paths\; data files must be in the bot's home directory." }
+		set result [data save [join $1]]
+		if [notempty result] {
+			print -short $nick "Saved: $result"
+		} {
+			print -short $nick "Unknown error while saving the data file."
+		}
+		return
+	}
+
+	print -home "\[SAVE\] Saving user, channel, & data files ...."
+	print $nick "\[SAVE\] Saving user, channel, & data files ...."
+	saveme all now
+
+	if [validflag -backup] {
+		print $nick "\[SAVE\] Running BACKUP ...."
+		print -home "\[SAVE\] Running BACKUP ...."
+		[sb7 command get backup proc] $nick $host $handle $chan BACKUP
+	}
+	return
+}
+

@@ -73,6 +73,7 @@ proc @jump { nick host handle chan arg } {
 				incr count 1
 				lassign [split [lindex $server 0] :] s1 s2 s3
 				set local [lindex $server 1]
+				if [string eq -nocase $local $s1] { set local "" }
 				if [isempty s2] { set s2 $default_port }
 				set entry [join [list $s1 $s2] :]
 				if [string eq -nocase $entry $current] { set control \037 } { set control "" }

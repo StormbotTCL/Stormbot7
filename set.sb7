@@ -4,7 +4,7 @@ sb7 command add MY 1 -none
 # NOTE: "getuser <handle> XTRA" gives a full list of set items (COPYUSER? :)
 
 # This is needed for WHOIS and COPYUSER
-data set @SET:VALID [list output gmt timezone burst prefix postfix alias color datetime private rank nochon]
+data set @SET:VALID [list output gmt timezone burst prefix postfix alias color datetime private rank nochon vhost twitter facebook aim tumblr myspace instagram phone cell work]
 
 proc @my { nick host handle chan arg } {
 	sb7 parseflags
@@ -30,6 +30,10 @@ proc @set { nick host handle chan arg } {
 		list { print -return $nick "\[SET\] Available options: [ajl $valid]" }
 
 		default {
+			###########################################################
+			##### Use $VALUE (fall-through) to establish new info #####
+			###########################################################
+
 			set word [uniquematch $valid $1]
 			set param $word
 
@@ -46,6 +50,16 @@ proc @set { nick host handle chan arg } {
 
 			# Any specific / special considerations?
 			switch -exact -- [string tolower $param] {
+
+				gmt {
+					set value [gmt:format decimal $2]
+					if [notempty 3] { [sb7 command get set proc] $nick $host $handle $chan "set timezone $3" }
+				}
+
+				tz - timezone {
+					set value $2
+					if [notempty 3] { [sb7 command get set proc] $nick $host $handle $chan "set gmt $3" }
+				}
 
 				output {
 					set valid [list notice msg chan same]

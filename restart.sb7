@@ -1,0 +1,19 @@
+sb7 command add RESTART 700 -locklevel -core
+
+proc @restart { nick host handle chan arg } {
+	sb7 parseflags
+
+	if [string eq HELP $1u] {
+		print -help $nick "\[RESTART\]:"
+		print -help $nick "Syntax: $::botnick RESTART HELP"
+		print -help $nick "Syntax: $::botnick RESTART"
+		print -help $nick "The RESTART command will make $::botnick disconnect from the server and re-run its configuration file. This includes restoring default variables, settings, & binds."
+		return
+	}
+
+	# RESTART automatically performs SAVE & SAVECHANNELS
+	data save
+	restart
+	return
+}
+

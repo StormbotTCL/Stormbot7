@@ -1,0 +1,54 @@
+sb7 command add OPASS 1000 -locklevel -core
+
+proc @opass { nick host handle chan arg } {
+	sb7 security
+	FLAGS
+	set old [userinfo get $handle opass]
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[OPASS\]:"
+		print -help $nick "Syntax: $::botnick OPASS "
+		print -help $nick "Syntax: $::botnick OPASS HELP"
+		print -help $nick "Syntax: $::botnick OPASS CLEAR <password>"
+		print -help $nick "Syntax: $::botnick OPASS <password>"
+		print -help $nick "Syntax: $::botnick OPASS <old pass> <new pass>"
+		print -help $nick "The OPASS command stores your owner password\; this is a password you need to use to access level =1000 commands. Because many of those commands allows shell interaction, this second password was required (in case the normal password was compromised)."
+		print -help $nick "Like PASS (the built-in Eggdrop command), use \"OPASS <password>\" to set your password."
+		print -help $nick "Use \"OPASS <old pass> <new pass>\" to change your password."
+		print -help $nick "Use \"OPASS CLEAR\" to remove your password."
+		print -help $nick "The password is encrypted via the bot's resident encryption module (by default, blowfish) and therefore protected\; it can NOT be recovered."
+		print -help $nick "Note: the SB6 command \"OLOGIN\" has been deprecated\; use the -OLOGIN flag with LOGIN to do an owner login."
+		print -help $nick "Note: see the PASSHINT command to store a \"password hint\" for your OPASS as well as your regular password."
+		return
+	}
+
+	if [string eq -nocase CLEAR $1] {
+		if [string eq "" $old] { print -help -short -return $nick "You don't have an OPASS set. Nothing to clear." }
+		if ![string eq $old [encpass [join $2]]] { print -help -short -return $nick "Invalid password." }
+		if ![string eq -nocase CLEAR $3] { print -short -return $nick "Are you \002\037SURE\037\002?! Use \"CLEAR <password> CLEAR\" to convince me." }
+		userinfo set $handle opass ""
+		saveme user
+		print $nick "Your password has been cleared."
+		return
+	}
+
+	if [isempty 1] { print -help -short -return $nick "To what am I setting your OPASS?" }
+
+	if [isempty 2] {
+		# Just setting your OPASS
+		if ![string eq "" $old] { print -help -short -return $nick "You have an OPASS set. Use the change-opass syntax to change it to something new." }
+		userinfo set $handle opass [encpass [join $1]]
+		saveme user
+		print -private $nick "Your password has been set."
+		return
+	} {
+		# Changing your OPASS
+		if [string eq "" $old] { print -help -short -return $nick "You don't have an OPASS set. Use the set-opass syntax to set it." }
+		if ![string eq $old [encpass [join $1]]] { print -help -short -return $nick "Invalid password." }
+		userinfo set $handle opass [encpass [join $2]]
+		saveme user
+		print -private $nick "Your password has been changed."
+		return
+	}
+	return
+}
+

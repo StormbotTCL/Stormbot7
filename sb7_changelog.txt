@@ -1,10 +1,21 @@
-# StormBot.TCL 7 version Changelog -- 2015-02-27 02:39:43 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-03-28 09:31:44 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-03-28 09:25:53 UTC: #462 [tail] Fixed TIMEVAL (code didn't allow for multiple indicators)
+2015-03-28 04:44:48 UTC: #461 [set] Fixed SET GMT / SET TIMEZONE (holdover from SB6: setting either allows you to set the other in one line)
+2015-03-28 04:44:30 UTC: #460 [botmon] Fixed BOTMON SUSPEND (added LIST option)
+2015-03-15 23:11:58 UTC: #459 [tail] Fixed LDESTROY (last night's patch reversed a critical logic gate)
+2015-03-15 07:17:47 UTC: #458 [tail] Fixed LDESTROY (-NOCASE flag was forcing the result to lower case. TRAC #23)
+2015-03-10 08:57:06 UTC: #457 [jump] Fixed JUMP LIST (properly display a server's alias if one is in place. TRAC #24)
+2015-03-10 08:42:26 UTC: #456 [tail] Fixed LASSIGN (when a target variable looks like an array, complain: you can't assign arrays in this way without EVAL. Trac #21)
+2015-03-04 02:37:23 UTC: #455 [botmon] Fixed BOTMON SUSPEND OFF (bad variable: $REASON instead of $WHY)
+2015-03-04 02:31:36 UTC: #454 [tail] Fixed SB7:SETUP (added ''vhost'' to $::WHOIS-FIELDS)
+2015-03-03 13:43:12 UTC: #453 [tail] Fixed TIMEVAL (the multiplicative factor for decades and centuries were the same, probably copied from decades)
+2015-02-28 03:20:01 UTC: #452 [tail] Fixed SB7:DISPATCH (left a debug in there from the $TCHAN repair)
 2015-02-24 04:59:40 UTC: #451 [debug] Added DEBUG to core distribution
 2015-02-24 03:43:20 UTC: #450 [debug] Upgraded DEBUG INFO & DEBUG HELP (added -SHARUTILS check, which was handled by BOTSEND in SB6. Also, updated DEBUG HELP to specifically instruct users to paste ''DEBUG INFO -ALL'' result into bug tracker system (added ''-ALL''))
-2015-02-24 03:26:21 UTC: #449 [tail] Fixed SHELL:FINDCMD (for those of us on CygWin, running both WHEREIS & WHERE causes =two= pop-up Dos boxen; only run both when necessary)
+2015-02-24 03:26:21 UTC: #449 [tail] Fixed SHELL:FINDCMD (for those of us on CygWin, running both WHEREIS & WHICH causes =two= pop-up Dos boxen; only run both when necessary)
 2015-02-05 11:03:00 UTC: #448 [debug] Fixed DEBUG INFO -VARTCL (a variable, which is normally defined, can be unset in some weird situations)
 2015-02-05 10:16:36 UTC: #447 [copyuser] Fixed COPYUSER -RAW (when no valid users are listed, complain)
 2015-02-05 06:25:09 UTC: #446 [debug & help] Fixed HELP & DEBUG (added a check for null-output; warn the user about this)

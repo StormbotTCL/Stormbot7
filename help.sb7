@@ -1,6 +1,13 @@
 sb7 command add HELP -1 -locklevel -core
 
 proc @help { nick host handle chan arg } {
+	if [string eq -nocase NULL [userinfo get $handle output]] {
+		userinfo set $handle output notice
+		print $nick "\[HELP\] Your output is currently set to NULL, so, I can't show you anything!"
+		userinfo set $handle output NULL
+		return 1
+	}
+
 	sb7 parseflags 
 	if [isempty 1] {
 		print -help $nick "\[HELP\]:"

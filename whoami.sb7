@@ -1,0 +1,60 @@
+sb7 command add WHOAMI -1 -none WAI
+
+# WHOAMI
+proc @whoami { nick host handle chan arg } {
+	sb7 setvars
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[WHOAMI\]:"
+		print -help $nick "Syntax: $::botnick WHOAMI HELP"
+		print -help $nick "Syntax: $::botnick WHOAMI"
+		print -help $nick "The WHOAMI command will identify how I see you. It will also catch and resolve any \$OWNER / =1000 access issues that may exist."
+		return
+	}
+
+	# Only do this if authed!
+	if [isnum -integer $nick] { set who $idx2nick ; set host "\[DCCIDX:$nick\]" } { set who $nick }
+	set authed [sb7 auth find handle $nick]
+	set:all g c -1
+	if [string eq $authed $handle] {
+		set authed $handle
+		set g [access get $handle]
+		if { $g >= 900 } {
+			if [is owner $handle] {
+				set level [access get $handle]
+				set check [access owner:check $handle]
+				if { $level != $check } {
+					set problem *
+					switch -exact -- $check {
+	
+						1000 {
+							print -home "\[WHOAMI\] Automatically adjusting global access for $nick (${handle}): 1000"
+							print $nick "User (${handle}) is flagged as an owner (global +n) but should be a permanent owner (=1000) due to being listed in my \$OWNER variable in my configuration file. Adjusting ...."
+							access set $handle 1000 GLOBAL
+						}
+	
+						1001 {
+							print -home "\[WHOAMI\] Automatically adjusting global access for $nick (${handle}): 1001"
+							print $nick "User (${handle}) is flagged as an owner (global +n) but should be a primary permanent owner (=1001) due to being listed in my \$OWNER variable in my configuration file. Adjusting ...."
+							access set $handle 1001 GLOBAL
+						}
+	
+						default { ? 900 ISOWNER \$CHECK vs \$LEVEL }
+	
+					}
+					saveme user
+					# Fall-through ....
+				}
+			}
+		}
+		set c [access get $handle $chan]
+		set list_access "global access:$g - ${chan}:$c"
+		print $nick "I see you as: [nph $idx2nick $authed]@$::botnick ( ${idx2nick}!$host ): $list_access"
+	} {
+		# User is not authed ....
+		set authed "unauthorized user"
+		set list_access "global access:0 - ${chan}:[lindex [list -1 0] [validuser $handle]]"
+		print $nick "I see you as: [nph $idx2nick $authed]@$::botnick ( ${idx2nick}!$host ): $list_access"
+	}
+	return
+}
+

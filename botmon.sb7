@@ -19,7 +19,7 @@ proc @botmon { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick BOTMON FREE <add | del | list | clear>"
 			print -help $nick "Syntax: $::botnick BOTMON NOTIFY <hourly | links | hubs> <off | on>"
 			print -help $nick "Syntax: $::botnick BOTMON DEFERTO <list of bots>"
-			print -help $nick "Syntax: $::botnick BOTMON SUSPEND <timestamp , URT offset, or other valid time>"
+			print -help $nick "Syntax: $::botnick BOTMON SUSPEND <off | list | timestamp , URT offset, or other valid time>"
 			print -help $nick "Syntax: $::botnick BOTMON STATUS"
 			print -help $nick ""
 			print -help $nick "The BOTMON command tracks bots connecting or leaving the local botnet, or, returns the botnet's current status. All information is reported to my \"home\" channel ([home])"
@@ -47,19 +47,51 @@ proc @botmon { nick host handle chan arg } {
 		}
 
 		susp - suspend {
-			if [isempty 2] { print -help -short -return $nick "What are we doing with BOTMON SUSPEND?" }
-			if [string eq -nocase OFF $2] {
-				data array set botmon suspend ""
-				saveme data
-				print $nick "\[BOTMON SUSPEND\] BOTMON alerts are no longer suspended."
-				return
+			switch -exact -- [string tolower $2] {
+
+
+				"" - help {
+					print -help $nick "Syntax:"
+					print -help $nick "$::botnick BOTMON SUSPEND OFF"
+					print -help $nick "$::botnick BOTMON SUSPEND LIST"
+					print -help $nick "$::botnick BOTMON SUSPEND <valid time expression> \[reason\]"
+					return
+				}
+
+				off {
+					set ts [data array get botmon suspend]
+					data array set botmon suspend ""
+					saveme data
+					if [isempty ts] { set ts <unknown> } { set ts [format:date $ts $handle] }
+					print $nick "\[BOTMON SUSPEND\] BOTMON alerts are no longer suspended, originally set to expire: $ts"
+					return
+				}
+
+				list {
+					set ts [data array get botmon suspend]
+					if [isempty ts] { print $nick "\[BOTMON SUSPEND\] Not currently active" ; return }
+					if { [clock seconds] > $ts } {
+						print $nick "\[BOTMON SUSPEND\] Suspension was due to expire: [format:date $ts $handle]\; forcing expiration now ...."
+						data array set botmon suspend ""
+						saveme data
+						return
+					}
+					set ts [format:date $ts $handle]
+					print $nick "\[BOTMON SUSPEND\] BOTMON active, set to expire: $ts ([effects [urt [expr $ts - [ clock seconds ]] " "] b u] from now)"
+					return
+				}
+
+				default {
+					set ts [get time -future $2e]
+					if [isempty ts] { print -help -return $nick "\[BOTMON SUSPEND\] I don't understand a date or time from that: [join $2]" }
+					print $nick "\[BOTMON SUSPEND\] BOTMON alerts are suspended until: [format:date $ts $handle]"
+					data array set botmon suspend $ts
+					saveme data
+					return
+				}
+
 			}
-			set ts [get time -future $2e]
-			if [isempty ts] { print -help -return $nick "\[BOTMON SUSPEND\] I don't understand a date or time from that: [join $2]" }
-			print $nick "\[BOTMON SUSPEND\] BOTMON alerts are suspended until: [format:date $ts $handle]"
-			data array set botmon suspend $ts
-			saveme data
-			return
+			?
 		}
 
 		df - dt - def - defer - deferto - defer-to {
@@ -709,7 +741,7 @@ proc @botmon:suspend_check args {
 		return
 	}
 
-	if { [clock seconds] >= $ts } {
+	if { [clock seconds] > $ts } { # >=
 		print -home "\[BOTMON SUSPEND\] Suspension released ...."
 		data array set botmon suspend ""
 		saveme data

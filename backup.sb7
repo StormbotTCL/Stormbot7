@@ -1,0 +1,116 @@
+sb7 command add BACKUP 700 -core BU
+
+proc @backup { nick host handle chan arg } {
+	sb7 parseflags
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[BACKUP\]:"
+		print -help $nick "Syntax: $::botnick BACKUP HELP"
+		print -help $nick "Syntax: $::botnick BACKUP"
+		print -help $nick "The bot will BACKUP it's user, channel, note, and, data files (make copies of each file as <filename>~bak)."
+		return
+	}
+
+	# Standard backup (user and channel files) and data backup (data file)
+	sb7:backup user chan data
+
+	# Note file
+#	if [file exists $::notfile] { file copy -force $::notefile ${::notefile}~bak }
+
+	print -home "\[BACKUP\] Complete."
+	print $nick "\[BACKUP\] Complete."
+	return
+}
+
+proc sb7:backup args {
+	# 2014-10-12 01:15 -0700: Disabling: data file saves occur in immediate quintuplets
+
+	# ---------------------------------------------------------------------------------
+
+	# The BACKUP command will call for this ....
+	# Each function will SAVE before attempting the backup ....
+	empty files
+	if [isempty args] { set args * }
+	foreach arg $args {
+		if [string eq * $arg] {
+			lappend files user chan data
+		} {
+			set um [uniquematch [list save keepall user chan data] $arg]
+			if [notempty um] { lappend files $um }
+		}
+	}
+
+	set save [expr ( [lsearch -exact $files save] == -1 ) ? 0 : 1]
+	set keep [expr ( [lsearch -exact $files keepall] == -1 ) ? 0 : 1]
+	set files [lunique $files]
+#debug =0 files
+	if { [lmatch -multiple -count -nocase $files [list user chan]] == 2 } { lremove files chan } ; # Only do "USER" if both are given
+#debug =1 files
+	set keepall [data array get -boolean config backup:keepall]
+	if $keep { set keepall 1 }
+
+	foreach file $files {
+		switch -exact -- [string tolower $file] {
+
+			user {
+				if $save {
+					set error [ catch save errortext ]
+					if $error { error "\[SB7:BACKUP\] Error while saving (user file): $errortext" }
+				}
+				putlog "Backing-up user & channel files ...."
+
+				if $keepall {
+					set error [ catch { file copy -force $::userfile ${::userfile}~bak.[clock format [clock seconds] -format "%Y%m%d-%H%M%S"]} errortext ]
+				} {
+					set error [ catch { file copy -force $::userfile ${::userfile}~bak } errortext ]
+				}
+				if $error { error "\[SB7:BACKUP\] Error (user file): $errortext" }
+
+				if $save {
+# Not needed: SAVE (above) does both	set error [ catch savechannels errortext ]
+#					if $error { error "\[SB7:BACKUP\] Error while saving (chan file): $errortext" }
+				}
+				if $keepall {
+					set error [ catch { file copy -force $::chanfile ${::chanfile}~bak.[clock format [clock seconds] -format "%Y%m%d-%H%M%S"]} errortext ]
+				} {
+					set error [ catch { file copy -force $::chanfile ${::chanfile}~bak } errortext ]
+				}
+				if $error { error "\[SB7:BACKUP\] Error (chan file): $errortext" }
+			}
+
+			chan {
+				if $save {
+					set error [ catch savechannels errortext ]
+					if $error { error "\[SB7:BACKUP\] Error while saving (chan file): $errortext" }
+				}
+				putlog "Backing-up chan file ...."
+				if $keepall {
+					set error [ catch { file copy -force $::chanfile ${::chanfile}~bak.[clock format [clock seconds] -format %Y%m%d-%H%M%S] } errortext ]
+				} {
+					set error [ catch { file copy -force $::chanfile ${::chanfile}~bak } errortext ]
+				}
+				if $error { error "\[SB7:BACKUP\] Error (chan file): $errortext" }
+			}
+
+			data {
+				if $save {
+					set error [ catch { data save } errortext ]
+					if $error { error "\[SB7:BACKUP\] Error while saving (data file): $errortext" }
+				}
+				putlog "Backing-up data file ...."
+				if $keepall {
+					set error [ catch { file copy -force [data filename tail] [data filename tail]~bak.[clock format [clock seconds] -format "%Y%m%d-%H%M%S"]} errortext ]
+				} {
+					set error [ catch { file copy -force [data filename tail] [data filename tail]~bak } errortext ]
+				}
+				if $error { error "\[SB7:BACKUP\] Error (data file): $errortext" }
+			}
+
+			save - keepall { # Do nothing # }
+
+			default { error "\[SB7:BACKUP\] Unknown file option: $file" }
+
+		}
+	}
+	return
+}
+
