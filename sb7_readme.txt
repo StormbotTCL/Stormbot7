@@ -55,7 +55,7 @@ StormBot.TCL version 7.0 is released under the BEERWARE license:
 
 Dave Hansen (xone@bothouse.org) and Mai Mizuno (domino@bothouse.org)
 wrote this script, with contributions by: Justin Hammond, Dave Klein, 
-& Dustin Shea. As long as you retain this notice you can do whatever you 
+& Dustin Lennon. As long as you retain this notice you can do whatever you 
 want with this stuff. If we meet some day, and you think this stuff is 
 worth it, you can buy everyone a beer (and Mai a vanilla creme soda or 
 strawberry soda) in return.
@@ -79,7 +79,7 @@ Enjoy!
 ~ Mai Mizuno (domino@bothouse.org)
 
 # StormBot.TCL version 7.X series, add-on script for EGGDROP V1.3 - V1.8
-# (C) 2012 - 2014: [V7.0      ] David P. Hansen, Mai Mizuno
+# (C) 2012 - 2015: [V7.0      ] David P. Hansen, Mai Mizuno
 # (C) 2009 - 2012: [V6.0      ] David P. Hansen, Mai Mizuno
 # (C) 2003 - 2010: [V5.0 - 5.2] David P. Hansen, Mai Mizuno
 # (C) 2000 - 2003: [V4.0 - 4.3] David P. Hansen, Mai Mizuno

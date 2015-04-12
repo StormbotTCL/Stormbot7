@@ -1,7 +1,12 @@
-# StormBot.TCL 7 version Changelog -- 2015-03-28 09:31:44 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-04-11 04:36:10 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-04-11 04:36:01 UTC: #467 [bot] Added BOT (a combination and complete re-write of the following commands: ISLINKED (new), LINK, UNLINK, USERLIST (new), BOTNET (new), HUB (new), LINKS (SB6:BOTNET LINKS), ADDR (SB6:BOTADDR with new syntax), ATTR (SB6:BOTATTR with new syntax))
+2015-04-11 04:34:35 UTC: #466 [bot] Added BOT bead to CORE & ZENKAI distributions
+2015-04-11 03:38:49 UTC: #465 [tail] Fixed SB7 SETVARIABLES (several loop & sanity check variables were left to bleed into the target PROC: _LOOP _LOOP2 _ERROR _ERROR2 _NAMETEMP)
+2015-04-11 00:53:59 UTC: #464 [block, botsend, snapshot, & tail] Fixed PLURAL (reverted CHANGELOG #352: moving the flags to *after* the word-to-pluralize. I don't remember the logic behind the change but it (1) is confusing against SB6 syntax, and, (2) just makes no sense [breaks rhythm of arguments/parameters]. Affected commands: BLOCK, BOTSEND, & SNAPSHOT)
+2015-04-11 00:37:46 UTC: #463 [tail] Fixed PROCDEF (now properly identifies interpreter aliases)
 2015-03-28 09:25:53 UTC: #462 [tail] Fixed TIMEVAL (code didn't allow for multiple indicators)
 2015-03-28 04:44:48 UTC: #461 [set] Fixed SET GMT / SET TIMEZONE (holdover from SB6: setting either allows you to set the other in one line)
 2015-03-28 04:44:30 UTC: #460 [botmon] Fixed BOTMON SUSPEND (added LIST option)

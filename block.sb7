@@ -1,0 +1,120 @@
+sb7 command add BLOCK 800 -invalid:ok
+sb7 register global BLOCK
+
+proc @block { nick host handle chan arg } {
+	FLAGS
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[BLOCK\]:"
+			print -help $nick "Syntax: $::botnick BLOCK ADD <#channel> \[reason\]"
+			print -help $nick "Syntax: $::botnick BLOCK DEL <#channel>"
+			print -help $nick "Syntax: $::botnick BLOCK LIST <#channel | wildcard>"
+			print -help $nick "Syntax: $::botnick BLOCK CLEAR"
+			print -help $nick ""
+			print -help $nick "The BLOCK command will let you block the bot from joining a channel (when the JOIN command is used)."
+			print -help $nick "If the bot is made to JOIN a BLOCKed channel some other way, it will realize the error and remove the channel from its records and leave the channel."
+			return
+		}
+
+		add {
+			if [isempty 2] { print -help -return $nick "\[BLOCK ADD\] What channel are we adding?" }
+			set blockme [join $2]
+			if [data array notempty block $blockme] {
+				lassign [data array get block $blockme] _nick _handle _ts _reason
+				print -help $nick "\[BLOCK ADD\] [effects $blockme b 4] was already added: [nph $_nick $_handle] on [format:date $_ts $handle] for: $_reason"
+				return
+			}
+			set matches [ldestroy -not -nocase -glob -all [channels] $blockme]
+			if [notempty matches] { print $nick "\[BLOCK ADD\] Blocking [effects $blockme b 4] also matches these active channels: [ajl $matches] (you will manually have to deal with these)" }
+			set reason [none [join $3e] default]
+			data array set block $blockme [list $nick $handle [clock seconds] $reason]
+			data array lappend block list $blockme
+			saveme data
+			print $nick "\[BLOCK ADD\] Added: $blockme"
+			return
+		}
+
+		delete - del {
+			if [isempty 2] { print -help -return $nick "\[BLOCK ADD\] What channel are we deleting?" }
+			set blockme [join $2]
+			lassign [ldestroy -both -nocase -glob -all [data array get block list] $blockme] matches remaining
+#debug matches remaining
+			if [isempty matches] { print -help -return $nick "\[BLOCK DEL\] I don't have any reference to a BLOCK for: $blockme" }
+			data array set block list $remaining
+			foreach match $matches {
+				lassign [data array get block $match] _nick _handle _ts _reason
+				data array set block $match
+				print $nick "\[BLOCK DEL\] Match found: [effects $match b 4]: [nph $_nick $_handle] on [format:date $_ts $handle]: $_reason"
+			}
+			saveme data
+			print $nick "\[BLOCK DEL\] Total: [plural -show -comma match [llength $matches] es]"
+			return
+		}
+
+		"" - list {
+			set matches [lmatch -glob -all -nocase -multiple [data array get block list] [none [join $2e] *]]
+			if [isempty matches] { print -help -return $nick "\[BLOCK LIST\] No entries." }
+			foreach match $matches {
+				lassign [data array get block $match] _nick _handle _ts _reason
+				print $nick "\[BLOCK DEL\] [effects $match b 4]: [nph $_nick $_handle] on [format:date $_ts $handle]: $_reason"
+			}
+			print $nick "\[BLOCK DEL\] [plural -show -comma match [llength $matches] es] found."
+			return 0
+		}
+
+		clear {
+			if ![string eq -nocase CLEAR $2] {print $nick "Are you \037\002SURE\002\037?! Use \"CLEAR CLEAR\" to convince me."; return 0}
+			data array clear block
+			saveme data
+			print $nick "\[BLOCK CLEAR\] List has been cleared."
+			return
+		}
+
+		default { print -help -short -return $nick "Unknown option: [join $1]" }
+
+	}
+	?
+}
+
+proc @block:bind:join { nick host handle chan } {
+	if ![isbotnick $nick] { return 0 }
+	# Check if the channel is blocked; if so, CHANNEL REMOVE it!
+	set blocked 0
+	if [data array notempty block $chan] { set blocked 1 }
+	if [lmatch -glob -nocase -all -multiple -count $chan [data array get block list]] { set blocked 1 }
+	if $blocked {
+		set message "\[BLOCK\] I'm not supposed to be in [effects $chan b 4] but I just joined! Removing channel from my records ...."
+		putlog $message
+		print -home $message
+		print -raw $chan $message
+		after 1000 ; # Let the message display before the channel is invalidated
+		channel remove $chan
+		raw "PART $chan :$message"
+		saveme chan
+	}
+	return 0
+}
+
+proc @block:bootstrap args {
+	if { [data notempty block] && [data array isempty block list] } {
+		# The old format was a multi-element LIST.
+		# Trying to directly save via DATA ARRAY will cause a "list must have even number of elements" error
+		data set block:temp
+		foreach block [data get block] {
+			lassign $block chan nick handle ts reason
+			data array set block:temp $chan [list $nick $handle $ts $reason]
+		}
+		data set block
+		data rename block:temp block
+		saveme data
+	}
+	bind join - * @block:bind:join
+	return
+}
+
+#####
+# BootStrap:
+
+@block:bootstrap
+

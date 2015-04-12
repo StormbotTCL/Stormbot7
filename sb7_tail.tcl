@@ -364,6 +364,7 @@ proc sb7 { args } { # General
 					}
 #putcmdlog =====20
 				}
+				unset -nocomplain _LOOP _LOOP2 _NAMETEMP _ERROR _ERROR2
 #putcmdlog [effects </parseflags> b u lower 3,1]
 			}
 			return ""
@@ -1055,7 +1056,9 @@ proc data args {
 
 	switch -exact -- [string tolower $cmd] {
 
-		test { return SB7 }
+		test { return sb7 }
+
+		ver - version { return sb7 }
 
 		file - filename { if [string eq -nocase TAIL $arg1] { return ${::nick}.data } { return [pwd]/${::nick}.data } }
 
@@ -1132,8 +1135,8 @@ proc data args {
 			flags -simple [lrange $args 1 end] -array text flags
 			lassign $text arg1 arg2 arg3
 			if { [notempty arg3] || [validflag -array] } { return [data array set $arg1 $arg2 $arg3] }
-			set sb7([string tolower $arg1]) $arg2 
-			if [isempty arg2] { unset sb7([string tolower $arg1]) } 
+			set sb7([string tolower $arg1]) $arg2
+			if [isempty arg2] { unset sb7([string tolower $arg1]) }
 			return $arg2
 		}
 
@@ -1184,8 +1187,15 @@ proc data args {
 		}
 
 		list {# 2-element LIST: scalar, array?
+			# Version 2
+			if [isempty arg1] return
+			if [string eq "" [data get %data:scalar]] return
+			set list ""
+			foreach a [data get %data:scalar] { foreach b [lrange $args 1 end] { if [string match -nocase $b $a] { lappend list $a } } }
+			return $list
+			# Version 1
 			if [isempty arg1] { return "" }
-			empty list
+			set list ""
 			foreach a [lsort -inc -uni -dict [array names sb7 [string tolower $arg1]]] { lappend list [list $a [data get $a]] }
 			return $list
 		}
@@ -1499,6 +1509,12 @@ proc data args {
 				}
 
 				list {
+					# Version 2
+					set list ""
+					if [string eq "" [data get %data:array]] return
+					foreach a [data get %data:array] { foreach b [lrange $args 1 end] { if [string match -nocase $b $a] { lappend list $a } } }
+					return $list
+					# Version 1
 					set list ""
 					set arg2 [string tolower $arg2]
 					if ![info exists sb7($arg2)] { return "" }
@@ -2055,8 +2071,9 @@ proc null args return ; # (:
 proc space { { count 1 } } { string repeat " " $count }
 
 proc plural args {
-	set args [lassign $args word]
+	#set args [lassign $args word]
 	flags -simple $args [list -show -comma] text flags
+	set text [lassign $text word]
 	lassign $text count ending replacement
 	if [validflag -comma] { lappend flags -show }
 
@@ -6020,7 +6037,9 @@ proc debug args {
 }
 
 proc procdef proc {
-	if [string eq "" [info procs $proc]] { error "\[DEFPROC\] No such PROC: $proc" }
+	set alias [interp alias {} $proc]
+	if ![string eq "" $alias] { return "interp alias {} $proc {} $alias" }
+	if [string eq "" [info procs $proc]] { error "\[DEFPROC\] No such PROC: $proc"  }
 	empty args code
 	foreach arg [info args $proc] {
 		set def [info default $proc $arg a]
@@ -6377,7 +6396,13 @@ proc ? args {
 	set level [info level]
 	decr level
 	set name [lindex [info level $level] 0]
-	error "\[?\][iff [notempty args] [space][join $args]]: Something went wrong in the \"${name}\" command: I ended up defaulting to the \"?\" somehow!"
+	set short [string range $name 1 end]
+putlog ?:$args:$name:$short:[string eq -nocase $name [sb7 command get $short proc]]
+	if [string eq -nocase $name [sb7 command get $short proc]] {
+		error "\[[string toupper $short]\] Unknown command option."
+	} {
+		error "\[?\][iff [notempty args] [space][join $args]]: Something went wrong in the \"${name}\" command: I ended up defaulting to the \"?\" somehow!"
+	}
 }
 
 proc bytes { number { decimal * } { align_bytes "false" } } {

@@ -300,7 +300,7 @@ debug id direction
 					set timeout [join $3]
 					data array set botsend option:timeout $timeout
 					saveme data
-					print -header $nick "New timeout: [plural second -show -comma $timeout][iff { $timeout > 60 } " ([urt $timeout " "])"]"
+					print -header $nick "New timeout: [plural -show -comma second $timeout][iff { $timeout > 60 } " ([urt $timeout " "])"]"
 					return
 				}
 

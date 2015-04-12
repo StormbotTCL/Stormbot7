@@ -278,7 +278,7 @@ proc @botmon { nick host handle chan arg } {
 							return
 						}
 
-						default { print -short -return $nick "Current IGNORE mode: [none [data array get BOTMON IGNOREMODE] "default (report)"]" }
+							default { print -short -return $nick "Current IGNORE mode: [none [data array get BOTMON IGNOREMODE] "default (report)"]" }
 
 					}
 				}
@@ -373,6 +373,7 @@ proc @botmon { nick host handle chan arg } {
 		group {
 			# Syntax: GROUP <name> <ADD|DEL|LIST|CLEAR> [list of bots]
 			if { [isempty 2] || [string eq -nocase HELP $2] } {
+				print -help $nick "Syntax: $::botnick GROUP <group name> AUDIT"
 				print -help $nick "Syntax: $::botnick GROUP <group name> KEY <single Letter / symbol>"
 				print -help $nick "Syntax: $::botnick GROUP <group name> DESC <any text>"
 				print -help $nick "Syntax: $::botnick GROUP <group name> ADD <bot list>"
@@ -405,6 +406,20 @@ proc @botmon { nick host handle chan arg } {
 					return
 				}
 				
+				audit {
+					set groups [lsort -increasing -unique -dictionary [data array names botmon group:*]]
+					foreach group $groups {
+						set problem ""
+						lassign [data array get botmon $group] key desc bots
+						if [isempty key] { set key <none> ; lappend problem "missing key" }
+						if [isempty desc] { set desc <none> ; lappend problem "missing description" }
+						if [isempty bots] { set bots <none> ; lappend problem "missing bots" }
+						print $nick "Group [effects [mid $group 7] b up]: key ($key), description ($desc), bots ($bots); problems: [none [join $problem ", "] <none>]"
+					}
+					print $nick "[plural -show -comma group [llength $groups]] total."
+					return
+				}
+
 			}
 
 			set group $2
@@ -478,7 +493,7 @@ proc @botmon { nick host handle chan arg } {
 					print -return -short $nick "Description for the \"${group}\" group is now: [join $4e]"
 				}
 
-				default { print -short -return $nick "Unknown option for GROUP: [join $3]" }
+				default { print -short -return $nick "Unknown option for GROUP: [join $2]" }
 
 			}
 			

@@ -1,0 +1,270 @@
+sb7 command add bot 501 -none bots
+
+proc @bot { nick host handle chan arg } {
+	sb7 parseflags
+
+	set header "\[$0u $1u\]"
+	set target [join $2]
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[BOTS\]:"
+			print -help $nick "Syntax: $::botnick BOT HELP"
+			print -help $nick "Syntax: $::botnick BOT ISLINKED <target>"
+			print -help $nick "Syntax: $::botnick BOT LINK <target>"
+			print -help $nick "Syntax: $::botnick BOT UNLINK <target> \[remote hub\]"
+			print -help $nick "Syntax: $::botnick BOT USERLIST"
+			print -help $nick "Syntax: $::botnick BOT BOTNET"
+			print -help $nick "Syntax: $::botnick BOT HUB"
+			print -help $nick "Syntax: $::botnick BOT LINKS \[-flags - short\] \[list of bots\]"
+			print -help $nick "Syntax: $::botnick BOT ADDR \[IP / DNS\]:\[bot port\]:\[user port\] <list of target bots>"
+			print -help $nick "Syntax: $::botnick BOT ATTR \[flag changes\] \[target channel for share flags\]"
+			print -help $nick ""
+			print -help $nick "Returns requested information about bot-specific data, or, botnet information."
+			print -help $nick "Each sub-command has its own HELP information."
+			return
+		}
+
+		is - islinked {
+			if [string eq -nocase HELP $2] { print -help -return $nick "Syntax: $::botnick BOT ISLINKED (displays if requested bot is currently linked to the botnet)" }
+			if [isbotnick $target] { print -return $nick "$header Being linked to myself is called something else; we don't talk about that in mixed company." }
+			print -return $nick "$header $target is [lindex [list not currently] [islinked $target]] linked to the botnet." 
+		}
+
+		link {
+			if [string eq -nocase HELP $2] { print -help -return $nick "Syntax: $::botnick BOT LINK \[target hub\] (links a bot to the botnet: immediately to me, or, to the specified remote hub)" }
+			set via [join $3]
+			if [string eq "" $via] {
+				set attempt [link $target]
+				if $attempt { print $nick "$header Linking to: $target ...." } { print $nick "$header Failed attempt to link ${target}." }
+				link $target
+			} {
+				set attempt [link $via $target]
+				if $attempt { print $nick "$header Linking $target to $via ...." } { print $nick "$header Failed attempt to link ${target}." }
+			}
+			return
+		}
+
+		unlink { 
+			if [string eq -nocase HELP $2] { print -help -return $nick "Syntax: $::botnick BOT UNLINK <target> (removes the requested bot from the botnet)" }
+			print -return $nick "$header [lindex [list Failed Successful] [unlink $target]] delink: $target" 
+		}
+
+		ul - list - userlist {
+			if [string eq -nocase HELP $2] { print -help -return $nick "Syntax: $::botnick BOT LIST (displays list of bots within my userlist)" }
+			print -return $nick "$header [ajl [userlist b]]"
+		}
+
+		net - botnet {
+			if [string eq -nocase HELP $2] { print -help -return $nick "Syntax: $::botnick BOT LINKED (displays list of current-linked bots)" }
+			print -return $nick "$header [ajl [bots]]" 
+		}
+
+		curr - current - hub {
+			if [string eq -nocase HELP $2] { print -help -return $nick "Syntax: $::botnick BOT HUB (displays the current botnet \"hub\" (immediate upstream connection)" }
+			if [string eq "" [bots]] { print -return $nick "$header Currently not linked to a botnet" }
+ 
+			set linked [lsearch -all -inline -glob [botlist] [list * [escape $::botnick] *]] ; # LSEARCH requires the extra escape
+			set upstream ""
+			set upstream_main ""
+			set upstream_alt ""
+			set leaf ""
+			foreach a $linked {
+				lassign $a link me version sharing
+				set botflags [botattr $link]
+				if [regexp -- h $botflags] {
+					lappend upstream_main $link
+				} elseif [regexp -- a $botflags] {
+					lappend upstream_alt $link
+				} {
+					lappend leaf $link 
+				}
+			}
+			set upstream [concat $upstream_main $upstream_alt]
+			switch -exact -- [llength $upstream] {
+
+				0 { print -return $nick "$header Currently, I'm not currently linked to a hub / alt-hub. I currently have the following children linked to me: [ajl $leaf] " }
+
+				1 { print -return $nick "$header Currently, I'm linked to my [iff ![string eq "" $upstream_main] [effects primary 3] [effects alternative 7 u]] hub: $upstream" }
+
+				default { print -return $nick "$header Currently, I'm linked currently to multiple bots, none of which are my target hubs. I have the following children linked to me: [ajl $leaf]" }
+
+			}
+			?
+		}
+
+		links {
+			# Which mode: which bots have which flags , or , what flags does a given bot have?
+
+			set validflags [list h a l r i g s p 0 1 2 3 4 5 6 7 8 9]
+			if [string eq -nocase HELP $2] {
+				print -help $nick "Syntax: $::botnick BOT LINKS"
+				print -help $nick "Syntax: $::botnick BOT LINKS -flags"
+				print -help $nick "Syntax: $::botnick BOT LINKS -short \[list of bots | \"all\"\]"
+				print -help $nick "Syntax: $::botnick BOT LINKS \[list of bots | \"all\"\]"
+				print -help $nick "Display which bots have which flags."
+				print -help $nick "Valid flags: +[join $validflags " +"]"
+				return
+			}
+
+			flags:simple $2e [list -short -flags] text flags
+
+			if [validflag -flags] {
+				set list [split $text ""]
+				if { [lsearch -exact [list all * ""] [string tolower $list]] != -1 } { set list $validflags }
+				array set botflags [list]
+				set botlist ""
+				foreach bot [userlist b] {
+					foreach f [split [getuser $bot botfl] ""] {
+						lappend botflags($f) $bot
+						lappend botlist $bot
+					}
+				}
+				set matches 0
+				print $nick "$header [plural -show -comma bot [llength $botlist]] checked:"
+				foreach element $list {
+					if [info exists botflags($element)] { print $nick "+$element ([llength $botflags($element)]): [lsort -unique -dictionary -increasing $botflags($element)]" ; incr matches [llength $botflags($element)]}
+				}
+				print $nick "[comma $matches] total [plural match $matches es]"
+				array set warnme [list h 0 a 0 r 0]
+				if [info exists botflags(h)] { set warnme(h) [llength $botflags(h)]}
+				if [info exists botflags(a)] { set warnme(a) [llength $botflags(a)]}
+				if [info exists botflags(r)] { set warnme(r) [llength $botflags(r)]}
+				if { $warnme(h) > 1 } { print $nick "To properly construct a botnet, you need only [effects one b u 4 up] main hub; you currently have $warnme(h)!" }
+				if { $warnme(a) > 1 } { print $nick "To properly construct a botnet, you need only [effects one b u 4 up] alternate hub; you currently have $warnme(a)!" }
+				if { $warnme(a) && !$warnme(h) } { print $nick "To properly construct a botnet, you should have one main hub and one alternate hub (depending on the size of your botnet)" }
+				if { $warnme(h) && !$warnme(a) } { print $nick "To properly construct a botnet, you should have one main hub and one alternate hub (depending on the size of your botnet). $::botnick will automatically link to the alternate hub if the main hub is not available" }
+				if { $warnme(r) != 0 } { print $nick "You currently have [plural -show -comma bot $warnme(r)] with the [effects reject up 4] flag. This may be causing you problems with construction of your botnet" }
+				return
+			}
+
+			if [validflag -short] {
+				array set botflags [list]
+				if [string eq "" $text] { set text * }
+				set bots [lsort -inc -uni -dict [lmatch -nocase -multiple -glob -all [userlist b] $text]]
+				array set warning [list 0 0 2 0]
+				set warn ""
+				foreach bot $bots {
+					set b [getuser $bot botfl]
+					foreach flag [split $b ""] { lappend botflags($flag) $bot ; lappend list $bot }
+				}
+				set list [lunique $list]
+				print $nick "$header [plural -show -comma bot [llength $list]] matched:"
+				foreach flag [lunique [concat h a l i c u g r [alphabet -split] [sequence 0 .. 9]]] { 
+					if ![info exists botflags($flag)] continue
+					if { [lsearch -exact [list h a] $flag] != -1 } {
+						if { [llength $botflags($flag)] == 0 } { set warning(0) 1 ; set warn + }
+						if { [llength $botflags($flag)] >  1 } { set warning(2) 1 ; set warn * }
+					}
+					print $nick "+${flag} ([llength $botflags($flag)]): [none $botflags($flag) <none>]$warn"
+				}
+				if $warning(0) { print $nick "+ = $::botnick should have a bot listed for this flag to properly construct a botnet" }
+				if $warning(2) { print $nick "* = $::botnick should have only [effects ONE b u 4] bot listed for this flag to properly construct a botnet; more than one entry will interfere with the building of a botnet" }
+				return
+			} {
+				if [string eq "" $text] { set text * }
+				set bots [lsort -inc -uni -dict [lmatch -nocase -multiple -glob -all [userlist b] $text]]
+				print $nick "$header [plural -show -comma match [llength $bots] es]:"
+				foreach bot $bots { print $nick "$header ${bot}: [none [getuser $bot botfl] <none>]" }
+				return
+			}
+			return
+		}
+
+		addy - addr - botaddr {
+			# Obey SB6 syntax (but allow all possible combintions at once)
+
+			# Check for colons AFTER the HELP info
+			if [string eq -nocase HELP $2] {
+				print -help $nick "\[BOT BOTADDR\] Syntax change for SB7:"
+				print -help $nick "$::botnick BOT BOTADDR \[IP/DNS\]:\[bot port\]:\[user port\] <list of bots>"
+				print -help $nick "You can specify any of the items you wish (in any combination): address (either IP or DNS name), bot connection port, or user connection port"
+				print -help $nick "Any parameter you leave blank will be ignored (no changes to that item). You [effects must up 7] use both colons (\":\") or the command will complain."
+				print -help $nick "Note: this command format allows for IPv6 entries for the IP whether the bot can actually USE it or not."
+				return
+			}
+
+			if [string eq "" $2] { print -help -return "$header You forgot to tell me address we're updating bots to." }
+			if [string eq "" $3] { print -help -return "$header You forgot to tell me what bots we're updating." }
+
+			if ![string match *:*:* $2] { print -help -return $nick "$header Syntax change: $::botnick \[address\]:\[bot port\]:\[user port\] (you must use both colons, but, you only fill in which data you want to update. Leave info blank if you want to leave it unchanged (such as: \":3333:3333\" = only change the ports / leave the address alone)" }
+			lassign [split $2 :] addy_bot port_bot port_user
+			set ok ""
+			set bad ""
+			foreach bot $3e {
+				set bot [join $bot]
+				lassign [whois $bot $handle $chan] online _n _u _h _c _ah _an
+				if { $online == -1 } { set target $_n } { set target $_h }
+				if ![validuser $target] { lappend bad $bot ; continue }
+				set address [getuser $target botaddr]
+				if ![string eq "" $addy_bot] { lset address 0 [join $addy_bot] } ; # JOIN = IPv6 use of [square brackets]
+				if ![string eq "" $port_bot] { lset address 1 $port_bot }
+				if ![string eq "" $port_user] { lset address 2 $port_user }
+				setuser $target botaddr $address
+				lappend ok $bot
+			}
+			if ![string eq "" $ok] { save ; print $nick "Successful updates: [ajl $ok]" }
+			if ![string eq "" $bad] { print $nick "Failed updated (no such bot): [ajl $bad]" }
+			return
+		}
+
+		attr - botattr {
+			# Use standard syntax: <target bot> <hard flags | dynamic flags changes>
+			if [string eq -nocase HELP $2] {
+				print -help $nick "Syntax: $::botnick BOT ATTR <target bot> (displays current settings)"
+				print -help $nick "Syntax: $::botnick BOT ATTR <target bot> <changes> \[share channels\] (makes requested changes)"
+				return
+			}
+			if [string eq "" $2] { print -help -return $nick "$header What bot's attributes are we changing?" }
+			lassign [whois $2 $handle $chan] online _n _u _h _c _ah _an
+			if { $online == -1 } { set target $_n } { set target $_h }
+			if ![validuser $target] { print -help -return $nick "$header Invalid bot: [join $2]" }
+
+			if [string eq "" $3] {
+				set b [botattr $target $chan]
+				if [string match *|*|* $b] {
+					# Eggdrop 1.6.21 and before
+					lassign [split ${b}|[chattr $target] |] _global _chattr_local _local _chattr_global
+				} {
+					# Eggdrop 1.8 and after
+					lassign [split ${b}|[chattr $target $chan] |] _global _local _chattr_global _chattr_local
+				}
+				set share ""
+				if [regexp -- g $_global] { lappend share "global share (all channels)" }
+				if [regexp -- s $_global] { lappend share "aggressive " }
+				if [regexp -- p $_global] { lappend share "passive" }
+				if [regexp -- s $_local] { lappend share "$chan aggressive" }
+				if [regexp -- p $_local] { lappend share "$chan passive" }
+				print $nick "$header ${target}: global ( +$_global ), $chan ( +$_local ), global op flags ( +$_chattr_global ), channel op flags ( +$_chattr_local ), sharing: [none [join $share ", "] <none>]"
+				return
+			}
+
+			set ch [join $4]
+			if ![string eq "" $ch] {
+				if ![validchan $ch] { print -help -return $nick "$header Invalid channel: $ch" }
+				botattr $target $3 $ch
+				set b [botattr $target $chan]
+				if [string match *|*|* $b] {
+					# Eggdrop 1.6.21 and before
+					lassign [split $b |] - - local
+				} {
+					# Eggdrop 1.8 and after
+					lassign [split $b |] - local
+				}
+				print $nick "Current flags (${target}): [iff [string eq "" $local] <none> "+[none $local -] $ch"]"
+			} {
+				botattr $target $3 
+				set global [botattr $target]
+				print $nick "Current flags (${target}): [iff [string eq "" $global] <none> "+[botattr $target]]"
+			}
+			saveme user
+			return 
+		}
+
+		default ?
+
+	}
+
+	return
+}
+

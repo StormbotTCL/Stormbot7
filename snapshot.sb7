@@ -50,7 +50,7 @@ proc @snapshot { nick host handle chan arg } {
 			if [notempty glob] {
 				set ll [llength $glob]
 				foreach file $glob { file rename -force $file ${dir}/[file tail $file] } 
-				print $nick "[plural file -count -comma $ll] moved: $snapshot_dir --> $dir"
+				print $nick "[plural -show -comma file $ll] moved: $snapshot_dir --> $dir"
 			}
 			return
 		}
