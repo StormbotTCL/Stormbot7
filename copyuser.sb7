@@ -51,7 +51,7 @@ proc @copyuser { nick host handle chan arg } {
 				if { ! ( [string eq "" $chattr_chan] || [string eq $chattr_chan "-"] ) } {
 					lappend datapacket ".chattr $who +|[lindex [split [chattr $who $ch] |] 1] $ch"
 				}
-				if {[getchaninfo $who $ch] != ""} {lappend datapacket ".tcl setchaninfo $who $ch [getchaninfo $who $ch]"}
+				if {[getchaninfo $who $ch] != ""} {lappend datapacket ".tcl setchaninfo $who $ch \{[getchaninfo $who $ch]\}"}
 			}
 
 			# StormBot.TCL internal data for users #

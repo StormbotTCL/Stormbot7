@@ -1,7 +1,9 @@
-# StormBot.TCL 7 version Changelog -- 2015-05-09 02:00:54 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-05-09 03:32:06 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-05-09 03:31:35 UTC: #480 [copyuser] Fixed COPYUSER HELP (TCL command availability specifically mentioned)
+2015-05-09 03:29:44 UTC: #479 [copyuser] Fixed COPYUSER (some of the data is stored via TCL statements. As a result, the data needs to be ''enclosed'' (braces or double-quotes))
 2015-05-02 09:33:04 UTC: #478 [tail] Fixed CONVERT (improperly matching ''0.<decimal>'' as an octal number via 0* match)
 2015-04-18 04:27:00 UTC: #477 [bmi] Fixed BMI (brace issues after a fast-fix attempt). Also, added BMI -RANGES (more useful guide)
 2015-04-15 23:13:17 UTC: #476 [maintenance] Fixed MAINTENANCE REHASH (added a couple of common typoes as aliases: REH and REHAHS, because I'm a butter-fingers)
