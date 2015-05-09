@@ -14,7 +14,7 @@ proc @debug { nick host handle chan arg } {
 	}
 
 	sb7 parseflags
-	set validflags [list -all -internal -eggdrop -dcclist -owners -varegg -validbinds -events -tcl -pwd -files -servers -binds -ban -exempt -invite -modes -stormbot -commands -vartcl -greet -sharutils -traffic]
+	set validflags [list -all -internal -eggdrop -dcclist -owners -varegg -validbinds -events -tcl -pwd -files -servers -binds -chanmodes -ban -exempt -invite -stormbot -commands -vartcl -greet -sharutils -traffic]
 
 	switch -exact -- [string tolower $1] {
 
@@ -43,7 +43,7 @@ proc @debug { nick host handle chan arg } {
 			# ----------------------------------------------------------------------
 
 			print -help $nick "\[DEBUG\]"
-			print -help $nick "Requested by: ${handle}:${nick}!${host}$chan ([access get $handle]/[access get $handle $chan])"
+			print -help $nick "Requested by: ${handle}\$${nick}!${host}$chan ([access get $handle]/[access get $handle $chan])"
 
 			if [validflag -all -internal] {
 				print -help $nick "Internal nick: $::nick"
@@ -62,7 +62,7 @@ proc @debug { nick host handle chan arg } {
 				array set dcclist_bot [list P "PING send (awaiting reply)" p "" U "userfile sharing active" u "" C "local bot initiated connection" c "" O "userfile offered (awating reply)" o "" S "sending userfile" s "" G "getting userfile" g "" W "Warned this bot to stop hubbing" w "" L "leaf-only bot (not allowed as hub)" l "" I "in linking stage" i "" A "$::botnick aggressively receiving share from %BOT%" a ""]
 				print -help $nick "Internal (DCC) connections:"
 				set dcclist [dcclist]
-				foreach entry [lsort -index 0 $dcclist] {
+				foreach entry [lsort -integer -index 0 $dcclist] {
 				lassign $entry socket 1 2 3 4 5
 				switch -exact -- [string tolower $3] {
 						telnet { lappend telnet [lindex $4 1] ; print -help $nick "[space 5]Socket #${socket}: \[LISTEN\] port: [lindex $4 1] (since [format:date $5 @short])" }
@@ -71,7 +71,7 @@ proc @debug { nick host handle chan arg } {
 							print -help $nick "[space 5]Socket #${socket}: \[DCC CHAT\] $1 ($2): flags: [lindex [split [lindex $4 end] /] 0] \[ $dcclist_chat($c)[iff [string eq $c c] " channel: #${channel}"] --  $dcclist_chat($p) -- $dcclist_chat($t) -- $dcclist_chat($e) -- $dcclist_chat(${p2}2)\] (since [format:date $5 @short])"
 						}
 						script { print -help $nick "[space 5]Socket #${socket}: \[SCRIPT\] [lindex $4 1] (since [format:date $5 @short])" }
-						server { print -help $nick "[space 5]Socket #${socket}: \[SERVER\] $2 [lindex $4 1] (since [format:date $5 @short])" }
+						server { print -help $nick "[space 5]Socket #${socket}: \[SERVER\] $2 [lrange $4 1 end] (since [format:date $5 @short])" }
 						dns { print -help $nick "[space 5]Socket #${socket}: \[DNS\] status [lindex $4 1] (since [format:date $5 @short])" }
 						bot { 
 							regexp -- {([Pp])([Uu])([Cc])([Oo])([Ss])([Gg])([Ww])([Ll])([Ii])([Aa])} $4 - p u c o s g w l i a
@@ -138,7 +138,7 @@ proc @debug { nick host handle chan arg } {
 			if [validflag -all -files] {
 				print -help $nick "Bot files:"
 				set:all file_user file_chan file_note <none>
-				foreach a [list user chan note] { if [info exists ::${a}file] { set file_$a [set ::${a}file]} }
+				foreach a [list user chan note] { if [info exists ::${a}file] { set file_$a [file normalize [set ::${a}file]] } }
 				foreach { a b } [list User user Chan chan Note note] { print -help $nick "[space 5]${a} file: [set file_$b]" }
 			}
 
@@ -150,13 +150,24 @@ proc @debug { nick host handle chan arg } {
 					lassign [trim [split $internal :]] name port password
 					if [notempty password] { set password " (<password>)" }
 					print -help $nick "Current server: $name ($port)${password}${alias}"
+					print -help $nick "Server address: $::serveraddress"
+					print -help $nick "Server name: [lindex [split $::server :] 0]"
 					print -help $nick "[space 5]since: [format:date ${::server-online} $handle] ([datediff [clock seconds] ${::server-online}] ago)"
 					print -help $nick "[space 5]nick: $::botnick"
 					print -help $nick "[space 5]altnick: $::altnick"
 					print -help $nick "[space 5]botnet-nick: ${::botnet-nick}"
+					print -help $nick ""
+					print -help $nick "IRCd: [data array get @server ircd] ( [data array get @server network] / [data array get @server server] )"
+					print -help $nick "Available user modes: [lsort:priority [lsort -inc [data array get @server usermodes]] [sequence:asc a .. z] [sequence:asc A .. Z]]"
+					print -help $nick "Available channel modes: [lsort:priority [lsort -inc [data array get @server chanmodes]] [sequence:asc a .. z] [sequence:asc A .. Z]]"
+					set options ""
+					set serv_opts [ldestroy -multiple -all -glob -nocase [data array names @server] [list chanmodes usermodes ircd server network chanflag:* chanmode:* chanmodes:*]]
+					foreach serv_opt $serv_opts { lappend options "$serv_opt ([data array get @server $serv_opt])" }
+					print -help $nick "Server options: [ajl $options]"
 				}
 
 				if [notempty ::servers] {
+					print -help $nick ""
 					print -help $nick "Server list:"
 					foreach a $::servers {
 						lassign $a internal alias
@@ -176,7 +187,7 @@ proc @debug { nick host handle chan arg } {
 			}
 			
 
-			if [validflag -all -ban -exempt -invite] {
+			if [validflag -all -chanmodes -ban -exempt -invite] {
 				set commands [info commands *]
 				foreach { ban mode } [list ban b exempt e invite I] {
 					if [validflag -all -$ban] {
@@ -188,15 +199,11 @@ proc @debug { nick host handle chan arg } {
 						set usable 0
 						if [string eq -nocase BAN $ban] { set usable 1 }
 						if [info exists ::use-${ban}s] { set usable [set ::use-${ban}s] }
-						print -help $nick "[string toupper $ban] (+${mode}) available via Eggdrop variable[iff ![string eq -nocase BAN $ban] " \[\$use-${ban}s\]"] ([boolean -noyes $usable]) -- via code ([boolean -noyes [notempty cmdlist]][iff [notempty cmdlist_${ban}] ": [ajl $cmdlist]"]) -- via the server? (<unknown>) -- commands ([llength $cmdlist]): [ajl $cmdlist]"
+						print -help $nick "[string toupper $ban] (+${mode}) available via Eggdrop variable[iff ![string eq -nocase BAN $ban] " \[\$use-${ban}s\]"] ([boolean -noyes $usable]) -- via code ([boolean -noyes [notempty cmdlist]][iff [notempty cmdlist_${ban}] ": [ajl $cmdlist]"]) -- via the server? ([iff { [lsearch -exact [data array get @server chanmodes] $mode] != -1 } yes no]) -- commands ([llength $cmdlist]): [ajl $cmdlist]"
 						if [string eq -nocase BAN $ban] { print -help $nick "Which version of STICK/UNSTICK BAN commands are in use: [ajl [lmatch -exact -multiple -all $commands [list stick stickban unstick unstickban]]]" }
 						print -help $nick ""
 					}
 				}
-			}
-
-			if [validflag -all -modes] {
-				print -help $nick "Available channel modes: [lsort:priority [lsort -inc [data array get @server chanmodes]] [sequence:asc a .. z] [sequence:asc A .. Z]]"
 			}
 
 			if [validflag -all -stormbot] {
@@ -208,7 +215,7 @@ proc @debug { nick host handle chan arg } {
 			if [validflag -all -commands] {
 				# Error checks / command version checks:
 				foreach cmd [list lassign lreverse lrepeat iff] {
-					if [iseggcorecmd $cmd] { set eggorsb7 "[string toupper $cmd] is an Eggdrop core command" } { set eggorsb7 "[string toupper $cmd] is an SB7-created command" }
+					if [iseggcorecmd $cmd] { set eggorsb7 "[string toupper $cmd] is an Eggdrop core command" } { set eggorsb7 "[string toupper $cmd] is a SB7-created command" }
 					print -help $nick $eggorsb7
 				}
 

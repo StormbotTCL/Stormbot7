@@ -21,7 +21,7 @@ proc @note { nick host handle chan arg } {
 
 	# Select archive (always lowercase archive names!)
 	set archivename main
-	if [validflag -archive] {set archivename archive}
+	if [validflag -archive] { set archivename archive }
 	if [validflag -name] {
 		set archivename $1l
 		# Re-shift the variables!
@@ -49,6 +49,7 @@ proc @note { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick NOTE INDEX"
 			print -help $nick "Syntax: $::botnick NOTE LIST"
 			print -help $nick "Syntax: $::botnick NOTE MARK (marks all notes as read)"
+			print -help $nick "Syntax: $::botnick NOTE FLAG \[--<archive name>\] <on | off> <number list>"
 			print -help $nick "Syntax: $::botnick NOTE ALIAS <help | add | del | list | clear>"
 			#print -help $nick "Syntax: $::botnick NOTE UNSEND <target> <CHECK | DEL> <NOTE number | list of numbers>"
 			#print -help $nick "Syntax: $::botnick NOTE CHGFLAGS <note range>"
@@ -56,7 +57,7 @@ proc @note { nick host handle chan arg } {
 			#print -help $nick "Syntax: $::botnick NOTE MAX <max notes>"
 			print -help $nick "Syntax: $::botnick NOTE SET <private | hourly | onjoin>"
 			print -help $nick ""
-			print -help $nick "The SB7 NOTE bead is yet ANOTHER rewrite of the forever-beleaguering SB6 NOTE bead with simplifications."
+			print -help $nick "The SB7 NOTE bead is yet ANOTHER re-write of the forever-beleaguered SB6 NOTE bead with simplifications."
 			print -help $nick "Keeping with SB6's version, notes are being kept in \"archives\" (think of them as \"note directories\"), each kept separate from the other."
 			print -help $nick "This allows you to organize your notes into categories. This way, you don't have to keep your notes alive because you haven't dealt with them yet (and, thus, get constant hourly reminders of them when you really want to save them for later)."
 			print -help $nick "For now, the NOTE command has limited functions\; new ones will be added as the code is adapted for SB7 use."
@@ -68,6 +69,11 @@ proc @note { nick host handle chan arg } {
 		}
 
 		hint { print -short -help -return $nick "There are no HINTs available for this bead." }
+
+		flag - flagged {
+			print -help $nick "\[NOTE FLAG\] This option is not ready yet."
+			return
+		}
 
 		unread - read {
 			flags:simple $2e [list -show -unread -noread] range flags
@@ -406,6 +412,7 @@ proc @note { nick host handle chan arg } {
 			# Send note
 			flags:simple $1e [list -urgent -important -private -receipt] text flags
 			set note [lassign $text users]
+			if [isempty note] { print -help -short -return $nick "You forgot the note text\; I don't sent blank notes." }
 			set targets [@notes targets $handle $users]
 			# Did we get anywhere with all this?
 			if [isempty targets] { print -short -return $nick "Invalid target: $1" }
@@ -418,6 +425,7 @@ proc @note { nick host handle chan arg } {
 			array set error [list]
 			foreach target $targets { 
 				lassign [whois $target $handle $chan] - target_nick - target_handle
+#debug target handle target_nick target_handle
 				set result [@notes send $target_handle main $handle [clock seconds] $note]
 				switch -exact -- $result {
 
@@ -491,7 +499,7 @@ proc @notes { cmd args } {
 					if { [string first \023 $note] != -1 } { lappend modes nohex }
 					if { [string first \024 $note] != -1 } { lappend modes important }
 					if { [string first \025 $note] != -1 } { lappend modes urgent }
-					if { [string first \026 $note] != -1 } { lappend modes unused:026 }
+					if { [string first \026 $note] != -1 } { lappend modes flagged }
 					if { [string first \027 $note] != -1 } { lappend modes unused:027 }
 					return [lsort -unique -dictionary -increasing $modes]
 				}
@@ -506,7 +514,7 @@ proc @notes { cmd args } {
 							nohex { prepend note \023 }
 							important { prepend note \024 }
 							urgent { prepend note \025 }
-							unused:026 { prepend note \026 }
+							flagged { prepend note \026 }
 							unused:027 { prepend note \027 }
 						}
 					}
@@ -712,14 +720,20 @@ proc @notes:hourly args {
 	# Now handle normal hourly checks
 	if ![data array get -boolean note setting:hourly] return
 
-	foreach user [userlist -b] {
+	set specific_user [validuser $args]
+	if $specific_user { set userlist $args } { set userlist [userlist -b] }
+
+	foreach user $userlist {
 		set count [@notes count $user main]
 		set new [@notes count $user main new]
-		if $new {
-			set urgent [@notes count $user main urgent]
-			set important [@notes count $user main important]
+		set urgent [@notes count $user main urgent]
+		set important [@notes count $user main important]
+		if { $specific_user || $new || $urgent || $important } {
+			set list_urg [process numlist [@notes list $user main urgent]]
+			set list_imp [process numlist [@notes list $user main important]]
+			set list_new [process numlist [@notes list $user main new]]
 			lassign [whois $user] online nick host handle chan auth_handle auth_nick
-			if $online { print $nick "\[NOTE HOURLY\] ${nick}, you have $new new [plural note $new] pending ($urgent urgent -- $important important)" }
+			if $online { print $nick "\[NOTE HOURLY\] ${nick}, you have [comma $count] total [plural note $count] pending: [join [concat [iff $new "new (#${list_new})"] [iff $urgent "[effects "urgent (#${list_urg})" 4,8]"] [iff $important "[effects "important (#${list_imp})" 4]"]] ", "]" }
 		}
 	}
 	return
@@ -728,6 +742,7 @@ proc @notes:hourly args {
 proc @notes:onjoin { nick host handle chan } {
 	if [isbotnick $nick] return
 	if ![data array get -boolean note setting:onjoin] return
+	@notes:hourly $handle
 	set count [@notes count $handle main]
 	set new [@notes count $handle main new]
 	set urgent [@notes count $handle main urgent]
@@ -737,8 +752,8 @@ proc @notes:onjoin { nick host handle chan } {
 }
 
 proc @notes:flags { flags message { preprocess "" } } { # Must use $FLAGS so VALIDFLAG will work
-	# Available: 026 - 027
-	array set modes [list \020 private \021 quiet \022 receipt \023 nohexconvert \024 important \025 urgent \026 unused:026 \027 unused:027]
+	# Available: 027
+	array set modes [list \020 private \021 quiet \022 receipt \023 nohexconvert \024 important \025 urgent \026 flagged \027 unused:027]
 
 	if [notempty preprocess] {set flags [concat $preprocess $flags]}
 
@@ -750,9 +765,7 @@ proc @notes:flags { flags message { preprocess "" } } { # Must use $FLAGS so VAL
 	}
 
 	foreach mode [array names modes] {
-		if [validflag -$modes($mode)] {
-			set message ${mode}[regsub -all -- $mode $message ""]
-		}
+		if [validflag -$modes($mode)] { set message ${mode}[regsub -all -- $mode $message ""] }
 	}
 	return $message
 }
@@ -783,25 +796,26 @@ proc @notes:convert args {
 }
 
 proc @notes:bootstrap args {
+	bind bot  - sb7:note:send @notes_botnet
+	bind note - * @notes:blockcheck
+	bind note - * @notes:intercept_old
+	bind time - * @notes:convert
+	bind time - [list 00 *] @notes:hourly
+	bind time - [list 00 00 01 *] @notes:check_recycled
+	bind join - * @notes:onjoin
+	bind nkch - * @notes:nkch
+
 	# Convert SB6:@ archive to SB7:main
 	foreach user [userlist -b] { @notes move $user @ main 1- }
 
 	# Move all "standard" notes[2].tcl notes under our control ....
 	@notes:convert *
+
 	return	
 }
 
 #####
 # Bootstrap:
-
-bind bot  - sb7:note:send @notes_botnet
-bind note - * @notes:blockcheck
-bind note - * @notes:intercept_old
-bind time - * @notes:convert
-bind time - [list 00 *] @notes:hourly
-bind time - [list 00 00 01 *] @notes:check_recycled
-bind join - * @notes:onjoin
-bind nkch - * @notes:nkch
 
 @notes:bootstrap
 

@@ -55,7 +55,7 @@ proc @maintenance { nick host handle chan arg } {
 			return 0
 		}
 
-		rehash {
+		reh - rehahs - rehash {
 			print $nick "\[MAINTENANCE REHASH\] Reloading StormBot.TCL v[data get @Version] ...."
 			set error [ catch { uplevel #0 { source [file dirname [file normalize $::config]]/scripts/sb7/sb7.tcl } } fail ]
 			if $error { print -help $nick "\[MAINTENANCE REHASH\] Error whlie reloading: $fail" ; return 0 }

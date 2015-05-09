@@ -1,7 +1,18 @@
-# StormBot.TCL 7 version Changelog -- 2015-04-11 04:36:10 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-05-09 02:00:54 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-05-02 09:33:04 UTC: #478 [tail] Fixed CONVERT (improperly matching ''0.<decimal>'' as an octal number via 0* match)
+2015-04-18 04:27:00 UTC: #477 [bmi] Fixed BMI (brace issues after a fast-fix attempt). Also, added BMI -RANGES (more useful guide)
+2015-04-15 23:13:17 UTC: #476 [maintenance] Fixed MAINTENANCE REHASH (added a couple of common typoes as aliases: REH and REHAHS, because I'm a butter-fingers)
+2015-04-11 14:26:48 UTC: #475 [readme] Fixed README (updated name info for Demonicpagan)
+2015-04-11 13:06:50 UTC: #474 [botmon] Added BOTMON GROUP AUDIT. TRAC #25
+2015-04-11 12:24:39 UTC: #473 [distro] Fixed DISTRO BUILD -QUICK -SINGLE (cosmetic: end-of-file markers were using full path, beginning-of-file markers were only using tails. Changed so both use tails)
+2015-04-11 12:21:30 UTC: #472 [tail] Added DEGREES (alias to ANGLE)
+2015-04-11 11:58:38 UTC: #471 [config] Fixed CONFIG -GLOBAL SHORTCUT LIST (don't list duplicates, even if the binds exist for them. TRAC #19)
+2015-04-11 11:56:23 UTC: #470 [note] Fixed NOTE HOURLY (cosmetic: when only important or urgent *new* notes (but no other regular new notes) were pending)
+2015-04-11 11:55:14 UTC: #469 [tail] Fixed SB7:BIND:RAW:004 (trap user and channel modes from the connect-to-server raw data (user modes not available any other way))
+2015-04-11 11:53:08 UTC: #468 [debug] Upgraded DEBUG (added or re-organized some of the info, including: -SERVERS, -MODES (removed), -CHANMODES, & -BAN / -EXEMPT / -INVITE, and a typo (''X is *an* SB7-created command''))
 2015-04-11 04:36:01 UTC: #467 [bot] Added BOT (a combination and complete re-write of the following commands: ISLINKED (new), LINK, UNLINK, USERLIST (new), BOTNET (new), HUB (new), LINKS (SB6:BOTNET LINKS), ADDR (SB6:BOTADDR with new syntax), ATTR (SB6:BOTATTR with new syntax))
 2015-04-11 04:34:35 UTC: #466 [bot] Added BOT bead to CORE & ZENKAI distributions
 2015-04-11 03:38:49 UTC: #465 [tail] Fixed SB7 SETVARIABLES (several loop & sanity check variables were left to bleed into the target PROC: _LOOP _LOOP2 _ERROR _ERROR2 _NAMETEMP)
@@ -81,7 +92,7 @@
 2014-11-26 22:42:27 UTC: #391 [tail] Fixed DATA ARRAY LIST (wasn't looping through the matched names properly)
 2014-11-26 02:04:51 UTC: #390 [tail] Fixed DATA ARRAY SET:ALL (UPVAR syntax for non-global variables ... forgot the reference to the variable!)
 2014-11-26 02:01:27 UTC: #389 [set] Updated SET (added options: vhost twitter facebook aim tumblr myspace instagram; also affects INFO)
-2014-11-21 10:54:44 UTC: #388 [-] Fixed DEC2FRAC (if a small number (with leading zeroes for the mantissa portion only) was processed, you got the ''looks like an octal number'' error)
+2014-11-21 10:54:44 UTC: #388 [tail] Fixed DEC2FRAC (if a small number (with leading zeroes for the mantissa portion only) was processed, you got the ''looks like an octal number'' error)
 2014-11-21 09:56:13 UTC: #387 [tail] Added SIMPLIFY, FACTORS, SQR, ISPRIME, & ISSQUARE (helper commands for math stuff. Originally only needed for a priavte floating-point script)
 2014-11-20 03:19:37 UTC: #386 [botsend] Fixed BOTSEND (log messages were weird)
 2014-11-20 03:00:54 UTC: #385 [who] Fixed WHO (list of nicks was unsorted (I was always under the impression that CHANLIST sorted, but, it doesn't))

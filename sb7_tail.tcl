@@ -5303,7 +5303,7 @@ proc convert { number { from 10 } { to 10 } } {
 		0b* { set from 2 ; set number [mid $number 3] }
 		0o* { set from 8 ; set number [mid $number 3] }
 		0r* { set from 10; set number [unroman [mid $number 3]] }
-		0* { set from 8 ; set number [mid $number 2] }
+		{0[0-7]*} { set from 8 ; set number [mid $number 2] }
 	}
 	if ![isnum -integer $from] { error "\[CONVERT\] Illegal base: $from" }
 #debug =1 $number from to
@@ -5317,8 +5317,10 @@ proc convert { number { from 10 } { to 10 } } {
 		foreach a [split $number ""] {
 			if [string eq . $a] continue
 			set v [expr [instr $string $a] - 1]
-			if { $v >= $from } { error "\[CONVERT\] Illegal digit for base ${from}: $a" }
-			set total [expr $total + ( $v * pow( $from , $e ) )]
+			if $v {
+				if { $v >= $from } { error "\[CONVERT\] Illegal digit for base ${from}: $a" }
+				set total [expr $total + ( $v * pow( $from , $e ) )]
+			}
 			decr e
 		}
 	}
@@ -6516,10 +6518,10 @@ proc angle args {
 	if [validflag -decimal] {
 		catch { set value [join $value] }
 		set value [encoding convertfrom utf-8 $value]
-		regsub % {^(\d+)[ %]+(\d+)[ ']+(\d+)[\"]*$} $degree_mark regexp
+		regsub % {^(\d+)[ %]+(\d+)[ ']+(\d+\.?\d*)[\"]*$} $degree_mark regexp
 		if ![regexp -- $regexp $value - degrees minutes seconds] { error "\[ANGLE -DECIMAL\] expected degrees\[${degree_mark}\] minutes\['\] seconds\[\"\] -- got: $value" }
-
-		return [expr {$degrees + ( $minutes / 60.0 ) + ( $seconds / 3600.0 ) } ]
+		foreach a [list degrees minutes seconds] { set $a [ expr 1.0 * [set $a] ] }
+		return [expr { $degrees + ( $minutes / 60.0 ) + ( $seconds / 3600.0 ) } ]
 	}
 	if [validflag -dms] { return [concat [expr int( $value )]$degree_mark [clock format [expr round( $value * 3600 )] -format "%M' %S\"" -gmt true]] }
 	return $value
@@ -6565,10 +6567,11 @@ proc sb7:bind:raw:001 { server code arg } {
 }
 
 proc sb7:bind:raw:351 { server code arg } { 
+	putlog "\[351\] ARG($arg)"
 	set arg [lreplace $arg 0 0]
 	data unset @server *
-	data array set @server ircd [lindex $arg 0] ; # Opposite of #004
-	data array set @server server [lindex $arg 1] ; # Opposite of #004
+	data array set @server ircd [lindex $arg 0] ; # Opposite position of #004
+	data array set @server server [lindex $arg 1] ; # Opposite position of #004
 	return 0 ; # RAW requires "0" 
 }
 
@@ -6601,10 +6604,14 @@ proc sb7:bind:raw:381 { server code arg } {
 }
 
 proc sb7:bind:raw:004 { server code arg } { 
+	putlog "\[004\] ARG($arg)"
 	set arg [lreplace $arg 0 0]
 	data unset @server *
-	data array set @server ircd [lindex $arg 1] ; # Opposite of #351
-	data array set @server server [lindex $arg 0] ; # Opposite of #351
+	data array set @server ircd [lindex $arg 1] ; # Opposite position of #351
+	data array set @server server [lindex $arg 0] ; # Opposite position of #351
+	data array set @server usermodes [split [lindex $arg 2] ""]
+	data array set @server chanmodes [split [lindex $arg 3] ""]
+	putlog "\[004\] @SERVER: [data array names @server]"
 	return 0 ; # RAW requires "0" 
 }
 
@@ -6930,6 +6937,7 @@ interp alias {} getflags {} sb7 parseflags
 interp alias {} FLAGS {} sb7 parseflags ; # Case sensitive!
 interp alias {} lmatch {} ldestroy -not
 interp alias {} path:rel {} path:relative 
+interp alias {} degrees {} angle
 
 # --- Deprecated commands ---
 
@@ -6997,5 +7005,4 @@ proc @version { nick host handle chan arg } {
 #####
 
 putlog "\[StormBot.TCL\] StormBot.TCL v[data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
-
 
