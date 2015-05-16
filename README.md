@@ -54,5 +54,5 @@ You may make a donation by clicking our Pledie button<br />
 <a href='https://pledgie.com/campaigns/29259'><img alt='Click here to lend your support to: Stormbot TCL and make a donation at pledgie.com !' src='https://pledgie.com/campaigns/29259.png?skin_name=chrome' border='0' ></a>
 
 Or if you prefer donating via bitcoin
-![QR Code](https://blockchain.info/qr?data=1FagxaJ4qVg44UePmk8VvuqYufLXnEgZns&size=200)<br />
+![QR Code](http://i.imgur.com/0CpHdYD.png)<br />
 [1FagxaJ4qVg44UePmk8VvuqYufLXnEgZns](bitcoin:1FagxaJ4qVg44UePmk8VvuqYufLXnEgZns)
