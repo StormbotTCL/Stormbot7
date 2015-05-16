@@ -46,3 +46,13 @@ An acknowledgement from Eggdrop core for a major recursive bug we found by the w
 Rødgrød med fløde!
 
 Additional information written by Mai "Domino" Mizuno, StormBot.TCL coder, 29 June 2010
+
+### Support this project
+The developers of this project work on this out of passion and love. Please support us by donating to the project. Any funds donated go towards paying for the servers that run our IRC Daemons and the hosting of our web site. We thank you in advance for your support.
+
+You may make a donation by clicking our Pledie button
+<a href='https://pledgie.com/campaigns/29259'><img alt='Click here to lend your support to: Stormbot TCL and make a donation at pledgie.com !' src='https://pledgie.com/campaigns/29259.png?skin_name=chrome' border='0' ></a>
+
+Or if you prefer donating via bitcoin
+<img src="https://blockchain.info/qr?data=1FagxaJ4qVg44UePmk8VvuqYufLXnEgZns&size=200" /><br />
+[1FagxaJ4qVg44UePmk8VvuqYufLXnEgZns](bitcoin:1FagxaJ4qVg44UePmk8VvuqYufLXnEgZns)
