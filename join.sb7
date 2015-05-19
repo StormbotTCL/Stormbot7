@@ -1,3 +1,4 @@
+return ; # Not ready yet
 SB:command add JOIN  700 -core -invalidok ADDCHAN
 
 proc SB:proc_join {nick host handle chan arg} {

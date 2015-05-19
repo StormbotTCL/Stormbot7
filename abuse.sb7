@@ -149,7 +149,7 @@ proc @abuse:kick { nick host handle chan victim reason } {
 	return
 }
 
-proc SB:abuse_post { type nick host handle chan reason } {
+proc @abuse:post { type nick host handle chan reason } {
 	if ![boolean [data array get abuse active]] return
 	if { [lsearch -exact [data array get -lower abuse exempt] [string tolower $chan]] != -1 } return
 	if ![data array get -boolean abuse reportall] { if { [access $handle > 500] } return }

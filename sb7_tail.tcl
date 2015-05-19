@@ -3343,6 +3343,14 @@ proc lsort:chanop { 1 2 } {
 
 # --- Math helpers ---
 
+proc percent { number total { decimal "" } } {
+	if !$total { return 0% }
+	set % [ fixmath 100 * ( $number / $total ) ]
+	if [string eq "" $decimal] { set % [normalize ${%}] } { set % [format %.${decimal}f ${%}] }
+	return ${%}%
+}
+
+
 proc simplify args {# Get FACTORS of both number, get the common ones, run through a FOREACH of them.
 
 	set expression [join $args ""]
@@ -6470,13 +6478,6 @@ proc double { number { times_double "1" } } {
 	return $number
 }
 
-proc percent { number total { decimal "" } } {
-	if !$total { return 0% }
-	set % [ fixmath 100 * ( $number / $total ) ]
-	if ![string eq "" $decimal] { set % [format %.${decimal}f ${%}] }
-	return ${%}%
-}
-
 proc timeval { value { convert_to s } } {
 	array set mult [list l .001 n .01 t .1 s 1 m 60 h 3600 d 86400 w 604800 y 31536000 e 315360000 c 3153600000]
 	empty time marker
@@ -6714,7 +6715,10 @@ putloglev 5 * "[effects "\[SB7:RAW:MODE\] SERVER($server):CMD($cmd):ARG($arg)" 6
 				set type [data array search -list @server chanmodes:? $mode]
 				set type [lindex [split [lindex $type 0 1] :] 1]
 #debug chan polarity mode targets =@SERVER:CHANMODE([data array get @server chanmode:$mode]) type
-				if { [lsearch -exact [list + -] $polarity] == -1 } { error "\[SB7:RAW:MODE\] Missing polarity for channel mode: $mode (+ or -?)" }
+				if { [lsearch -exact [list + -] $polarity] == -1 } { 
+					set polarity +
+#					error "\[SB7:RAW:MODE\] Missing polarity for channel mode: $mode (+ or -?)" 
+				}
 #[data array get @server chanmode:$mode]
 				switch -exact -- $type {
 
@@ -6783,6 +6787,10 @@ proc sb7:bind:splt { nick host handle chan } {
 }
 
 proc sb7:bind:rejn { nick host handle chan } {
+	# Nothing yet ....
+}
+
+proc sb7:bind:kick { nick host handle chan target { reason "" } } {
 	# Nothing yet ....
 }
 

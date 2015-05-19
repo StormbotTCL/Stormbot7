@@ -1,7 +1,14 @@
-# StormBot.TCL 7 version Changelog -- 2015-05-09 03:32:06 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-05-16 07:09:21 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-05-11 09:39:25 UTC: #487 [debug] Fixed DEBUG INFO (cosmetic: ''requested by'' now has '':'' separator for host / channel)
+2015-05-11 09:20:39 UTC: #486 [tail] Fixed SB7:RAW:MODE (when polarity was missing, it used to complain via console. Now, instead, presume the IRCd is replying ''current'' modes (which may not have a ''+'' in front of it), so: assume ''+'' and carry-on normally. TRAC #5, long un-resolved.)
+2015-05-11 09:00:53 UTC: #485 [tail] Fixed TAIL (dummy PROC needed for SB7:BIND:KICK (I haven't written anything for it yet))
+2015-05-11 08:58:11 UTC: #484 [abuse] Fixed ABUSE (unknown PROC ''@ABUSE:POST'' was there as SB:ABUSE_POST, the old name from SB6)
+2015-05-11 08:35:11 UTC: #483 [maintenance] Fixed MAINTENANCE REHASH (cosmetic re: version information)
+2015-05-10 10:57:50 UTC: #482 [tail] Added PERCENT (provides a percentage of two numbers, with optional decimal-size control)
+2015-05-09 03:42:02 UTC: #481 [config] Fixed CONFIG SHORTCUT LIST (stupid patch wasn't written properly. TRAC #19)
 2015-05-09 03:31:35 UTC: #480 [copyuser] Fixed COPYUSER HELP (TCL command availability specifically mentioned)
 2015-05-09 03:29:44 UTC: #479 [copyuser] Fixed COPYUSER (some of the data is stored via TCL statements. As a result, the data needs to be ''enclosed'' (braces or double-quotes))
 2015-05-02 09:33:04 UTC: #478 [tail] Fixed CONVERT (improperly matching ''0.<decimal>'' as an octal number via 0* match)

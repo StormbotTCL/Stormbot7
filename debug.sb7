@@ -43,7 +43,7 @@ proc @debug { nick host handle chan arg } {
 			# ----------------------------------------------------------------------
 
 			print -help $nick "\[DEBUG\]"
-			print -help $nick "Requested by: ${handle}\$${nick}!${host}$chan ([access get $handle]/[access get $handle $chan])"
+			print -help $nick "Requested by: ${handle}\$${nick}!${host}:$chan ([access get $handle]/[access get $handle $chan])"
 
 			if [validflag -all -internal] {
 				print -help $nick "Internal nick: $::nick"

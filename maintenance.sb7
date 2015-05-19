@@ -56,10 +56,13 @@ proc @maintenance { nick host handle chan arg } {
 		}
 
 		reh - rehahs - rehash {
-			print $nick "\[MAINTENANCE REHASH\] Reloading StormBot.TCL v[data get @Version] ...."
+			array set ver [data get @version]
+			print $nick "\[MAINTENANCE REHASH\] Reloading StormBot.TCL (current: $ver(stormbot), $ver(distro) distro on: [format:date $ver(timestamp) $handle])"
 			set error [ catch { uplevel #0 { source [file dirname [file normalize $::config]]/scripts/sb7/sb7.tcl } } fail ]
 			if $error { print -help $nick "\[MAINTENANCE REHASH\] Error whlie reloading: $fail" ; return 0 }
-			print $nick "\[MAINTENANCE REHASH\] REHASH complete: currently running StormBot.TCL v[data get @VERSION]"
+			unset -nocomplain ver
+			array set ver [data get @version]
+			print $nick "\[MAINTENANCE REHASH\] REHASH complete: currently running StormBot.TCL $ver(stormbot), $ver(distro) distro on: [format:date $ver(timestamp) $handle]"
 		}
 
 		purge { print -help $nick "\[MAINTENANCE PURGE\] Not available yet." ; return 0 }

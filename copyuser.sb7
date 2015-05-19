@@ -14,7 +14,7 @@ proc @copyuser { nick host handle chan arg } {
 		print -help $nick "COPYUSER does just that: copies user data from me to another bot."
 		print -help $nick "If the user exists on the target bot, the data will be rejected (the -FORCE flag will override this behavior)."
 		print -help $nick "You have to have access on the target bot to be able to transfer user data (and be ABOVE that user to do it)."
-		print -help $nick "-RAW: display a raw TCL-based copy / paste data stream to dump into DCC with a bot to add a user. Info will not be displayed publicly."
+		print -help $nick "-RAW: display a raw TCL-based copy / paste data stream to dump into DCC with a bot to add a user. Info will not be displayed publicly. The TCL command must be active and available to permanents owners via config file settings)."
 		return
 	}
 

@@ -238,9 +238,9 @@ proc @config { nick host handle chan arg } {
 			switch -exact -- $2 {
 
 				"" - list {
-					print -header $nick "local: [none [lsort -uni -dict -inc [data get $base shortcut:all]] <none>]"
-					print -header $nick "global: [none [lsort -uni -dict -inc [data get $base shortcut:global]] <none>]"
-					print -header $nick "owner: [none [lsort -uni -dict -inc [data get $base shortcut:owner]] <none>]"
+					print -header $nick "local: [none [lsort -uni -dict -inc [data get -lower $base shortcut:all]] <none>]"
+					print -header $nick "global: [none [lsort -uni -dict -inc [data get -lower $base shortcut:global]] <none>]"
+					print -header $nick "owner: [none [lsort -uni -dict -inc [data get -lower $base shortcut:owner]] <none>]"
 					return 
 				}
 
