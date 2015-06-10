@@ -1,5 +1,8 @@
 # TAIL!
 
+#####
+# --- Debug config variables ---
+
 # ISEGGCORECMD must be first!
 proc iseggcorecmd cmd { expr ![string eq "" [info commands $cmd]] && [string eq "" [info procs $cmd]] }
 
@@ -8,7 +11,7 @@ proc validproc cmd { expr ![string eq "" [info procs $cmd]] }
 
 proc sb7 { args } { # General
 	global sb7
-     lassign $args cmd 1 2 3 4 5 6 7 8 9      
+	lassign $args cmd 1 2 3 4 5 6 7 8 9      
 	switch -exact -- [string tolower $cmd] {
 
 		sec - security {
@@ -783,63 +786,6 @@ proc sb7:dispatch:pubm { nick host handle chan arg } {
 	return 0 ; # "RETURN 0" is needed to allow PUB BIND to trigger on this
 }
 
-# Delete me?
-proc `sb7:macro_process { nick host handle chan cmd arg { var_cmd "" } { var_arg "" } } {
-	if [notempty var_cmd] { upvar 1 $var_cmd new_cmd }
-	if [notempty var_arg] { upvar 1 $var_arg new_arg }
-	# Let local (user) macros override global ones.
-	# 2014-12-18 14:32:00 -0800: How will "blank" (defined) macros survive CONCAT? (Test = "{}" used in proper places; the array integrity will hold)
-	array set macros [concat [data array get macros *global] [data array get macro $handle]] ; # "*global" permitted in DATA to be saved to data file
-	if ![info exists macros([string tolower $cmd])] {
-		set new_cmd $cmd
-		set new_arg $arg
-		return
-	}
-	set macro $macros([string tolower $cmd])
-	foreach a [list nick host handle chan cmd] { regsub -all "\\\$$a" $macro [set $a] macro }
-	set macro [split $macro] ; # REGSUB will be placing LIST elements in to place; anticipate this
-	foreach r [regexp -all -inline -nocase -- {[<\[](\d+\-*|\-*\d+|\d+)[\]>]} $macro] {
-		if [regexp -- {^[<\[][^\]>]+[\]>]$} $r] {
-			set original $r
-			set r [mid $r 2 -1]
-			switch -regexp -- $r {
-				{^\d+$} { set:all begin end $r }
-				{^\d+\-$} { set begin [left $r -1] ; set end [llength $arg] }
-				{^\-\d+$} { set begin 1 ; set end [mid $r 2] }
-				{^\d+\-\d+$} { lassign [split $r -] begin end }
-				default { error "\[SB7:MACRO_PROCESS\] Illegal atom: <${r}>" }
-			}
-#debug original r begin end
-			incr begin -1
-			incr end -1
-			set replace [lrange [split $arg] $begin $end]
-			if [string match <*> $original] { if [isempty replace] { error "\[SB7:MACRO_PROCESS\] No data at position $r (${original}) in \$ARG: $arg" } }
-			regsub -all [escape $original] $macro [lrange [split $arg] $begin $end] macro
-#debug macro
-		}
-		if [regexp -- {^Q\[[^\]]+\]$} $r] {
-			set original $r
-			set r [mid $r 2 -1]
-			switch -regexp -- $r {
-				{^\d+$} { set:all begin end $r }
-				{^\d+\-$} { set begin [left $r -1] ; set end [llength $arg] }
-				{^\-\d+$} { set begin 1 ; set end [mid $r 2] }
-				{^\d+\-\d+$} { lassign [split $r -] begin end }
-				default { error "\[SB7:MACRO_PROCESS\] Illegal atom: \[${r}\]" }
-			}
-debug original r begin end
-			incr begin -1
-			incr end -1
-			set replace [lrange [split $arg] $begin $end]
-			regsub -all [escape $original] $macro [lrange [split $arg] $begin $end] macro
-debug =\[\] r macro
-		}
-	}
-	set macro [join $macro]
-	set new_cmd [join [lindex [split $macro] 0]]
-	set new_arg $macro
-}
-
 proc sb7:check_data_command_integrity args {
 #logme
 	# BOOTSTRAP: timered command (UTIMER 0 after boot)
@@ -864,8 +810,8 @@ proc sb7:check_data_command_integrity args {
 
 	if $bad {# Stupid false matches on "PROC ..." when debugging ....
 		set message "\00304,01\[SB7\] My data management command has been overwritten by another script! I can NOT function at all without this command! Check your other scripts for a line beginning with: \"proc \144ata \"\003\017"
-		quit $message
 		putlog $message
+		quit $message
 		after 1000
 		die $message
 	}
@@ -900,13 +846,17 @@ proc sb7:setup_userlevel args {
 
 proc sb7:setup args {
 #logme
-	# Security clean-up
-#	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?[a-f]+[1-9]$} $var] { unset $a } } ; # $VAR not $A
-	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?_[a-f]+[1-9]$} $var] { unset $var } }
+# --- Debug config variables ---
+putlog "\[SB7:SETUP - CONFIG\] <SETUP>"
+lappend _useless
+foreach _useless [lsort -increasing -dictionary [array names ::sb7 config:*]] { putloglev 5 * "\[SB7:SETUP - CONFIG\] CONFIG: ${_useless}($::sb7($_useless))" }
+unset _useless
+putlog "\[SB7:SETUP - CONFIG\] </setup>"
 
+	# Security clean-up
+	foreach var [info vars ::_*] { if [regexp -nocase -- {^(\:\:)?_[a-f]+[1-9]$} $var] { unset $var } }
 	global sb7
 
- 	# Check all CONFIG:BLAH options; convert to DATA ARRAY
 	# Check all CONFIG:BLAH options; convert to DATA ARRAY
 	# MUST COME =BEFORE= DATA FILE LOAD!
 	foreach a [array names sb7 config:*] {
@@ -940,15 +890,13 @@ proc sb7:setup args {
 	# Default setup variables (need to assure SOME values before we process)
 
 	# Set these even if the CONFIG value is NOT empty (do always)!
-	# if [data array value -isempty CONFIG SHORTCUT:ALL] { # }
-		empty list
-		#lappend list [string toupper [left $::nick 1][right $::nick 1]]
-		# 1399779872: NO! Don't always want this! (SA / Santana)
-		foreach a [list botnick botnet-nick alt-nick] {
-			if [info exists ::${a}] { if ![string eq "" [set ::$a]] { lappend list [set ::$a] } }
-		}
-		data array set CONFIG shortcut:all [concat [data array value CONFIG shortcut:all] $list]
-	# { # }
+	empty list
+	#lappend list [string toupper [left $::nick 1][right $::nick 1]]
+	# 1399779872: NO! Don't always want this! (SA / Santana)
+	foreach a [list botnick botnet-nick alt-nick] {
+		if [info exists ::${a}] { if ![string eq "" [set ::$a]] { lappend list [set ::$a] } }
+	}
+	data array set CONFIG shortcut:all [concat [data array value CONFIG shortcut:all] [string tolower $list]]
 
 	if [data array value -isempty CONFIG GMT] { data array set CONFIG GMT [gmt:format decimal [clock format [clock seconds] -format %z]] }
 	if [data array value -isempty CONFIG TZ ] { data array set CONFIG TZ  [clock format [clock seconds] -format %Z] }
@@ -1000,6 +948,7 @@ proc sb7:setup args {
 	# Let's clean up the shortcut variables here
 	foreach a [data array find CONFIG shortcut:*] { data array set CONFIG $a [lsort -unique -increasing -dictionary [data array value CONFIG $a]] }
 	if [data array value -normalize CONFIG BIND:PUB] {
+		sb7:bind:version true false true ; # Activate, pad-zero: minor, pad-zero: patchlevel
 		foreach a [lsort -uni [data array value CONFIG shortcut:all]] { bind pub - [string tolower $a] sb7:dispatch }
 		foreach a [lsort -uni [data array value CONFIG SHORTCUT:GLOBAL]] { bind pub vlotmn [string tolower $a] sb7:dispatch }
 		foreach a [lsort -uni [data array value CONFIG SHORTCUT:OWNER ]] { bind pub n [string tolower $a] sb7:dispatch }
@@ -1045,6 +994,36 @@ proc sb7:setup args {
 
 	# Done!
 	return 0
+}
+
+proc sb7:bind:version { { activate true } { padzero_minor false } { padzero_patch false } } {
+	lappend list
+	if [data array get -boolean CONFIG BIND:PUB] {
+		if [data array get -boolean CONFIG SHORTCUT:VERSION] {
+			# Eggdrop binds
+			regexp -nocase -- {^(\d+)\.(\d+)\.(\d+)} $::version - egg_major egg_minor egg_patch
+			regexp -nocase -- {^(\d+)\.(\d+)\.(\d+)} [info patchlevel] - tcl_major tcl_minor tcl_patch
+			regexp -nocase -- {^(\d+)\.(\d+)\.(\d+)} [data array get @version stormbot] - sb7_major sb7_minor sb7_patch
+			foreach type [list egg tcl] {
+				if [boolean $padzero_minor] { set ${type}_minor [format %02d [set ${type}_minor]] }
+				if [boolean $padzero_patch] { set ${type}_patch [format %02d [set ${type}_patch]] }
+				lappend list *[string index $type 0][set ${type}_major]*
+				lappend list *[string index $type 0][set ${type}_minor]*
+				lappend list *[string index $type 0][set ${type}_major][set ${type}_minor]*
+				lappend list *[string index $type 0][set ${type}_minor][set ${type}_patch]*
+				lappend list *[string index $type 0][set ${type}_major][set ${type}_minor][set ${type}_patch]*
+			}
+			lappend list *sb7*
+		}
+	}
+	if [string eq -nocase LIST $activate] { return $list }
+	if [is boolean $activate] {
+		switch -exact -- [boolean $activate] {
+			0 { foreach a $list { catch { unbind pub - $a sb7:dispatch } } }
+			1 { foreach a $list { catch {   bind pub - $a sb7:dispatch } } }
+		}
+	}
+	return $list
 }
 
 #############################################################################
@@ -1858,6 +1837,7 @@ rawhome "\[SB7:COMMAND\] Why is this being used ?!?!? COMMAND($command):ARGS($ar
 
 		rebind {
 			# Recheck all binds: PUB / MSG / NOT
+			#%#
 		}
 
 		default { error "\[SB7:COMMAND\] Unknown option: [string toupper $command]" }
@@ -1868,6 +1848,7 @@ rawhome "\[SB7:COMMAND\] Why is this being used ?!?!? COMMAND($command):ARGS($ar
 proc sb7:getcmdargs {arg var_cmd var_level var_flags var_abbr} {
 #$args cmd level flags abbr
 	set validflags [list -none -badchan:ok -logout:ok -suspended:ok -auth -chanspecific -locklevel -corecommand -redirect]
+	#%#
 	switch -exact -- [string tolower [lindex $arg 0]] {
 
 		add {
@@ -2028,15 +2009,15 @@ proc swap { var1 var2 } {
 # --- STRING manipulation ---
 
 proc falsetrue value { lindex [list false true] [istrue $value] }
-
 proc noyes     value { lindex [list no    yes ] [istrue $value] }
-
 proc offon     value { lindex [list off   on  ] [istrue $value] }
+proc istrue    value { string is true -strict $value }
+proc isfalse   args  {
+	flags:simple $args -strict value flags
+	if [validflag -strict] { string is false -strict $value } { string is false $value }
+}
 
 proc singlespace text { set singlespace [regsub -all -- { [ ]+} $text " "] }
-
-#%# 1386457200 Is this still needed? Only BOTSEND was using it but has been replaced by IFF
-proc boolean:value { off on value } { lindex [list $off $on] [istrue $value] }
 
 proc boolean args {
 	flags:simple $args [list -integer -onoff -offon -truefalse -falsetrue -yesno -noyes] value flags
@@ -2145,22 +2126,28 @@ proc aj { list { join ", " } { and & } } {
 	? aj
 }
 
-proc comma number {
-	if ![regexp -- {^[\+\-]?\d+(\.\d+)?$} $number] { return $number }
-	if [instr $number ,] { return $number } ; # Or strip & recaulcuate?
-	if [regexp -- {^[\+\-]} $number] { set sign [left $number 1] ; set number [mid $number 2] } { empty sign }
-	set s [split $number .]
-	lset s 0 ${sign}[join [reverse [regexp -inline -all -- {\d{1,3}} [reverse [lindex $s 0]]]] ,]
-	join $s .
-}
-
 # Replacement PROC 2014-09-06 18:13:02 -0700
 # By Peter Spjuth, from http://wiki.tcl.tk/526, modified by Pixelz
 proc comma value { regsub -all {\d(?=(\d{3})+($|\.))} $value {\0,} }
-
 proc nocomma { number { comma , } } { regsub -all -nocase -- $comma $number "" }
-
 proc iscomma { number { comma , } } { string match -nocase *${comma}* $number }
+
+proc split_by_base { number { base 0 } { integer 0 } { mantissa 0 } } {
+	proc split_by_base_reverse text { set split_by_base_reverse "" ; foreach letter [split $text ""] { set split_by_base_reverse "${letter}$split_by_base_reverse" } ; return $split_by_base_reverse }
+	if [string match *.*.* $number] { error "\[SPLIT_BY_BASE\] Illegal number: \"${number}\"" }
+	regexp -nocase -- {^([^\d]*)} $number - header
+	set number [string range $number [string length $header] end]
+	set mantissa2 0
+	if !$base { switch -glob -- [string tolower $header] { *%* - 0b* { set base 2 } *&* - 0o* - 0\[0-7\]* { set base 8 } $* - #$* - 0x { set base 16 } default { set base 10 } } }
+	if !$integer { switch -exact -- $base { 2 { set integer 4 } 8 { set integer 3 } 10 { set integer 3 ; set mantissa2 2} 16 { set integer 2 } default { set integer 2 } } }
+	if { [lsearch -exact [list 2 8 10 16] $base] == -1 } { error "\[SPLIT_BY_BASE\] Illegal base: \"${base}\" (expected 2, 8, 10, or 16)" }
+	if !$mantissa { set mantissa $integer }
+	if !$mantissa2 { set mantissa2 $mantissa }
+	lassign [split $number .] _int _man
+	if ![string eq "" $_int] { set _int [split_by_base_reverse $_int] ; set _int [split_by_base_reverse [regexp -all -inline -- ".\{1,${integer}\}" $_int]] }
+	if ![string eq "" $_man] { set _man [concat [regexp -inline -- ".\{1,${mantissa2}\}" $_man] [regexp -all -inline -start $mantissa2 -- ".\{1,${mantissa}\}" $_man]] }
+	return ${header}[join [list $_int $_man] .]
+}
 
 proc reverse text {
 	set error [ catch { set reverse [string reverse $text] } ]
@@ -2445,12 +2432,6 @@ proc fixmath args {
 
 proc trim { string { trim_me "" } } { if [isempty trim_me] { string trim $string } { string trim $string $trim_me } }
 
-proc istrue  value { string is true -strict $value }
-proc isfalse args  {
-	flags:simple $args -strict value flags
-	if [validflag -strict] { string is false -strict $value } { string is false $value }
-}
-
 if ![iseggcorecmd iff] {
 	proc iff { condition true { false "" } } {
 		# UPLEVEL because someone might do {$m > 0} instead of just "$m > 0"
@@ -2465,6 +2446,9 @@ if ![iseggcorecmd iff] {
 }
 
 proc isnum args {
+	#%# If flags are mixed, what kind of mess will we create?
+	#%# Will radix points survive -BINARY/at al checks?
+
 	flags -simple $args [list -boolean -positive -negative -nonnegative -integer -real -even -odd -prime -square -binary -octal -decimal -hexadecimal -positive -negative -scinot] number flags
 	if [regexp -- {^\.\d+$} $number] { prepend number 0 }
 
@@ -2486,7 +2470,7 @@ proc isnum args {
 	if [validflag -binary]      { return [regexp -- {^(%|0b|0B)?[01]+$} $number] }
 	if [validflag -octal]       { return [regexp -- {^([&\\]?[0-7]+|0[0-7]+|0o[0-7]+)$} $number] }
 	if [validflag -decimal]     { return [regexp -- {^[#\+\-]*([^0]+[0-9]+|0)$} $number] }
-	if [validflag -hexadecimal] { return [regexp -- {^((#)?\$|0[xX]|\\0?x)?[0-9A-Fa-f]+$} $number] }
+	if [validflag -hexadecimal] { return [regexp -- {^((#)?\$|0[xX]|\\0?[xX])?[0-9A-Fa-f]+$} $number] }
 	regexp -- {^[\+\-]?\d+?(\.\d+)?$} [noscinot $number]
 }
 
@@ -2599,7 +2583,7 @@ proc lsort:priority { list { priority "" } { last "" } } {
 	set new [lsort -increasing -unique $list]
 	if [notempty priority] { set new [lunique [concat $priority $new]] }
 	if [notempty last] { set new [lunique -last [concat $new $last]] }
-	set _sort $new ; # Needed by LSORT:PRIORITY2
+	set _sort $new ; # Needed by LSORT:PRIORITY2 (UPVAR!)
 	set list [lsort -uni -inc -command lsort:priority2 $list]
 	return $list
 }
@@ -2685,7 +2669,7 @@ debug =final list
 			lappend list_map $a
 		}
 	} {
-		# Can this be re-written using LSEARCH / LINDEX / LSET with REGSUB?
+		#%# Can this be re-written using LSEARCH / LINDEX / LSET with REGSUB?
 		foreach a $list {
 			foreach { point replace } $map {
 				if $nocase {
@@ -3065,7 +3049,27 @@ proc lunique args {
 	return $lunique
 }
 
-proc lprepend { var text } { upvar 1 $var local ; set local [linsert $local 0 $text] }
+proc list:unpack args {
+	# Unpack lists: 0 1{3} 2 3 4{2} 5 *{1,3} = "0 1 1 1 2 3 4 4 5 1 2 3"
+	empty new
+	foreach element $args {
+		if [regexp -nocase -- {^(.*)\{(\d+)\}$} $element - text multiple] {
+			set new [concat $new [lrepeat $text $multiple]]
+		} elseif [regexp -nocase -- {^[*]\{(\d+),(\d+)\}$} $element - range1 range2] {
+			for { set x $range1 } { $x <= $range2 } { incr x } { lappend new $x }
+		} {
+			lappend new $element
+		}
+	}
+	return $new
+}
+
+proc lprepend { var_name args } {
+	# http://wiki.tcl.tk/43  ;# DKF 
+	upvar 1 $var_name local
+	lappend local
+	set local [eval [list linsert $local 0] $args]
+}
 
 proc ldefault args {
 	flags:simple $args -count text flags
@@ -3147,7 +3151,7 @@ proc lremove { var args } {
 proc lcancel args {
 	flags:simple $args [list -cleanup -nocase -replace -annihilate] list flags
 	set list [join $list]
-	# Process -CLEANUP first: parse through and handle duplicates, baed on other flags
+	# Process -CLEANUP first: parse through and handle duplicates, based on other flags
 	if [validflag -cleanup] {
 		set cleanup [lindex $list 0]
 		set temp_list [lrange $list 1 end]
@@ -3344,87 +3348,58 @@ proc lsort:chanop { 1 2 } {
 # --- Math helpers ---
 
 proc percent { number total { decimal "" } } {
+	if !number { return 0% }
 	if !$total { return 0% }
-	set % [ fixmath 100 * ( $number / $total ) ]
+	set % [ fixmath 100 * ( double( $number ) / double( $total ) ) ]
 	if [string eq "" $decimal] { set % [normalize ${%}] } { set % [format %.${decimal}f ${%}] }
 	return ${%}%
 }
 
+proc float args { 
+	set split [split $args]
+	set reset [string eq -nocase [lindex $split 0] -RESET]
+	if $reset { set split [join [lreplace $split 0 0]] ; set args [join $split] }
+	foreach arg $args { upvar 1 $arg local ; if $reset { set local 0.0 } { if { [string first . $local] == -1 } { append local .0 } } }
+}
 
 proc simplify args {# Get FACTORS of both number, get the common ones, run through a FOREACH of them.
-
+error "Not ready yet ~ endless loop"
+return $args ; # Not ready yet
 	set expression [join $args ""]
-
 	lassign [split $expression /] e1 e2
 
-
-
 	# Syntax checks
-
 	if ![regexp -- {^[\+\-]?\d+?(\.\d+)?$} $e1] { return $expression }
-
 	# Don't check $E2: this disallows "0.24" to be passed through
 
-
-
 	# Upgrade fraction if numerator or denominator is a decimal 
-
 	# Can this be collected, choose the highest-needed push, apply to both?
-
 	if [instr $e1 .] { set e1 [dec2frac $e1] }
-
 	if [instr $e2 .] { set e2 [dec2frac $e2] }
 
-
-
 	# A lonely floating point number was given
-
 	if [isempty e2] { lassign [split $e1 /] e1 e2 }
 
-
-
 	# Let's do a cheat first: can the fraction be directly reduced?
-
-
-
 	set d1 [ expr $e2 / $e1 ]; # Will truncate to integer answer
-
 	set d2 [ fixmath $e2 / $e1 ]; # Will force the mantissa is necessary
-
 	if { $d1 == $d2 } { return 1/[ expr $e2 / $e1 ] }
 
-
-
 	# Reduce fraction by GCM
-
 	zero c
-
-	do {incr c ; if {$c > 1000} { error "\[SIMPLIFY\] Endless loop: C($c)" }
-
+	while 1 {incr c ; if {$c > 1000} { error "\[SIMPLIFY\] Endless loop: C($c)" }
 		set f1 [factors $e1] 
-
 		set f2 [factors $e2]
-
 		if [isempty f1] break
-
 		if [isempty f2] break
-
 		set gcm [le [lcommon $f1 $f2]]
-
 		if [isempty gcm] break
-
 		set e1 [ expr $e1 / $gcm ]
-
 		set e2 [ expr $e2 / $gcm ]
-
 	}
 
-
-
 	if { $e2 == 1 } { set simplify $e1 } { set simplify ${e1}/$e2 }
-
 	return $simplify
-
 }
 
 proc dec2frac number {
@@ -3439,105 +3414,56 @@ proc dec2frac number {
 }
 
 proc factors { args } {
-
 	set arg "* [join $args]"
-
 	flags:simple $args [list -prime -square -all] 1 flags
 
-
-
 	if { $1 > 1e12 } { error "\[FACTORS\] Error in FACTORS: value ($misc1) exceeds 999,999,999,999 limit (based on default 12-bit TCL precision)." }
-
 	if ![isnum -integer $1] { error "\[FACTORS\] I need an integer, not: $1" }
 
-
-
 	zero neg
-
 	if [left $1 1 -] { one neg ; set 1 [mid $1 2] }
 
-
-
 	empty f
-
 	set s [expr $1 / 2] ; # set s [sqr $1]
-
 	for { set loop 2 } { $loop <= $s } { incr loop } {
-
 		if { [lsearch -exact $f $loop] != -1 } continue
-
 		set d [normalize [expr $1 / ${loop}.0]]
-
 		if [isnum -integer $d] { lappend f $loop $d }
-
 	}
-
 	set f [lsort -int -inc $f]
-
 	if [validflag -prime] {
-
 		empty t
-
 		foreach a $f { if [isprime $a] { lappend t $a } }
-
 		set f $t
-
 	}
-
 	if [validflag -square] {
-
 		empty t
-
 		foreach a $f { if [issquare $a] { lappend t $a } }
-
 		set f $t
-
 	}
-
-
 
 	if [validflag -all] { lappend f 1 $1 } ; # Must precede $NEG check
-
 	if $neg { foreach a $f { lappend f -$a } }
-
 	set f [lsort -unique -real -increasing $f]
-
 	return $f
-
 }
 
 proc isprime { number } {
-
 	if ![regexp -- {^[\+\-]?\d+$} $number] { error "\"${number}\" is not an integer: ISPRIME <integer>" }
-
 	if { $number < 2 } { return 0 }
-
 	float number
 
-
-
 	set half [ expr ( $number / 2 ) ]
-
 	int half
-
 	incr half; # These lines needed to evade "integer too large" error.
 
-
-
 	one list
-
 	for {set i 2} {$i < $half} {incr i} {
-
 		if { ( $number / $i ) == int( $number / $i ) } { lappend list $i }
-
 	}
-
 	int number
-
 	lappend list $number
-
 	string eq -n "1 ${number}" $list
-
 }
 
 proc issquare number {
@@ -3546,11 +3472,12 @@ proc issquare number {
 	regexp -- {^(\+\-)?\d+$} $s
 }
 
-proc sqr { value } { normalize [expr pow( $value , 0.5 )] }
+proc sqr { value } { normalize [ expr pow( $value , 0.5 ) ] }
 
 # --- User information ---
 
 proc alias args {
+	#%#
 	flags:simple $args [list] text flags
 	lassign $text cmd 1 2 3 4 5
 	switch -exact -- [string tolower $cmd] {
@@ -4332,7 +4259,10 @@ proc print args {
 	set validflags [list -none -strip -mute -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
 	# -DUMMY is for a variable to hold a "-private" or "-dummy" flag (based on need) within a variable
 	flags -simple $args $validflags text flags
+
+	# Should we allow -DEBUG to survive -NONE? Hmmmmm.....
 	if [validflag -none] { empty flags } ; # For use with NOTE and others that need to swap "-private" with "-none"
+
 	set debug [validflag -debug]
 	if [validflag -raw] { set flags [ldestroy -all -replacewith -- $flags -raw -burst] }; # Synonym
 	if [validflag -noraw] { set flags [ldestroy -all -replacewith -- $flags -noraw -noburst] }; # Synonym
@@ -4340,6 +4270,9 @@ proc print args {
 if $debug { debug =-1 target message }
 	empty open close
 	set tab 5
+
+	if [string eq ! $target] { upvar 1 nick _tempnick ; if [info exists _tempnick] { if $debug { debug "=TARGET(${target}) -> $_tempnick" ; set target $_tempnick } } }
+	if [string eq # $target] { upvar 1 chan _tempnick ; if [info exists _tempnick] { if $debug { debug "=TARGET(${target}) -> $_tempnick" ; set target $_tempnick } } }
 
 	if [validflag -home] {
 		# Abandon the previous $MESSAGE value
@@ -5292,7 +5225,7 @@ proc longip { a } {
 }
 
 proc convert { number { from 10 } { to 10 } } {
-	# OK to use NORMALIZE (as long as there's no flag-based base convertion)
+	# OK to use NORMALIZE (as long as there's no flag-based base conversion)
 	set string "0123456789abcdefghijklmnopqrstuvwxyz"
 	#Not yet! - if ![isnum -integer $from] { error "\[CONVERT\] Illegal base: $from" }
 	if ![isnum -integer $to] { error "\[CONVERT\] Illegal base: $to" }
@@ -5865,6 +5798,8 @@ proc is { cmd args } {
 			return [is within $value $bottom $top]
 		}
 
+		boolean { return [ expr ( [lsearch -exact [list 0 1 no yes off on false true] [string tolower [lindex [split $args] 0]]] == -1 ) ? 0 : 1 ] }
+
 		default {
 			putcmdlog "\00301,00\[IS\] Unknown values: CMD($cmd):ARGS($args)\003"
 			error "\[IS\] Unknown command value for IS: $cmd (see command log)"
@@ -6046,7 +5981,7 @@ proc debug args {
 	return $o ; # -QUIET may be used just to get this RETURN value
 }
 
-proc procdef proc {
+proc procdef { proc { tab2space 5 } } {
 	set alias [interp alias {} $proc]
 	if ![string eq "" $alias] { return "interp alias {} $proc {} $alias" }
 	if [string eq "" [info procs $proc]] { error "\[DEFPROC\] No such PROC: $proc"  }
@@ -6055,7 +5990,9 @@ proc procdef proc {
 		set def [info default $proc $arg a]
 		if $def { lappend args " $arg \"${a}\" " } { lappend args $arg }
 	}
-	return "proc $proc \{ $args \} \{[info body $proc]\}"
+	set body [info body $proc]
+	if $tab2space { regsub -all -- \t $body [string repeat " " $tab2space] body }
+	return "proc $proc \{ $args \} \{${body}\}"
 }
 
 proc findinprocs text {
@@ -7011,6 +6948,7 @@ proc @version { nick host handle chan arg } {
 }
 
 #####
+# We're done!
 
-putlog "\[StormBot.TCL\] StormBot.TCL v[data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
+putlog "\[StormBot.TCL\] Version [data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
 

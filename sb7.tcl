@@ -132,6 +132,20 @@ set sb7(config:shortcut:all)    ""
 set sb7(config:shortcut:global) "***"
 set sb7(config:shortcut:owner)  ""
 
+##### Optional: Version Binds
+# Set this to determine if special binds should be automatically added to SB7
+# that represent version numbers: Eggdrop, TCL,  &  Stormbot.TCL.  These  are
+# useful for those who run bot services and need to control  groups  of  bots
+# based on their versions.
+#
+# Eggdrop binds (example: 1.6.21): *E1* *E6* *E16* *E621* *E1621*
+# TCL binds (example: 8.5.11): *T8* *T5*, *T85*, *T511*, *T8511*
+# StormBot.TCL binds (example 7.0.1): *SB7*
+#
+# Options: boolean
+
+set sb7(config:shortcut:version) true
+
 ##### Required: Output
 # Set this to the default type of output for each user (each  user  can  then
 # select an individual output type via the SET  command).  The  original  IRC
@@ -200,8 +214,8 @@ set sb7(config:bind:not) true ; # false
 # Options (GMT): (-14.00 ~ +14.00)
 # Options (TZ) : (any valid text, such as "PST")
 
-set sb7(config:gmt) ""
-set sb7(config:tz) ""
+set sb7(config:gmt) "-0800"
+set sb7(config:tz) "PST"
 
 ##### Required: HOME (valid channel name)
 # Set this variable to the channel that will be your "home" for your bot. For
@@ -214,7 +228,7 @@ set sb7(config:tz) ""
 #
 # Options: (any valid channel name), or "" (blank)
 
-set sb7(config:home) ""
+set sb7(config:home) "#Home"
 
 ##### Optional: GROUP
 # If this bot belongs to an organization / bot-loaning  group,  you  can  set
@@ -250,14 +264,20 @@ set sb7(config:give_p) 0
 # converted to scientific notation (e.g. 1.70141183E+38).
 #
 # Please note: using the maximum value  of  "17"  will  cause  IEEE  rounding 
-# errors (a value of 2 will become "1.9999999999999999" in some  calculations
-# instead). It's not recommended to use this value; use "16" instead.
+# errors (a value of 0.1 will become "0.09999999999999" in some  calculations
+# instead). It's not recommended to use 17; use "16" instead.
 
 # Additional note: in TCL 8.6, a TIP is active to allow a new value "0" which
 # will allow TCL to use whatever precision necessary to  internally  preserve
 # perfect accuracy. As of this date (1364253709), I am unsure of its  status.
 # For now, TCL defaults to "12" but I recommend "16"  instead.  This  can  be
-# changed via the CONFIG command.
+# changed via the CONFIG command. Additionally, TCL 8.5, and  above,  have  a
+# special ability to do: (1) 64-bit math, even on 32-bit systems,  &  (2)  do
+# all integer math using "arbitrary-precision" (there are no  retrictions  as
+# how large of a number the system can manipulate). As long as you keep  with
+# integers,  you  can  produce  obscenely  large  numbers.  The  instant  you
+# introduce a floating-point number  (decimal  or  scientific-notation),  you
+# lose this ability; the normal rules of TCL's EXPR math are applied.
 #
 # Options: (integer: 0 , or , 1 ~ 17)
 

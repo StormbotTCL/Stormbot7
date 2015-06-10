@@ -1,7 +1,22 @@
-# StormBot.TCL 7 version Changelog -- 2015-05-16 07:09:21 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-06-10 03:48:50 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-06-08 01:58:00 UTC: #502 [config] Added CONFIG BINDVER (to correlate with the changes to SB7:SETUP -- CHANGELOG #501
+2015-06-08 01:49:57 UTC: #501 [core & tail] Fixed SB7:SETUP (added an option in SB7.TCL to automatically bind version numbers to the dispatcher (CONFIG will be patched in the future))
+2015-06-08 01:44:58 UTC: #500 [tail] Fixed IS (added IS BOOLEAN)
+2015-06-08 00:56:07 UTC: #499 [tail] Fixed PERCENT (if $NUMBER == 0, result is automatically 0%. Only had checked $TOTAL (which, if you think about it, is weird))
+2015-06-08 00:47:16 UTC: #498 [tail] Fixed LCANCEL (cosmetic: typo in comment)
+2015-06-08 00:36:21 UTC: #497 [tail] Fixed ISNUM (cosmetic: tweaking various places where symbols represent different base systems. Still pending: will -BINARY allow %100101.11 to survive? What if you combine -REAL with -BINARY?)
+2015-06-07 23:52:08 UTC: #496 [tail] Fixed SB7:CHECK_DATA_COMMAND_INTEGRITY (cosmetic: swap output order of $MESSAGE)
+2015-05-31 07:43:41 UTC: #495 [tail] Fixed PROCDEF (cosmetic re: tabs)
+2015-05-31 07:43:31 UTC: #494 [maintenance] Fixed MAINTENANCE LOAD (added a few aliases to deal with common typoes)
+2015-05-26 06:56:34 UTC: #493 [myip] Added MYIP (shows what IP is being seen by the outside world (WAN))
+2015-05-26 06:56:06 UTC: #492 [myip] Added MYIP to core & zenkai distros
+2015-05-26 05:14:18 UTC: #491 [tail] Added LIST:UNPACK (minimal way to shorten lists with repeated sequences)
+2015-05-26 04:03:33 UTC: #490 [tail] Fixed LPREPEND (changed to allow multiple args to be prepended, similar to LAPPEND, cf. TCL docs info for EVAL)
+2015-05-18 11:13:37 UTC: #489 [tail] Fixed PRINT (added a shortcut: if ''!'' is used for a PRINT target, search back and substitute $NICK; if ''#'' then use $CHAN instead)
+2015-05-17 09:04:31 UTC: #488 [tail] Added SPLIT_BY_BASE (splits a number with spaces depending on the base of the number system)
 2015-05-11 09:39:25 UTC: #487 [debug] Fixed DEBUG INFO (cosmetic: ''requested by'' now has '':'' separator for host / channel)
 2015-05-11 09:20:39 UTC: #486 [tail] Fixed SB7:RAW:MODE (when polarity was missing, it used to complain via console. Now, instead, presume the IRCd is replying ''current'' modes (which may not have a ''+'' in front of it), so: assume ''+'' and carry-on normally. TRAC #5, long un-resolved.)
 2015-05-11 09:00:53 UTC: #485 [tail] Fixed TAIL (dummy PROC needed for SB7:BIND:KICK (I haven't written anything for it yet))
