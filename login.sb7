@@ -102,7 +102,9 @@ proc @login { nick host handle - arg } {
 	append congratulations " successful" ; # Space!
 
 	print -private -raw -short $nick $congratulations
-	print -home "\[${congratulations2}[iff [notempty congratulations3] " + ${congratulations3}"]\] $nick ($host)[iff ![string eq -nocase $handle $target] " \[mask-matching: [effects $handle u b]\]"] as $target" ; # Spaces!
+	# The IFF section displays what the user matches, in case they're trying to LOGIN as someone other than who the bot thinks s/he is
+	# Unknown user = "*"
+	print -home "\[${congratulations2}[iff [notempty congratulations3] " + ${congratulations3}"]\] $nick ($host)[iff ![string eq -nocase $handle $target] [iff [string eq * $handle] "\[not matching any known users\]" " \[mask-matching: [effects $handle u b]\]"]] as $target" ; # Spaces!
 
 	set me [access compare $target]
 	foreach op [list invite voice halfop op level prot own] {

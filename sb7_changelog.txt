@@ -1,7 +1,10 @@
-# StormBot.TCL 7 version Changelog -- 2015-06-10 03:48:50 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-06-18 11:47:48 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-06-17 12:43:04 UTC: #505 [login] Fixed LOGIN (when a user matches a different user than the person is logging-in as [or just doesn't match anyone at all], say so in the ''congratulations'' message shown to the home channel)
+2015-06-15 09:05:51 UTC: #504 [tail] Fixed DEBUG (cosmetic: reverted output style for arrays: ARRAYNAME[](list of elements & values), matching SB6)
+2015-06-15 09:01:20 UTC: #503 [tail] Fixed DEBUG (arrays are now sorted by element by -DICTIONARY -INCREASING, something I should have done long ago)
 2015-06-08 01:58:00 UTC: #502 [config] Added CONFIG BINDVER (to correlate with the changes to SB7:SETUP -- CHANGELOG #501
 2015-06-08 01:49:57 UTC: #501 [core & tail] Fixed SB7:SETUP (added an option in SB7.TCL to automatically bind version numbers to the dispatcher (CONFIG will be patched in the future))
 2015-06-08 01:44:58 UTC: #500 [tail] Fixed IS (added IS BOOLEAN)
@@ -251,7 +254,7 @@
 2014-10-08 14:28:14 UTC: #256 [ban] Added BAN, EXEMPT, & INVEX (and counterparts: UNBAN, BANLIST, UNEXEMPT, EXEMPTLIST, UNINVEX, & INVEXLIST. Only BAN is coded; all the others are -REDIRECTs into BAN (which handles them all))
 2014-10-08 14:28:13 UTC: #255 [tail] Fixed TIME GET (when no valid clock data was found, $TIME was left unset)
 2014-10-08 14:28:12 UTC: #254 [tail] Fixed GET TIME (when no valid clock data was found, $TIME was left unset)
-2014-10-08 14:28:10 UTC: #253 [tail] Fixed SB7:DISPATCH (targetting an illegal channel was being overridden with the last-successful-channel command target. This was originally done for output reasons but that messed-up the check for illegal command target channels (if we ignore -INVALID:OK))
+2014-10-08 14:28:09 UTC: #253 [core] Deleted entry (duplicate of CHANGELOG #252). Keeping this in place so the numbering continues to match TRAC entry numbers
 2014-10-08 14:28:09 UTC: #252 [tail] Fixed SB7:DISPATCH (targetting an illegal channel was being overridden with the last-successful-channel command target. This was originally done for output reasons but that messed-up the check for illegal command target channels (if we ignore -INVALID:OK))
 2014-10-08 14:28:08 UTC: #251 [tail] Fixed DATA SAVE (sort data member names)
 2014-10-08 14:28:06 UTC: #250 [tail] Fixed NONE (cosmetic: easier to rad by separating lines)

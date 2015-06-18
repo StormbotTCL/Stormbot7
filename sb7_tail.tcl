@@ -5943,9 +5943,11 @@ proc debug args {
 			upvar 1 $arg local
 			if [info exists local] {
 				if [array exists local] {
-					#append arg \[\]
+					append arg \[\]
 					one isarray
-					set v [array get local]
+					#set v [array get local]
+					set v [list]
+					foreach _loop [lsort -increasing -dictionary [array names local]] { lappend v $_loop $local($_loop) }
 				} {
 					set v $local
 				}
@@ -5957,7 +5959,7 @@ proc debug args {
 		}
 		if [notempty o] { append o : }
 		if [info exists v] {
-			if $isarray { set data "\[${v}\]" } { set data "(${v})" }
+			if $isarray { set data "(${v})" } { set data "(${v})" }
 		} {
 			empty data
 		}
