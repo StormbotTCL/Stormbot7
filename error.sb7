@@ -1,0 +1,12 @@
+sb7 command add ERROR 0 -none ERR
+
+proc @error { nick host handle chan arg } {
+	if [string eq -nocase HELP $arg] {
+		print -help $nick "\[ERROR\]:"
+		print -help $nick "Syntax: $::botnick ERROR"
+		print -help $nick "All the ERROR command does is raise an intentional exception so you can review the debug data manually. Otherwise, debug data only appears when an error occurs."
+		return
+	}
+	error "Intentional error"
+}
+

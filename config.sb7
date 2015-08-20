@@ -3,7 +3,7 @@ sb7 command add CONFIG 501 -chanspec CF CFG
 sb7 register global [concat [data array value @CONFIG global] [data array value @CONFIG chan]]
 
 proc @config { nick host handle chan arg } {
-	set valid_global [list mute color burst pubcmd group rank shortcut debug binds chon backup access cservice bindver]
+	set valid_global [list mute color burst pubcmd group rank shortcut debug binds chon backup access cservice bindver debuglevel format:time]
 	set valid_chan   [list mute color]
 	set valid_abbr   [list shortcut sc binds bind pubcmd pc]
 
@@ -27,10 +27,10 @@ proc @config { nick host handle chan arg } {
 
 	# File each option by type: this will commonize syntax checking
 	array set types    [list]
-	set types(integer) [list]
+	set types(integer) [list debuglevel]
 	set types(boolean) [list mute rank bindver]
 	set types(channel) [list home]
-	set types(text)    [list group backup access cservice]
+	set types(text)    [list group backup access cservice format:time]
 	set types(custom)  [list pubcmd shortcut burst color debug chon]
 	# Custom: Debug(chan), color("",block), shortcut(local,global,owner), burst(allow,all)
 
@@ -115,6 +115,22 @@ proc @config { nick host handle chan arg } {
 				print $nick "[format %${max}s $a]: [none $data <none>]"
 			}
 			return 0
+		}
+
+		date - time - datetime - timestamp - timeformat - ts - tf - format - format:time - formattime {
+			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] FORMAT:TIME: [data get -normalize $base format:time]" }
+			set value $2e
+			data set $base format:time $value
+			saveme data
+			print -return $nick "\[CONFIG\] Updated setting: FORMAT:TIME (${value})"
+		}
+
+		dl - debug - debuglevel {
+			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -normalize $base bind:version]" }
+			set value $2
+			data set $base debuglevel $value
+			saveme data
+			print -return $nick "\[CONFIG\] Updated setting: $1u (${value})"
 		}
 
 		bindver - ver - version {

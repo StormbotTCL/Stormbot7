@@ -1,0 +1,27 @@
+sb7 command add modekill  50 -chanspec mk
+
+proc @modekill {nick host handle chan arg} {
+	FLAGS
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[MODEKILL\]"
+		print -help $nick "Syntax: $::botnick MODEKILL HELP"
+		print -help $nick "Syntax: $::botnick MODEKILL \[list of nicks\]"
+		print -help $nick "MODEKILL will remove all chanop flags from you (-qaohv, which ever are permitted by the server)."
+		return 0
+	}
+
+	empty ok bad
+	foreach user [none $1e me] {
+		lassign:array modekill [whois $user $handle] - nick - handle
+		if [access compare -self:ok $handle $modekill(handle) $chan] { 
+			lappend ok $user
+			raw "MODE $chan -vhoaq $modekill(nick) $modekill(nick) $modekill(nick) $modekill(nick) $modekill(nick)" 
+		} {
+			lappend bad $user
+		}
+	}
+	if [notempty ok] { print -short $nick "Successful: [ajl -unique $ok]" }
+	if [notempty bad] { print -short $nick "Failed (insufficient access): [ajl -unique $bad]" }
+	return
+}
+

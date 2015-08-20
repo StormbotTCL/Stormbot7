@@ -487,6 +487,10 @@ proc sb7 { args } { # General
 	}
 }
 
+##############
+# DISPATCHER #
+##############
+
 # Can NOT be put into SB7 command due to the PUB / MSG / DCC / PUBM BINDs.
 proc sb7:dispatch { nick host handle chan arg } {
 	# Set execution time
@@ -672,8 +676,6 @@ proc sb7:dispatch { nick host handle chan arg } {
 		}
 	}
 
-	data set @LASTBIND
-
 #putlog [effects DISPATCH:21 11,12 bold]
 	# If authcmd, obfuscate $ARG
 	if { [lsearch -exact $cmdinfo(flags) -authcmd] != -1 } { set arg "$cmd <password redacted>" }
@@ -700,7 +702,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	}
 
 	# Account for normal RETURN codes of "" "0" & "1" (not really an error)
-	if $error { if [info exists uh_oh] { if { [lsearch -exact [list {} 0 1] $uh_oh] != -1 } { zero error } } }
+	if $error { if [info exists uh_oh] { if { [lsearch -exact [list "" 0 1] $uh_oh] != -1 } { zero error } } }
 
 	#####
 	# Do NOT exit the dispatcher prematurely: output overrides need to be
@@ -710,8 +712,12 @@ proc sb7:dispatch { nick host handle chan arg } {
 #putlog [effects DISPATCH:24 11,12 bold]
 	if $error {
 #putlog [effects DISPATCH:24.1 11,12 bold]:ERROR($error):UH_OH($uh_oh)
-		set debuglevel [data array value -normalize CONFIG DEBUGLEVEL]
+		#set debuglevel [data array value -normalize CONFIG DEBUGLEVEL]
+		set debuglevel [data array value CONFIG DEBUGLEVEL]
+		if [isempty debuglevel] { set debuglevel 2 }
 #putlog [effects DISPATCH:24.2:DEBUGLEVEL($debuglevel) 11,12 bold]
+
+		# Force timestamps to GMT
 		switch -exact -- $debuglevel {
 
 			0 {
@@ -721,7 +727,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 			1 {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
 				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) AUTHCMD] == -1} $original "<password blocked>"]"
-				print $nick "Time: [clock format $time(0) -format [data array value -default CONFIG FORMAT %c]] Length: $time(3)"
+				print $nick "Time: [clock format $time(0) -format [data array value -default CONFIG format:time %c]]-0000 Elapsed: $time(3)"
 				print $nick "Error message: $uh_oh"
 			}
 
@@ -729,22 +735,28 @@ proc sb7:dispatch { nick host handle chan arg } {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
 				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) AUTHCMD] == -1} $original "<password blocked>"]"
 				print $nick "Error message: $uh_oh"
-				print $nick "Time:[clock format $time(0) -format %Y%m%d%H%M%S] Length:$time(3)"
+				print $nick "Time/Stamp: $time(0) Time/Local:[clock format $time(0) -format %Y%m%d-%H%M%S%z] Time/Zulu:[clock format $time(0) -format %Y%m%d-%H%M%S -gmt true]-0000 Elapsed:$time(3)"
 				print $nick "Please include the following debug information when reporting this bug (the coder will need all these details):"
-				print $nick "SBV:[data get @VERSION] WWW:[data get @DISTRO] N:${::nick} BN:${::botnet-nick} AN:${::alt-nick} BH:[nick2hand $::botnick $chan] C:$chan EDV:[lindex $::version 0] NL:${::nick-len} HL:$::handlen TCLV:[info patchlevel] OS:$::tcl_platform(os) OSPLAT:$::tcl_platform(platform) OSV:$::tcl_platform(osVersion) OSBO:$::tcl_platform(byteOrder) OSTH:$::tcl_platform(threaded) OSM:$::tcl_platform(machine) OSWS:$::tcl_platform(wordSize) OSU:$::tcl_platform(user) LIB:$::tcl_library PWD:[pwd]"
-				print $nick "NH:${nick}!$host H:$handle SC:$::server BO:[getopsymbol $nick $chan] AUTHED:[noyes [is authed $handle $nick $host]] ACCESS:[SB:accesslevel $handle]/[SB:accesslevel $handle $chan]"
-				print $nick "LT:$::lasttrigger LB:$::lastbind CSL:[sb7:issuspended cmd $cmd $chan] CSG:[sb7:issuspended cmd $cmd] USL:[sb7:issuspended user $handle $chan] USG:[sb7:issuspended user $handle]"
-				print $nick "CIL:$cmdinfo(level) CIF:[join $cmdinfo(flags) ,] CIF:[join $cmdinfo(flags) ,] CIE:[join $cmdinfo(extra) ,]"
+				set tag_threaded ""
+				if [info exists ::tcl_platform(threaded)] { set tag_threaded " OSTH:$::tcl_platform(threaded)" }
+				print $nick "SBV:[data array get @VERSION stormbot] SBT:[data array get @VERSION timestamp] SBTH:[clock format [data array get @VERSION timestamp] -format [data array value -default CONFIG format:time %c] -gmt true] -0000 SBD:[data array get @VERSION distro] N:${::nick} BN:${::botnet-nick} AN:${::altnick} BH:[nick2hand $::botnick $chan] C:$chan EDV:[lindex $::version 0] NL:${::nick-len} HL:$::handlen TCLV:[info patchlevel] OS:$::tcl_platform(os) OSP:$::tcl_platform(platform) OSV:$::tcl_platform(osVersion) OSBO:$::tcl_platform(byteOrder)${tag_threaded} OSM:$::tcl_platform(machine) OSWS:$::tcl_platform(wordSize) OSU:$::tcl_platform(user) LIB:$::tcl_library PWD:[pwd]"
+				print $nick "NH:${nick}!${host}\$$handle SC:$::server BO:[get opsymbol $nick $chan] AUTHED:[noyes [is authed $handle $nick $host]] OAUTHED:[noyes [is oauthed $handle $nick $host]] ACCESS:[access $handle]/[access $handle $chan]"
+				print $nick "LB:$::lastbind LB/SB:[data get -default @LASTBIND PUB] CSL:[is suspended cmd $cmd $chan] CSG:[is suspended cmd $cmd] USL:[is suspended user $handle $chan] USG:[is suspended user $handle]"
+				#print $nick "CIL:$cmdinfo(level) CIF:[join $cmdinfo(flags) ,] CIF:[join $cmdinfo(flags) ,] CIE:[join $cmdinfo(extra) ,]"
+				set debug_cmdinfo [list]
+				foreach a [lsort -inc -uni -dict [array names cmdinfo]] { lappend debug_cmdinfo "CMDINFO/[string toupper $a]:$cmdinfo($a)" }
+				print $nick "[join $debug_cmdinfo]"
 			}
 
 			default {
-				# Do NOT exit the dispatcher here; need to clear the outptu overrides first!
+				# Do NOT exit the dispatcher here; need to clear the output overrides first!
 				print -help -error $nick "\[DISPATCH\] Unknown DEBUGLEVEL value: $debuglevel"
 			}
 
 		}
 #putlog [effects DISPATCH:24.3 11,12 bold]
 	}
+	data set @LASTBIND
 	data array set @OUTPUT:OVERRIDE $nick
 
 #putlog [effects DISPATCH:30 11,12 bold]
@@ -2047,6 +2059,10 @@ proc unescape text {
 	return $text
 }
 
+proc escape:unicode string { subst [string map {\n {\\u000a}} [regsub -all {[][{};#\\\$ \r\t\u0000-\u001F\u0080-\uFFFF]} $string {[format \\\\u%04x [scan "\\&" %c]]}]] }
+
+proc unescape:unicode string { subst $string }
+
 proc null args return ; # (:
 
 proc space { { count 1 } } { string repeat " " $count }
@@ -2132,8 +2148,8 @@ proc comma value { regsub -all {\d(?=(\d{3})+($|\.))} $value {\0,} }
 proc nocomma { number { comma , } } { regsub -all -nocase -- $comma $number "" }
 proc iscomma { number { comma , } } { string match -nocase *${comma}* $number }
 
-proc split_by_base { number { base 0 } { integer 0 } { mantissa 0 } } {
-	proc split_by_base_reverse text { set split_by_base_reverse "" ; foreach letter [split $text ""] { set split_by_base_reverse "${letter}$split_by_base_reverse" } ; return $split_by_base_reverse }
+proc split:base { number { base 0 } { integer 0 } { mantissa 0 } } {
+	proc split:base_reverse text { set split_by_base_reverse "" ; foreach letter [split $text ""] { set split_by_base_reverse "${letter}$split_by_base_reverse" } ; return $split_by_base_reverse }
 	if [string match *.*.* $number] { error "\[SPLIT_BY_BASE\] Illegal number: \"${number}\"" }
 	regexp -nocase -- {^([^\d]*)} $number - header
 	set number [string range $number [string length $header] end]
@@ -2144,7 +2160,7 @@ proc split_by_base { number { base 0 } { integer 0 } { mantissa 0 } } {
 	if !$mantissa { set mantissa $integer }
 	if !$mantissa2 { set mantissa2 $mantissa }
 	lassign [split $number .] _int _man
-	if ![string eq "" $_int] { set _int [split_by_base_reverse $_int] ; set _int [split_by_base_reverse [regexp -all -inline -- ".\{1,${integer}\}" $_int]] }
+	if ![string eq "" $_int] { set _int [split:base_reverse $_int] ; set _int [split:base_reverse [regexp -all -inline -- ".\{1,${integer}\}" $_int]] }
 	if ![string eq "" $_man] { set _man [concat [regexp -inline -- ".\{1,${mantissa2}\}" $_man] [regexp -all -inline -start $mantissa2 -- ".\{1,${mantissa}\}" $_man]] }
 	return ${header}[join [list $_int $_man] .]
 }
@@ -2349,20 +2365,25 @@ proc mid args {
 	if [string match -nocase e* $b] { set b [len $a] }; # "End"
 	if [string match -nocase e* $c] { set c [len $a] }; # "End"
 	int b c; # Some procs might pass a floating-point. STRING RANGE will choke.
-	if ![regexp -- {^\d+$} $b] {return ""}
+	if ![regexp -- {^[\d,]+$} $b] {return ""}
 	if ![regexp -- {^[\+\-]?\d+$} $c] {return ""}
-	if !$b return
 	if !$c return
-	incr b -1; # Counter offset [INDEX vs position]
-	set mid [left [string range $a $b end] $c]
-	if [isempty args] { return $mid }
-	empty flags
-	while { [lsearch -glob [string tolower [lindex [split $args] 0]] -n*] != -1 } {
-		lappend flags [lindex [split $args] 0]
-		set args [lreplace $args 0 0]
+	set final [list]
+	set s [split $b ,]
+	foreach b $s {
+		if !$b return
+		incr b -1; # Counter offset [INDEX vs position]
+		set mid [left [string range $a $b end] $c]
+		if [isempty args] { lappend final $mid ; continue ; #return $mid }
+		empty flags
+		while { [lsearch -glob [string tolower [lindex [split $args] 0]] -n*] != -1 } {
+			lappend flags [lindex [split $args] 0]
+			set args [lreplace $args 0 0]
+		}
+		set flags [uniquematch -nocase $flags]
 	}
-	set flags [uniquematch -nocase $flags]
 	lassign $args d
+	if [isempty d] { if { [llength $s] == 1 } { return [lindex $final 0] } { return $final } }
 	if [validflag -nocase] { string eq -nocase $mid $d } { string eq $mid $d }
 }
 
@@ -2379,6 +2400,23 @@ proc instrrev { text value { start "" } } {
 	decr start
 	set instr [string last $value $text $start]
 	incr instr
+}
+
+proc instr:all args { # text find_me { start 1 }
+	flags:simple $args -nocase data flags
+	lassign $data text find_me start
+	if ![isnum -integer $start] { set start 1 }
+	if [validflag -nocase] { set text [stl $text] ; set find_me [stl $find_me] }
+	set list [list]
+	incr start -1
+	while 1 {
+		set first [string first $find_me $text $start]
+		if { $first == -1 } break
+		incr first
+		lappend list $first
+		set start $first
+	}
+	return $list
 }
 
 proc len text { string length $text }
@@ -4254,6 +4292,17 @@ proc rawhome text { rawprint "PRIVMSG [home] :$text" ; return }
 proc printctcp { nick ctcp { message "" } } { print -ctcp -strip $nick "\001[string toupper $ctcp] ${message}\001" }
 proc printctcr { nick ctcp { message "" } } { print -ctcr -strip $nick "\001[string toupper $ctcp] ${message}\001" }
 
+proc print:ident { list { spacing 3 } { space " " } } {
+	set print [list]
+	set indent -1
+	foreach line $list {
+		incr indent
+		set new "[string repeat $space [ expr $indent * $spacing ]]$line"
+		lappend print $new
+	}
+	return $print
+}
+
 # All-inclusive PRINT command (including line-splitting)
 proc print args {
 	set validflags [list -none -strip -mute -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
@@ -4960,6 +5009,20 @@ proc stack:trace args {
 	if [isnum -integer $args] { set deep $args } { set deep [info level] }
 	empty o
 	for { set x $deep } { $x > 0 } { incr x -1 } { lappend o "\[STACK:TRACE - level #${x}\] [info level $x]" }
+	return $o
+}
+
+proc trace args {
+	# Enter with: TRACE <code> (TCL will perform a round of substitution before arriving)
+	# Enter with: TRACE {<code>} (TCL will not perform substitution; text will arrive exactly as coded)
+
+	# See also: PRINT:IDENT to indent for heirarchy
+	set deep [info level]
+	empty o
+	lappend o "\[TRACE - level #${deep}\] $args"
+	for { set x [ expr $deep - 1 ] } { $x > 0 } { incr x -1 } {
+		lappend o "\[TRACE - level #${x}\] [info level $x]"
+	}
 	return $o
 }
 
@@ -5674,6 +5737,11 @@ proc get { cmd args } {
 proc is { cmd args } {
 	set args [join $args]
 	switch -exact -- [string tolower $cmd] {
+
+		suspended {
+			putlog "\[IS SUSPENDED\] [color 4]Command not complete yet.[color] (ARGS: $args)"
+			return 0
+		}
 
 		path - pathchange { return [regexp -nocase -- {\/|\\} $args] }
 
@@ -6539,7 +6607,8 @@ proc sb7:bind:raw:353 { server code arg } {
 proc sb7:bind:raw:381 { server code arg } {
 	set modes [data array get @usermode Santana]
 	set snomask [data array get @snomask Santana]
-	putlog "\[381\] $::botnick is now: $arg ([none $modes + [data array get @usermode Santana]][none $snomask "" " ($snomask)"])"
+	#putlog "\[381\] $::botnick is now: $arg ([none $modes + [data array get @usermode Santana]][none $snomask "" " ($snomask)"])"
+	putlog "\[381\] $::botnick is [lrange [split $arg] 3 end]: [none $modes + [data array get @usermode Santana]][none $snomask "" " (${snomask})"]"
 	return 0
 }
 

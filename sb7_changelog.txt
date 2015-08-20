@@ -1,7 +1,22 @@
-# StormBot.TCL 7 version Changelog -- 2015-06-18 11:47:48 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-08-17 11:29:33 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-08-17 11:21:47 UTC: #520 [tail] Fixed SB7:DISPATCH (cosmetic: debuglevel 2 error output)
+2015-08-17 11:11:00 UTC: #519 [tail] Fixed SB7:DISPATCH (applied changes from CONFIG -GLOBAL FORMAT:TIME to DEBUGLEVEL 1 & 2 processor)
+2015-08-17 11:10:02 UTC: #518 [config] Added CONFIG -GLOBAL FORMAT:TIME
+2015-08-17 10:56:06 UTC: #517 [tail] Patched IS (put place-holders for SUSPENDED for now)
+2015-08-17 10:35:53 UTC: #516 [tail] Fixed SB7:DISPATCH (debuglevel 2: bad (or new-eggdrop-version-only) variables being reported: alt-nick (altnick), tcl_platform(threaded))
+2015-08-17 10:33:25 UTC: #515 [config & tail] Fixed SB7:DISPATCH & CONFIG (added CONFIG -GLOBAL DEBUGLEVEL to control the verbosity of command error messages; ported from SB6)
+2015-08-17 01:05:16 UTC: #514 [error] Added ERROR (ported from SB6, just triggers an error to force debug information to be displayed. Too bad I haven't written it yet! *Sad face*)
+2015-07-26 00:59:37 UTC: #513 [tail] Added TRACE & PRINT:IDENT (debugging tools I can ask users to implement)
+2015-07-21 01:33:02 UTC: #512 [tail] Updated MID (multiple args now possible, comma-delimited: MID ''This is a sentence.'' 4,5,6 3 -> ''{s i} { is} {is }'' now works. Ported from private TCLs)
+2015-07-21 01:33:01 UTC: #511 [tail] Added INSTR:ALL from private TCLs
+2015-07-07 12:45:26 UTC: #510 [tail] Added [UN]ESCAPE:UNICODE (convert unprintable chars into \uXXXX unicode sequences and back)
+2015-07-07 12:42:27 UTC: #509 [tail] Fixed SPLIT_BY_BASE (renamed to ''SPLIT:BASE'' for simplicity)
+2015-06-21 04:09:24 UTC: #508 [chanset] Fixed CHANSET/CHANINFO (added +STATIC as a value option, added in Eggdrop 1.8)
+2015-06-18 12:56:27 UTC: #507 [modekill] Added MODEKILL (removed all chanop modes from a target user)
+2015-06-18 12:56:16 UTC: #506 [modekill] Added MODEKILL to Zenkai
 2015-06-17 12:43:04 UTC: #505 [login] Fixed LOGIN (when a user matches a different user than the person is logging-in as [or just doesn't match anyone at all], say so in the ''congratulations'' message shown to the home channel)
 2015-06-15 09:05:51 UTC: #504 [tail] Fixed DEBUG (cosmetic: reverted output style for arrays: ARRAYNAME[](list of elements & values), matching SB6)
 2015-06-15 09:01:20 UTC: #503 [tail] Fixed DEBUG (arrays are now sorted by element by -DICTIONARY -INCREASING, something I should have done long ago)

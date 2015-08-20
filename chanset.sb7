@@ -1,6 +1,6 @@
 sb7 command add CHANSET  400 -chanspec CS
 
-data set @chanset:valid [list:tolower [list aop-delay autohalfop autoop autovoice ban-time bitch chanmode cycle dontkickops dynamicbans dynamicexempts dynamicinvites enforcebans exempt-time flood-chan flood-ctcp flood-deop flood-join flood-kick flood-nick greet idle-kick inactive invite-time need-invite need-key need-limit need-op need-unban nodesynch protectfriends protecthalfops protectops revenge revenge-mode revengebot secret seen shared statuslog stopnethack-mode userbans userexempts userinvites]]
+data set @chanset:valid [list:tolower [list aop-delay autohalfop autoop autovoice ban-time bitch chanmode cycle dontkickops dynamicbans dynamicexempts dynamicinvites enforcebans exempt-time flood-chan flood-ctcp flood-deop flood-join flood-kick flood-nick greet idle-kick inactive invite-time need-invite need-key need-limit need-op need-unban nodesynch protectfriends protecthalfops protectops revenge revenge-mode revengebot secret seen shared static statuslog stopnethack-mode userbans userexempts userinvites]]
 
 proc @chanset { nick host handle chan arg } {
 	FLAGS
