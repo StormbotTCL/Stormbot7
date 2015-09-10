@@ -727,21 +727,21 @@ proc sb7:dispatch { nick host handle chan arg } {
 			1 {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
 				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) AUTHCMD] == -1} $original "<password blocked>"]"
-				print $nick "Time: [clock format $time(0) -format [data array value -default CONFIG format:time %c]]-0000 Elapsed: $time(3)"
+				print $nick "Time/Stamp:[clock format $time(0) -format [data array value -default CONFIG format:time %c]]-0000 Time/Elapsed:$time(3)"
 				print $nick "Error message: $uh_oh"
 			}
 
 			2 {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
+				print $nick "$uh_oh"
 				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) AUTHCMD] == -1} $original "<password blocked>"]"
-				print $nick "Error message: $uh_oh"
-				print $nick "Time/Stamp: $time(0) Time/Local:[clock format $time(0) -format %Y%m%d-%H%M%S%z] Time/Zulu:[clock format $time(0) -format %Y%m%d-%H%M%S -gmt true]-0000 Elapsed:$time(3)"
 				print $nick "Please include the following debug information when reporting this bug (the coder will need all these details):"
 				set tag_threaded ""
 				if [info exists ::tcl_platform(threaded)] { set tag_threaded " OSTH:$::tcl_platform(threaded)" }
-				print $nick "SBV:[data array get @VERSION stormbot] SBT:[data array get @VERSION timestamp] SBTH:[clock format [data array get @VERSION timestamp] -format [data array value -default CONFIG format:time %c] -gmt true] -0000 SBD:[data array get @VERSION distro] N:${::nick} BN:${::botnet-nick} AN:${::altnick} BH:[nick2hand $::botnick $chan] C:$chan EDV:[lindex $::version 0] NL:${::nick-len} HL:$::handlen TCLV:[info patchlevel] OS:$::tcl_platform(os) OSP:$::tcl_platform(platform) OSV:$::tcl_platform(osVersion) OSBO:$::tcl_platform(byteOrder)${tag_threaded} OSM:$::tcl_platform(machine) OSWS:$::tcl_platform(wordSize) OSU:$::tcl_platform(user) LIB:$::tcl_library PWD:[pwd]"
+				print $nick "Time/Stamp:$time(0) Time/Local:[clock format $time(0) -format %Y%m%d-%H%M%S%z] Time/Zulu:[clock format $time(0) -format %Y%m%d-%H%M%S -gmt true]-0000 Time/Elapsed:$time(3)"
+				print $nick "SBV:[data array get @VERSION stormbot] SBT:[data array get @VERSION timestamp] SBTH:[clock format [data array get @VERSION timestamp] -format "%Y%m%d-%H%M%S" -gmt true]-0000 SBD:[join [split [data array get @VERSION distro]] _] N:${::nick} BN:${::botnet-nick} AN:${::altnick} BH:[nick2hand $::botnick $chan] C:$chan EDV:[lindex $::version 0] NL:${::nick-len} HL:$::handlen TCLV:[info patchlevel] OS:$::tcl_platform(os) OSP:$::tcl_platform(platform) OSV:$::tcl_platform(osVersion) OSBO:$::tcl_platform(byteOrder)${tag_threaded} OSM:$::tcl_platform(machine) OSWS:$::tcl_platform(wordSize) OSU:$::tcl_platform(user) LIB:$::tcl_library PWD:[pwd]"
 				print $nick "NH:${nick}!${host}\$$handle SC:$::server BO:[get opsymbol $nick $chan] AUTHED:[noyes [is authed $handle $nick $host]] OAUTHED:[noyes [is oauthed $handle $nick $host]] ACCESS:[access $handle]/[access $handle $chan]"
-				print $nick "LB:$::lastbind LB/SB:[data get -default @LASTBIND PUB] CSL:[is suspended cmd $cmd $chan] CSG:[is suspended cmd $cmd] USL:[is suspended user $handle $chan] USG:[is suspended user $handle]"
+				print $nick "LB:$::lastbind LB/SB:[data get -default @LASTBIND PUB] CSL:[boolean -noyes [is suspended cmd $cmd $chan]] CSG:[boolean -noyes [is suspended cmd $cmd]] USL:[boolean -noyes [is suspended user $handle $chan]] USG:[boolean -noyes [is suspended user $handle]]"
 				#print $nick "CIL:$cmdinfo(level) CIF:[join $cmdinfo(flags) ,] CIF:[join $cmdinfo(flags) ,] CIE:[join $cmdinfo(extra) ,]"
 				set debug_cmdinfo [list]
 				foreach a [lsort -inc -uni -dict [array names cmdinfo]] { lappend debug_cmdinfo "CMDINFO/[string toupper $a]:$cmdinfo($a)" }
@@ -3088,13 +3088,19 @@ proc lunique args {
 }
 
 proc list:unpack args {
-	# Unpack lists: 0 1{3} 2 3 4{2} 5 *{1,3} = "0 1 1 1 2 3 4 4 5 1 2 3"
+	# Unpack lists: 0 1{3} 2 3 4{2} 5 *{1,3} *{1,5,2} = "0 1 1 1 2 3 4 4 5 1 2 3 1 3 5"
+	# SCINOT now valid
 	empty new
 	foreach element $args {
-		if [regexp -nocase -- {^(.*)\{(\d+)\}$} $element - text multiple] {
+		if [regexp -nocase -- {^(.*)\{(\d+|[+\-]?\d[\.]?\d*[Ee][+\-]?\d+)\}$} $element - text multiple] {
+			foreach var [list multiple] { set $var [normalize [ expr [ set $var ] ]] }
 			set new [concat $new [lrepeat $text $multiple]]
-		} elseif [regexp -nocase -- {^[*]\{(\d+),(\d+)\}$} $element - range1 range2] {
+		} elseif [regexp -nocase -- {^[*]\{(\d+|[+\-]?\d[\.]?\d*[Ee][+\-]?\d+),(\d+|[+\-]?\d[\.]?\d*[Ee][+\-]?\d+)\}$} $element - range1 range2] {
+			foreach var [list range1 range2] { set $var [normalize [ expr [ set $var ] ]] }
 			for { set x $range1 } { $x <= $range2 } { incr x } { lappend new $x }
+		} elseif [regexp -nocase -- {^[*]\{(\d+|[+\-]?\d[\.]?\d*[Ee][+\-]?\d+),(\d+|[+\-]?\d[\.]?\d*[Ee][+\-]?\d+),(\d+|[+\-]?\d[\.]?\d*[Ee][+\-]?\d+)\}$} $element - range1 range2 step] {
+			foreach var [list range1 range2 step] { set $var [normalize [ expr [ set $var ] ]] }
+			for { set x $range1 } { $x <= $range2 } { incr x $step } { lappend new $x }
 		} {
 			lappend new $element
 		}
@@ -5291,6 +5297,7 @@ proc convert { number { from 10 } { to 10 } } {
 	# OK to use NORMALIZE (as long as there's no flag-based base conversion)
 	set string "0123456789abcdefghijklmnopqrstuvwxyz"
 	#Not yet! - if ![isnum -integer $from] { error "\[CONVERT\] Illegal base: $from" }
+	regexp -- {^([\+\-]?)(.+)$} $number - sign number
 	if ![isnum -integer $to] { error "\[CONVERT\] Illegal base: $to" }
 	if { $number == 0 } { return 0 }
 	set number [string tolower $number]
@@ -5331,7 +5338,7 @@ proc convert { number { from 10 } { to 10 } } {
 #debug =2 $number from to
 
 	# Are we there yet?
-	if { $to == 10 } { return [normalize $total] }
+	if { $to == 10 } { return ${sign}[normalize $total] }
 
 	set h [= int( log($total) / log($to) ) + 1] ; # Will overshoot sometimes
 	empty new
@@ -5352,7 +5359,7 @@ proc convert { number { from 10 } { to 10 } } {
 	if [left $new 1 .] { prepend new 0 }
 	if [instr $new .] { set new [string trimright $new 0] }
 	if [right $new 1 .] { set new [left $new -1] ; # append new 0 }
-	return $new
+	return ${sign}$new
 }
 
 proc hex number { convert $number 10 16 }
@@ -6258,14 +6265,15 @@ proc uniquematch { list matchme } {
 	return ""
 }
 
-proc gmt:format { type gmt } {
-	switch -exact -- [uniquematch [list decimal integer colon] $type] {
+proc gmt:format { type { gmt "" } } {
+	set gmt [lindex [split $gmt] 0]
+	switch -exact -- [uniquematch [list ? help decimal integer colon] $type] {
 
 		? - help { return "[lindex [info level [info level]] 0] <type: integer | decimal> <value>" }
 
 		decimal {
-			if [regexp -- {^[\+\-]?\d{1,2}(\.\d{1,2})?$} $gmt] {return $gmt}
-			if ![regexp -- {^[\+\-]?\d{3,4}$} $gmt] {error "\[SB:GMT_FORMAT\] illegal GMT format: \"${gmt}\" (should be in +\[0\]000 format)"}
+			if [regexp -- {^[\+\-]?\d{1,2}(\.\d{1,2})?$} $gmt] { return $gmt }
+			if ![regexp -- {^[\+\-]?\d{3,4}$} $gmt] {error "\[GMT:FORMAT\] Illegal GMT format: \"${gmt}\" (should be in +\[0\]000 format)"}
 			set sgn [sgn $gmt]   
 			set sign [lindex [list - + +] [incr sgn]]
 			set gmt [addzero [string trimleft $gmt +-] 4]
@@ -6276,7 +6284,7 @@ proc gmt:format { type gmt } {
 
 		colon - integer {
 			if [regexp -- {^[\+\-]?\d{3,4}$} $gmt] {return $gmt}
-			if ![regexp -- {^[\+\-]?\d{1,2}(\.\d{1,2})?$} $gmt] {error "\[SB:GMT_FORMAT\] illegal GMT format: \"${gmt}\" (should be in +00, +00.0, or +00.00 format)"}
+			if ![regexp -- {^[\+\-]?\d{1,2}(\.\d{1,2})?$} $gmt] {error "\[GMT:FORMAT\] Illegal GMT format: \"${gmt}\" (should be in +00, +00.0, or +00.00 format)"}
 			set sgn [sgn $gmt]
 			set sign [lindex [list - + +] [incr sgn]]
 			regsub -- {^[\+\-]} $gmt "" gmt

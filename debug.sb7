@@ -51,6 +51,7 @@ proc @debug { nick host handle chan arg } {
 			}
 
 			if [validflag -all -eggdrop] {
+				print -help $nick "EGGDROP executable: [file normalize [info nameofexecutable]]"
 				print -help $nick "EGGDROP version: [lindex $::version 0], running $::tcl_platform(machine) with $::tcl_platform(os) $::tcl_platform(osVersion) ($::tcl_platform(platform)) \[[info hostname]\] system."
 				print -help $nick "EGGDROP source modules loaded: [ajl [stl [get first [get first [modules]]]]]"
 			}

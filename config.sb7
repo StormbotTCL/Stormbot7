@@ -259,8 +259,8 @@ proc @config { nick host handle chan arg } {
 		sc - shortcut {
 			# Quick clean up of shortcut data ....
 			foreach a [list all global owner] { data array set CONFIG SHORTCUT:$a [lsort -unique -increasing -dictionary [data array value CONFIG SHORTCUT:$a]] }
-			array set bindflags [list all - global vlo owner n]
-			switch -exact -- $2 {
+			array set bindflags [list all - global vlo owner n] ; # -- $BINDFLAGS(global) must match BSERVICE BOTS SHORTCUT AUDIT/$FLAGS_GLOBAL
+			switch -exact -- [string tolower $2] {
 
 				"" - list {
 					print -header $nick "local: [none [lsort -uni -dict -inc [data get -lower $base shortcut:all]] <none>]"
@@ -271,7 +271,7 @@ proc @config { nick host handle chan arg } {
 
 				add {
 					if [string eq "" $3] { print -return -help -short $nick "What shortcut(s) am I adding?" }
-					if ![info exists bindflags($3l)] { print -return -help -header $nick "Unknown level: $3u (valid options: all, global, &, owner)" }
+					if ![info exists bindflags($3l)] { print -return -help -header $nick "Unknown level: $3u (valid options: all, global, & owner)" }
 					foreach a $4e {
 						data array lappend $base shortcut:$3 $a
 						if [data array get -boolean $base bind:pub] { bind pub $bindflags($3l) [string tolower [join $a]] sb7:dispatch }
@@ -309,12 +309,13 @@ proc @config { nick host handle chan arg } {
 					foreach a $3e {
 						foreach bind [binds [escape [join $a] ?*]] {
 							lassign $bind type flags trigger count proc
+							lappend total $trigger
 							unbind $type $flags $trigger $proc
 							incr killed
 						}
 					}
 
-					print -short $nick "Removed binds: $total"
+					print -short $nick "Removed binds: [none $total <none>]"
 					if $killed { print -short $nick "Killed an [iff { $killed > 1 } "[comma $killed] "]additional default [plural bind $killed]." }
 					return
 				}
