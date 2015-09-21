@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/StormbotTCL/Stormbot7.png?label=ready&title=Ready)](https://waffle.io/StormbotTCL/Stormbot7)
 Stormbot7
 =========
 
