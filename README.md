@@ -1,9 +1,12 @@
 [![Gitter chat][gitter-img]][gitter-url]
 [![Stories in Ready][ready-img]][waffle]
 [![Stories in Progress][progress-img]][waffle]
+[![Feature Requests][feat-url]][feature]
 
 [gitter-img]: https://img.shields.io/badge/Gitter-Join%20Chat%20%E2%86%92-1dce73.svg
 [gitter-url]: https://gitter.im/StormbotTCL
+[feat-url]: http://feathub.com/StormbotTCL/Stormbot7?format=svg
+[feature]: http://feathub.com/StormbotTCL/Stormbot7
 [waffle]: https://waffle.io/StormbotTCL/Stormbot7
 [ready-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=ready&title=Ready
 [progress-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=in+progress&title=In+Progress
