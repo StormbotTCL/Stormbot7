@@ -1,0 +1,31 @@
+sb7 command add MYIP 700 -none IP
+
+proc @myip { nick host handle chan arg } {
+	FLAGS
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[MYIP\]:"
+			print -help $nick "Syntax: $::botnick MYIP HELP"
+			print -help $nick "Syntax: $::botnick MYIP \[url\]"
+			print -help $nick ""
+			print -help $nick "The MYIP command connects to an external website to determine what IP is visible to the outside world."
+			return 0
+		}
+
+		default {
+			set url [iff [isempty 1] http://ip.changeip.com $1]
+			lassign [www $url] error html code
+			if $error { print -help $nick "\[MYIP\] Can't detect my IP at: ${url}!" ; return 0 }
+			regexp -nocase -- {^([^\n]+)} $html - ip
+			print -short $nick "I show my current WAN IP as: $ip"
+			print $nick "My internal IP is: [longip [myip]][iff { [longip [myip]] == $ip } " (is a match)"]"
+			foreach var [list my-ip my-hostname nat-ip vhost4 vhost6] {
+				if [info exists ::$var] { print $nick "\$$var: [none [set ::$var] {""}]" }
+			}
+			return 0
+		}
+
+	}
+	return 0
+}
