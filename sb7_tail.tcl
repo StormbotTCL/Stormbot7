@@ -177,16 +177,15 @@ proc sb7 { args } { # General
 		}
 
 		register {
-			if [isempty 2] return
+			if [isempty 1] return
 			set valid [list global user chan block]
-			set match [uniquematch $valid $1]
-
-			switch -exact -- $match {
+			switch -exact -- [string tolower $1] {
 
 				user - global - chan - block {
-					set data [data array value %VARIABLES $match]
+					if [isempty 2] return
+					set data [data array value %VARIABLES $1]
 					set data [lsort -increasing -unique [concat $data [lrange $args 2 end]]]
-					data array set %VARIABLES $match $data
+					data array set %VARIABLES $1 $data
 					return $data
 				}
 
@@ -197,6 +196,14 @@ proc sb7 { args } { # General
 					set data [ldestroy -multiple -all -nocase -nonulls -unique -increasing $data [lrange $arg 3 end]]
 					data array set %VARIABLES $match $data
 					return $data
+				}
+
+				list {
+					set options [data array names %VARIABLES]
+					if [string eq "" $2] { return $options }
+					set um [uniquematch $options $2]
+					if [string eq "" $um] return
+					return [data array get %VARIABLES $um]
 				}
 
 				clear {
@@ -2971,7 +2978,7 @@ if $debug { debug temp_list temp_not }
 
 proc ldestroy args {
 	# Use -COUNT to test number of results (0 = no matches)
-	flags:simple $args [list -debug -count -common -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
+	flags:simple $args [list -debug -count -common -test -all -not -unique -both -increasing -decreasing -nonulls -glob -regexp -exact -nocase -multiple -replacewith -keepnulls] temp flags
 	set debug [validflag -debug]
 	if ![validflag -keepnulls] { lremove flags -keepnulls -nonulls ; lappend flags -nonulls }
  
@@ -2981,21 +2988,21 @@ proc ldestroy args {
 	set match glob ; # Default order (lowest-to-highest: regexp, exact, glob)
 	foreach a [list regexp exact glob] { if [validflag -$a] { set match $a } }
 #debug *
-	set _ $list
-	if [validflag -nocase] { set _ [string tolower $_] ; set total [string tolower $total] }
+	set _ $list ; set _total $total
+	if [validflag -nocase] { set _ [string tolower $_] ; set _total [string tolower $_total] }
  
 	if [validflag -common] {
 		###########
 		# -COMMON #
 		###########
 		empty common fail1 fail2
-		foreach item [lunique [concat $_ $total]] {
+		foreach item [lunique [concat $_ $_total]] {
 			if [validflag -all] {
 				set __1 [lsearch -all -inline -${match} $_ $item]
-				set __2 [lsearch -all -inline -${match} $total $item]
+				set __2 [lsearch -all -inline -${match} $_total $item]
 			} {
 				set __1 [lsearch      -inline -${match} $_ $item]
-				set __2 [lsearch      -inline -${match} $total $item]
+				set __2 [lsearch      -inline -${match} $_total $item]
 			}
 			switch -exact -- [string eq "" $__1][string eq "" $__2] {
 				11 { error "\[LDESTROY -COMMON\] This should not be possible: \"${item}\" doesn't match either list!" }
@@ -3025,10 +3032,27 @@ proc ldestroy args {
 	#####################
 
 	empty temp_list temp_not
+
+	# -TEST first
+	if [validflag -test] {
+debug list _list
+debug total _total
+		array set tests [list 0 "" 1 ""]
+		for { set x 0 } { $x < [llength $total] } { incr x } {
+			set _item [lindex $_total $x]
+			set item [lindex $total $x]
+debug match _ item _item =LSEARCH([lsearch -$match $_ $_item])
+			lappend tests([ expr ( [lsearch -$match $_ $_item] == -1 ) ? 0 : 1 ]) $item
+		}
+debug tests
+		if [validflag -both] { return [list $tests(1) $tests(0)] }
+		if [validflag -not] { return $tests(0) }
+		return $tests(1)
+	}
  
-	# Collect indeces only (to not corrupt case of original list); pick-appart later
+	# Collect indeces only (to not corrupt case of original list); pick-apart later
 	set collected ""
-	foreach item $total {
+	foreach item $_total {
 		if [validflag -all] { set __ [lsearch -all -$match $_ $item] } { set __ [lsearch -$match $_ $item] }
 		set collected [concat $collected $__]
 	}
@@ -3191,7 +3215,7 @@ proc lremove { var args } {
 	return $matches
 }
 
-# Enter with: LCANCEL <LIST> ( list = { +1 +2 +3 -2 -3 -4 +5 +4 -5 +5 cow } --> { +1 +5 cow } )
+# Enter with: LCANCEL <LIST> ( list = { +1 +2 +3 -2 -3 -4 +5 +4 -5 +5 cow } --> { +1 +5 cow } ) ????? Why both +1 and +5?
 proc lcancel args {
 	flags:simple $args [list -cleanup -nocase -replace -annihilate] list flags
 	set list [join $list]
@@ -4311,7 +4335,7 @@ proc print:ident { list { spacing 3 } { space " " } } {
 
 # All-inclusive PRINT command (including line-splitting)
 proc print args {
-	set validflags [list -none -strip -mute -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
+	set validflags [list -tabs -none -strip -mute -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
 	# -DUMMY is for a variable to hold a "-private" or "-dummy" flag (based on need) within a variable
 	flags -simple $args $validflags text flags
 
@@ -4324,7 +4348,9 @@ proc print args {
 	lassign $text target message
 if $debug { debug =-1 target message }
 	empty open close
-	set tab 5
+
+	# What are we doing with tabs?
+	if [validflag -tabs] { set tab \t } { set tab [string repeat " " 5] }
 
 	if [string eq ! $target] { upvar 1 nick _tempnick ; if [info exists _tempnick] { if $debug { debug "=TARGET(${target}) -> $_tempnick" ; set target $_tempnick } } }
 	if [string eq # $target] { upvar 1 chan _tempnick ; if [info exists _tempnick] { if $debug { debug "=TARGET(${target}) -> $_tempnick" ; set target $_tempnick } } }
@@ -4510,7 +4536,7 @@ if $debug { debug =6 flags }
 if $debug { debug =7 flags }
 	# Create the output buffer ....
 	if [isempty message] { set message " " } ; # "Blank" line
-	regsub -all -- \t $message [space $tab] message
+	if ![validflag -tabs] { regsub -all -- \t $message $tab message }
 
 	empty buffer
 	# 1399240763: Tests indicate that the most the test bed's IRCd (UnrealIrcd) can handle is: 490 chars-per-line (including header)
@@ -4519,6 +4545,7 @@ if $debug { debug =7 flags }
 	# What about NOTICE [vs PRIVMSG] (or just sacrifice the single character?)
 	# Reduced to 484 to account for 6-characters color codes ("\00399,99")
 	set limit 475 ; # Let's just be safe (RSS keeps clipping characters if we try to hit the limit exactly)
+	# NOTICE would provide 1 more character (vs PRIVMSG); let's play it safe as use the *longer* one to calculate line length limits
 	set max_length [expr $limit - ([string length $::botname] + 1 + [string length "PRIVMSG $target :"]) ]
 
 	set original $message
@@ -5610,9 +5637,11 @@ proc get { cmd args } {
 
 			if [notempty var_time] { upvar 1 $var_time time }
 			if [notempty var_text] { upvar 1 $var_text text }
+#debug =0 time text
 
 			empty time
 			set _ [lindex $arg 0]
+#debug =1 time text
 
 			# Unix time stamp?
 			if [isnum -integer $_] {
@@ -5620,8 +5649,10 @@ proc get { cmd args } {
 				set text [join [lreplace $arg 0 0]]
 				return $time
 			}
+#debug =2 time text
 
 			set timeval [timeval $_ s]
+#debug =3 time text timeval
 			if [notempty timeval] {
 				set sign -
 				if $flags(-past) { set sign - ; set timeval [expr abs($timeval)] }
@@ -5630,8 +5661,9 @@ proc get { cmd args } {
 				set text [join [lreplace $arg 0 0]]
 				return $time
 			} 
+#debug =4 time text timeval
 
-			# Guess'timates show that a valid timestamp can consist of SIX elements!
+			# Guess'timates show that a valid timestamp can consist of MANY(!) elements!
 			# today
 			# yesterday yesterday yesterday yesterday yesterday 11:00 (5 days ago, at 11:00)
 			# 2014-08-30 17:50:00
@@ -5650,6 +5682,7 @@ proc get { cmd args } {
 				}
 			}
 			if [notempty time] { return $time }
+#debug =9 arg time text
 
 			# Fail (we shouldn't get here any more)
 			set time ""
@@ -6059,6 +6092,17 @@ proc debug args {
 }
 
 proc procdef { proc { tab2space 5 } } {
+debug tab2space
+	if { [lsearch -exact [list tab \t] [string tolower $tab2space]] != -1 } {
+debug =TAB
+		set tab \t
+		set tab2space 0
+	} {
+debug =No\ tab
+		set tab [string repeat " " $tab2space]
+	}
+binary scan $tab H* h
+debug tab h
 	set alias [interp alias {} $proc]
 	if ![string eq "" $alias] { return "interp alias {} $proc {} $alias" }
 	if [string eq "" [info procs $proc]] { error "\[DEFPROC\] No such PROC: $proc"  }
@@ -6068,8 +6112,8 @@ proc procdef { proc { tab2space 5 } } {
 		if $def { lappend args " $arg \"${a}\" " } { lappend args $arg }
 	}
 	set body [info body $proc]
-	if $tab2space { regsub -all -- \t $body [string repeat " " $tab2space] body }
-	return "proc $proc \{ $args \} \{${body}\}"
+	if $tab2space { regsub -all -- \t $body $tab body }
+	return "proc $proc \{ $args \} \{[iff ![instr $body \n] " "][string trim ${body} " "][iff ![instr $body \n] " "]\}"
 }
 
 proc findinprocs text {
@@ -6144,6 +6188,7 @@ proc flags args { # Have to allow several variations in order to unite everythin
 		set blank_0 0
 		lassign $args text array var_text var_flags
 
+		set text [split $text]
 		array set params ""
 		foreach { a b } $array {
 			if ![left $a 1 -] { prepend a - }
@@ -6205,6 +6250,7 @@ proc flags args { # Have to allow several variations in order to unite everythin
 			}
 		}
 
+		set text [join $text]
 		if [notempty var_text] { upvar 1 $var_text local_text ; unset -nocomplain local_text ; set local_text $text }
 		if [notempty var_flags] { upvar 1 $var_flags local_flags ; unset -nocomplain local_flags ; array set local_flags [array get processed] }
 		return [list $text [array get processed]]

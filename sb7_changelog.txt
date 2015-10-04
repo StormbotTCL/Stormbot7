@@ -1,7 +1,25 @@
-# StormBot.TCL 7 version Changelog -- 2015-08-17 11:29:33 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-10-04 19:27:03 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-10-04 14:58:02 UTC: #538 [tail] Upgraded LDESTROY (added -TEST option: respecting -NOT & -BOTH, return which elements properly match into the original list)
+2015-10-03 02:50:54 UTC: #537 [tail] Added SB7 REGISTER LIST [options] (now will return registered data information. Needed to finish transitioning PART (SB6 -> SB7), and, is generally good to have anyway)
+2015-10-03 01:40:10 UTC: #536 [myip] Added MYIP to GIT distribution (wasn't there before for some reason)
+2015-10-02 12:47:03 UTC: #535 [tail] Fixed FLAGS -PARAMS (special characters when processing text vs flags: backslash substitution is being performed, causing loss of the character by the end)
+2015-09-25 05:03:01 UTC: #534 [pastebin] Fixed PASTEBIN (added -BURN option; didn't know it existed until we started dealing with a core bug with the pastebin system itself and we discovered a few things)
+2015-09-25 01:32:23 UTC: #533 [pastebin] Fixed PASTEBIN LIST (forgot PRINT target ($NICK) on the sanity-check error messages)
+2015-09-10 00:10:31 UTC: #532 [distro] Fixed DISTRO CHANGELOG GIT HELP (info was out of date)
+2015-09-08 04:30:28 UTC: #531 [tail] Fixed SB7:DISPATCH (cosmetic: DEBUGLEVEL 2: boolean args for suspended users/commands changed to NO/YES for use with private program)
+2015-09-08 02:01:44 UTC: #530 [tail] Fixed SB7;DISPATCH (cosmetic re: debuglevel 2 output (spaces where they don't belong, so my personal processor program won't miss details))
+2015-09-08 00:58:22 UTC: #529 [tail] Fixed GMT:FORMAT ((1) bad debug statement headers (copied from SB6's SB:GMT_FORMAT), & (2) forced DECIMAL version to truncate any extra garbage; only pay attention to first word: ''-7 PDT'' should only process ''-7'')
+2015-09-08 00:30:23 UTC: #528 [config] Fixed CONFIG SHORTCUT ($2 wasn't being forced to lowercase for comparison; DEL wasn't triggering del (and all others, actually))
+2015-09-07 04:08:23 UTC: #527 [tail] Fixed SB7:DISPATCH (cosmetic: changed the order of error data for DEBUGLEVEL=2 (which applies to the previous two entries as well))
+2015-09-07 04:04:56 UTC: #526 [tail] Fixed SB7:DISPATCH (cosmetic: changed time formats of SBTH & SBD, to keep it consistent with the other fields around them)
+2015-09-07 04:01:33 UTC: #525 [tail] Fixed SB7:DISPATCH (cosmetic: Time/Elapsed instead of just Elapsed, to keep it consistent)
+2015-08-30 09:57:23 UTC: #524 [tail] Fixed CONVERT (wasn't handling negative numbers)
+2015-08-29 08:14:20 UTC: #523 [tail] Upgraded LIST:UNPACK (added two options: range from / range to / step size, &, enabled SCINOT values to be processed for all numeric values)
+2015-08-22 03:12:50 UTC: #522 [debug] Fixed DEBUG (added Eggdrop's executable to -EGGDROP data)
+2015-08-22 01:41:05 UTC: #521 [tail] Fixed SB7:DISPATCH (swapped order of error description & syntax in debuglevel #2)
 2015-08-17 11:21:47 UTC: #520 [tail] Fixed SB7:DISPATCH (cosmetic: debuglevel 2 error output)
 2015-08-17 11:11:00 UTC: #519 [tail] Fixed SB7:DISPATCH (applied changes from CONFIG -GLOBAL FORMAT:TIME to DEBUGLEVEL 1 & 2 processor)
 2015-08-17 11:10:02 UTC: #518 [config] Added CONFIG -GLOBAL FORMAT:TIME
