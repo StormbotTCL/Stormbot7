@@ -13,10 +13,10 @@ proc @pastebin { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick PASTEBIN HELP"
 			print -help $nick "Syntax: $::botnick PASTEBIN GET -show <ID>"
 			print -help $nick "Syntax: $::botnick PASTEBIN LIST <range>"
-			print -help $nick "Syntax: $::botnick PASTEBIN \[-EXPIRE <expiration in minutes>\] <file>"
+			print -help $nick "Syntax: $::botnick PASTEBIN \[-EXPIRE <expiration in minutes | URT>\] \[-BURN (will self-delete when read)\] \[-PRIVATE\] <file>"
 			print -help $nick "Posts a file to the pastebin website, or, reads one."
 			print -help $nick "Acceptable range specifications for LIST: \"1\" \"First 5\" \"Last 7\" \"3-9\""
-			if [data value get -boolean @pastebin error] { print -help $nick "\[JSON\] While I can read the data from the website, I can not interpret it for you: the JSON package is not available to me." }
+			if [data array get -boolean @pastebin error] { print -help $nick "\[JSON\] While I can read the data from the website, I can not interpret it for you: the JSON package is not available to me." }
 			return
 		}
 
@@ -61,13 +61,13 @@ proc @pastebin { nick host handle chan arg } {
 			
 				after - since {
 					set timeval [timeval $3]
-					if [isempty timeval] { print -return -error -short "Illegal $2u time designation: $3" }
+					if [isempty timeval] { print -return -error -short $nick "Illegal $2u time designation: $3" }
 					set target [expr [clock seconds] - $timeval]
 					foreach pid $pids {
 						if { $pastebin(${pid}:updated) < $target } continue
 						lappend printme $pid
 					}
-					return 0
+					# Fall-through ....
 				}
 
 				before - b4 - within - wi {
@@ -79,7 +79,6 @@ proc @pastebin { nick host handle chan arg } {
 						lappend printme $pid
 					}
 					# Fall-through ....
-					return 0
 				}
 
 				first - last {
@@ -117,23 +116,27 @@ proc @pastebin { nick host handle chan arg } {
 			if [isempty 1] { print -help -return -short $nick "Unknown request." }
 
 			# Post a paste! ( Or poste a past? :p )
-			flags:simple $1e -expire text flags
-			if [validflag -expire] {
-				set expire [lindex $text 0]
-				set text [lreplace $text 0 0]
+			flags -params -force $1e [list -expire 1 -burn 0 -private 0] text flags
+			if $flags(-burn) {
+				set expire burn
+				set expiry "self-destruct after reading"
+			} elseif [notempty flags(-expire)] {
+				set timeval [timeval $flags(-expire) m]
+				if ![string eq "" $timeval] { set expire $timeval } { set expire $flags(-expire) }
 			} {
-				set expire 5256000
+				set expire 43200 ; # 30 days
 			}
-			set filename $text
+			if [isnum $expire] { set expiry [format:date [ expr [ clock seconds ] + [ timeval +${expire}m s ] ] $handle] }
+			set filename [sb7 component $text]
 			if ![file exists $filename] { print -return -error -short $nick "No such file: $filename" }
-			if [string match -nocase *.tcl $filename] { set type tcl } { set type text } 
+			set type [lindex [list text tcl] [regexp -nocase -- {\.(tcl|sb6|sb7)$} $filename]]
 			set text [file:read $filename]
-			if [info exists flags(-expire)] { set expire $flags(-expire) } { set expire 0 }
-			set list [list title [file tail $filename] name "[nph $idx2nick $handle] via $::botnick" private 1 text $text code $text lang $type expire $expire]
+			set list [list title [file tail $filename] name "[nph $idx2nick $handle] via $::botnick" private $flags(-private) text $text code $text lang $type expire $expire]
 			lassign [www ${api}/create $list] error html code
 			if $error { print -error -short -help -return $nick "Error while pasting file: $html" }
 			regexp -nocase -- {(http\:\/\/[^\/]+\/view\/[a-f0-9]{8})} $html - url
-			print -short $nick "Successfully pasted: $filename ( [color 4]${url}[color] )"
+			if [string eq "" $url] { print -return -help -short $nick "I couldn't detect the reference URL! ( $html )" }
+			print -short $nick "Successfully pasted: $filename ( [color 4]${url}[color] ), expiry: $expiry"
 			return 0
 		}
 	}
