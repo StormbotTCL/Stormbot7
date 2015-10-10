@@ -10,6 +10,12 @@
 [waffle]: https://waffle.io/StormbotTCL/Stormbot7
 [ready-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=ready&title=Ready
 [progress-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=in+progress&title=In+Progress
+[throughput-img]: https://graphs.waffle.io/StormbotTCL/Stormbot7/throughput.svg
+[throughput-url]: https://waffle.io/StormbotTCL/Stormbot7/metrics
+
+Throughput Graph
+================
+[![Throughput Graph][throughput-img]][throughput-url]
 
 If you would like to request a feature for Stormbot7, please do so on [FeatHub](http://feathub.com/demonicpagan).
 
