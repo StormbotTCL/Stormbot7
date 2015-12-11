@@ -1,7 +1,18 @@
-# StormBot.TCL 7 version Changelog -- 2015-10-04 19:27:03 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-12-11 11:36:06 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-12-01 03:57:19 UTC: #549 [tail] Added DATE:SHORT (short version formatting of date)
+2015-11-30 08:57:04 UTC: #548 [tail] Added LSORT:RANGE
+2015-11-27 06:14:46 UTC: #547 [tail] Fixed EXPR:FIX (multi-arg math was being processed as a protected LIST (with braces), causing no math to be done)
+2015-10-10 09:44:28 UTC: #546 [tail] Added END (visual marker for end-of-PROC. It's only cosmetic but it'll help me with writing / debugging new code. It's set up so, if I forget to remove / replace with it a proper RETURN, it'll still do the equivalent)
+2015-10-10 09:23:34 UTC: #545 [clearqueue] Fixed CLEARQUEUE (displayed command use to home channel, since it was done in SB6, and bot owners should be aware if their output gets swallowed because of the command's use (instead of just sitting there wondering))
+2015-10-10 08:43:14 UTC: #544 [tail] Added EXPR:FIX (this replaces SB6:FIXMATH. To not massively break everything in one place, FIXMATH is being kept as an alias to EXPR:FIX. EXPR:FIX exists to address 3 things: (1) allow ''PI'' as an param, (2) allow binary / octal / hexadecimal input, & (3) avoid integer math [EXPR default])
+2015-10-10 08:34:26 UTC: #543 [tail] Fixed PERCENT (forgot the ''$'' for a variable; a literal was being processed)
+2015-10-08 13:23:09 UTC: #542 [debug] Fixed DEBUG (added some clarifications on the TCL path variables)
+2015-10-06 15:09:52 UTC: #541 [botsend] Upgraded BOTSEND (added PRE and POST options for automatic command execution before and after transfers begin/end. Inspired by Demonicpagan. QUICK doesn't trigger it yet; pending repair)
+2015-10-06 13:42:12 UTC: #540 [help] Fixed HELP (cosmetic: ''somewhere else'' -> ''some other channel'')
+2015-10-06 12:36:40 UTC: #539 [tail] Fixed SB7, DATA LOAD, SB7:SETUP_VERSION, IS, & SB7:LOADBEADS (all references to the bot's home dir or script dir relied on the normalized file path to $::CONFIG or the ''./scripts/sb7'' which is still technically relative [think about it]. Now, using INFO NAMEOFEXECUTABLE which creates an absolute path to work with. Inspired by Demonicpagan)
 2015-10-04 14:58:02 UTC: #538 [tail] Upgraded LDESTROY (added -TEST option: respecting -NOT & -BOTH, return which elements properly match into the original list)
 2015-10-03 02:50:54 UTC: #537 [tail] Added SB7 REGISTER LIST [options] (now will return registered data information. Needed to finish transitioning PART (SB6 -> SB7), and, is generally good to have anyway)
 2015-10-03 01:40:10 UTC: #536 [myip] Added MYIP to GIT distribution (wasn't there before for some reason)
