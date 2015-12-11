@@ -9,6 +9,8 @@ proc iseggcorecmd cmd { expr ![string eq "" [info commands $cmd]] && [string eq 
 proc validcmd cmd { expr ![string eq "" [info commands $cmd]] }
 proc validproc cmd { expr ![string eq "" [info procs $cmd]] }
 
+proc end args { return -code return }
+
 proc sb7 { args } { # General
 	global sb7
 	lassign $args cmd 1 2 3 4 5 6 7 8 9      
@@ -220,9 +222,9 @@ proc sb7 { args } { # General
 
 		component {
 			if [instr $1 /] { return $1 }
-			#set dir [file dirname [file normalize $::config]]/scripts/sb7
-			set dir ./scripts/sb7
-			foreach dir [list ./scripts/sb7 ./scripts/sb7/[string tolower $::nick]] {
+			#set dir ./scripts/sb7
+			set dir [file dirname [info nameofexecutable]]/scripts/sb7
+			foreach dir [list [file dirname [info nameofexecutable]]/scripts/sb7 [file dirname [info nameofexecutable]]/scripts/sb7/[string tolower $::nick]] {
 				set list [list %.sb7 sb7_%.tcl sb7%.tcl % sb7_% %.tcl %.txt sb7_%.txt]
 				if { [lsearch -exact [list "" core] $1] != -1 } { empty 1 ; set list [ldestroy -all -nonulls $list %] } ; # Core (the FILE EXISTS will match the directory itself! ): )
 				foreach element $list {
@@ -248,7 +250,7 @@ proc sb7 { args } { # General
 		target {
 			# Allow "." and "" to return the bot's root directory
 			# (because it won't match anything)
-			set root [file dirname [file normalize $::config]]
+			set root [file dirname [info nameofexecutable]]
 			switch -glob -- [string tolower $2] {
 
 				stormbot*.tar.gz { set target ${root}/scripts }
@@ -1308,7 +1310,7 @@ proc data args {
 		}
 
 		backup {
-			set filename [file dirname [file normalize $::config]]/${::nick}.data
+			set filename [file dirname [info nameofexecutable]]/${::nick}.data
 			if [file exists ${filename}~bak] { file delete ${filename}~bak }
 			set error [ catch { file copy $filename ${filename}~bak } crap ]
 			if $error { error "\[DATA BACKUP\] Unable to save data file backup: ${filename}~bak" ; return }
@@ -1705,13 +1707,13 @@ proc sb7:setup_version args {
 	data set @VERSION ; # Clear previous values (code upgrade had a single value, caused "list != even # of elements" error)
 	data array set @VERSION stormbot 7.0
 	data array set @VERSION DISTRO http://www.stormbot.org/
-	if [file exists ./scripts/sb7/sb7.tcl] {
-		data array set @VERSION timestamp [file mtime ./scripts/sb7/sb7.tcl]
+	if [file exists [file dirname [info nameofexecutable]]/scripts/sb7/sb7.tcl] {
+		data array set @VERSION timestamp [file mtime [file dirname [info nameofexecutable]]/scripts/sb7/sb7.tcl]
 	} {
 		data array set @VERSION timestamp [file mtime $::config]
 	}
-	if [file exists ./scripts/sb7/sb7_version.txt] {
-		set data [readfile ./scripts/sb7/sb7_version.txt]
+	if [file exists [file dirname [info nameofexecutable]]/scripts/sb7/sb7_version.txt] {
+		set data [readfile [file dirname [info nameofexecutable]]/scripts/sb7/sb7_version.txt]
 		lassign $data ver ts www
 #putlog DATA($data):TS($ts):VER($ver):WWW($www)
 		regsub -all -nocase -- {stormbot|.tar.gz} $ver "" ver
@@ -1727,7 +1729,7 @@ proc sb7:loadbeads { { match "*" } { force false } } {
 	# Using $DIRS allows for bot-specific scripts addendums:
 	# <bot dir>/scripts/sb7/<lowercase: bot's nick>/
 
-	set dirs [list [file dirname [file normalize $::config]]/scripts/sb7 [file dirname [file normalize $::config]]/scripts/sb7/[string tolower $::nick]]
+	set dirs [list [file dirname [info nameofexecutable]]/scripts/sb7 [file dirname [info nameofexecutable]]/scripts/sb7/[string tolower $::nick]]
 #putlog "\[SB7:LOADBEADS\] DIR($dir):BEADS($beads)"
 #putlog <LOOP>
 	foreach dir $dirs {
@@ -2436,43 +2438,16 @@ proc addzero { number pad } {
 	return $addzero
 }
 
-proc fixmath args {
-	set arg [string tolower [join $args]]
-	
-	# Process "PI" first
-	set pi 3.14159265358979323846264338
-	if {[info commands pi:value] != ""} { set pi [pi:value] }
-	regsub -all -nocase -- PI $arg $pi arg
-
-	empty new
-	zero count
-
-	foreach a [regexp -all -inline -- {[^\d]\.\d+[^\d]} $arg] {
-		set b [left $a 1]0[mid $a 2] 
-		regsub -all -- $a $arg $b arg
-	}
-
-	# Can we use REGEXP (\d*)\.?\d{1,} (or something else) and predict which
-	# match will give us the full number?
-
-	while { [notempty arg] } {
-		incr count ; if { $count > 1024 } { error "> FIXMATH: We got up to a ridiculous loop count: \$COUNT ($count)" }
-
-		if ![regexp -- {[0-9\.]} [left $arg 1]] {
-			append new [left $arg 1]
-			set arg [mid $arg 2]
-			continue
-		}
-
-		# Otherwise, you're a digit ....
-
-		set prelim [lindex [regexp -inline -nocase -- {^[+\-]?([0-9]+[\.]?[0-9]*|[0-9]*[\.]?[0-9]+)(e[+\-]?[0-9]+)?} $arg] 0]
-		set num $prelim; # Need to preserve original # for string index shifting!
-		if ![instr $num e] { if ![instr $num .] { append num .0 } }
-		append new $num
-		set arg [mid $arg [ expr [ len $prelim ] + 1 ]]
-	}
-	expr $new
+# 2015-10-10 01:44:00 -0700: PROC FIXMATH (INTERP ALIAS points it here) - for search purposes only
+proc expr:fix args {
+	# 2015-10-02 03:16:00 -0700: The REGEXP for BIN/OCT must include bad digits (0-9) so DEC can 
+	# throw an exception. Otherwise, $BIN/$OCT will equal a mashed string ("0b11000000.8" -> "1928")
+	regsub -all -nocase -- PI $args 3.14159265358979323846264338 args
+	empty bin oct hex
+	regexp -nocase -- {[^0-9]?(0b[\.0123456789]+)} $args 0 bin ; if [notempty bin] { regsub -all $bin $args [dec $bin] args }
+	regexp -nocase -- {[^0-9]?(0o[\.0123456789]+)} $args 0 oct ; if [notempty oct] { regsub -all $oct $args [dec $oct] args }
+	regexp -nocase -- {[^0-9]?(0x[\.0123456789ABCDEF]+)} $args 0 hex ; if [notempty hex] { regsub -all $hex $args [dec $hex] args }
+	expr [string map {/ *1.0/} [join $args]]
 }
 
 proc trim { string { trim_me "" } } { if [isempty trim_me] { string trim $string } { string trim $string $trim_me } }
@@ -2729,8 +2704,20 @@ debug =final list
 	return $list_map
 }
 
-# Note: LMATCH (interp alias) -> "LDESTROY -NOT"
+proc lsort:range { 1 2 } {
+	# "1 5-9 7 12-13" --> "12-13 5-9 7 1" (ranges first [descending] then integers [descending])
+	set 1d [string match *-* $1]
+	set 2d [string match *-* $2]
+	if { $1d != $2d } { return [expr $1d - $2d] }
+	set 10 [lindex [split $1 -] 0]
+	set 20 [lindex [split $2 -] 0]
+	# Let the larger number go first ("100" needs to be processed before "10" or "1")
+	if { $10 < 20 } { return -1 }
+	if { $10 > 20 } { return +1 }
+	return 0
+}
 
+# Note: LMATCH (interp alias) -> "LDESTROY -NOT"
 # 2014-09-13 18:05:00 -0700: Replaced with new (fresh re-write) version, specifically to add new function: -COMMON
 proc ``ldestroy args {
 	# Use -COUNT to test number of results (0 = no matches)
@@ -3035,16 +3022,12 @@ proc ldestroy args {
 
 	# -TEST first
 	if [validflag -test] {
-debug list _list
-debug total _total
 		array set tests [list 0 "" 1 ""]
 		for { set x 0 } { $x < [llength $total] } { incr x } {
 			set _item [lindex $_total $x]
 			set item [lindex $total $x]
-debug match _ item _item =LSEARCH([lsearch -$match $_ $_item])
 			lappend tests([ expr ( [lsearch -$match $_ $_item] == -1 ) ? 0 : 1 ]) $item
 		}
-debug tests
 		if [validflag -both] { return [list $tests(1) $tests(0)] }
 		if [validflag -not] { return $tests(0) }
 		return $tests(1)
@@ -3416,7 +3399,7 @@ proc lsort:chanop { 1 2 } {
 # --- Math helpers ---
 
 proc percent { number total { decimal "" } } {
-	if !number { return 0% }
+	if !$number { return 0% }
 	if !$total { return 0% }
 	set % [ fixmath 100 * ( double( $number ) / double( $total ) ) ]
 	if [string eq "" $decimal] { set % [normalize ${%}] } { set % [format %.${decimal}f ${%}] }
@@ -4679,6 +4662,16 @@ proc format:date args {
 	clock format $time -format $format -gmt $gmtflag
 }
 
+proc date:short args {
+	flags:simple $args [list -gmt -ymd_format] timestamp flags
+	if [string eq "" $timestamp] { set timestamp [clock seconds] }
+	if [validflag -ymd_format] {
+		clock format $timestamp -format "%Y-%m-%d %H:%M" -gmt [validflag -gmt]
+	} {
+		clock format $timestamp -format "%m/%d/%Y %H:%M" -gmt [validflag -gmt]
+	}
+}
+
 proc format:percent args {
 	flags:simple $args [list -leading_zero -trim] text flags
 	lassign [concat $text 1] value decimal
@@ -5433,6 +5426,7 @@ proc casehandle data { if [validuser $data] { return [getuser $data handle] } { 
 proc casechan   data { set c [channels] ; set casechan [lindex $c [lsearch -exact [string tolower $c] [string tolower $data]]] ; if [isempty casechan] { set casechan $data } ; return $casechan }
 proc casebot    data { set b [bots] ; set casebot [lindex $b [lsearch -exact [string tolower $b] [string tolower $data]]] ; if [isempty casebot] { set casebot $data } ; return $casebot }
 proc casealias  data { foreach a [userlist -b] { set alias [userinfo get $a alias] ; set m [lsearch -exact [string tolower $alias] [string tolower $data]] ; if { $m != -1 } { return [lindex $alias $m] } ; } ; return $data }
+proc casetitle { data { ignore "" } } { set regexp [regexp -inline -all -nocase -- {[A-Z']+} $data] ; set regexp [lsort -decreasing -dictionary -command lsort:len $regexp] ; if [notempty ignore] { foreach r [lsort -decreasing -dictionary -command lsort:len [regexp -all -inline -nocase -- $ignore $data]] { lappend regexp $r } } ; foreach r $regexp { set m [lsearch -exact [string tolower $ignore] [string tolower $r]] ; if { $m != -1 } { regsub -all -nocase -- $r $data [string tolower $r] data } { regsub -all -nocase -- $r $data [string totitle $r] data } } ; return $data }
 
 proc get { cmd args } {
 	set args_ $args
@@ -5788,11 +5782,11 @@ proc is { cmd args } {
 		comp - component {
 			set file [file rootname [file tail [lindex $args 0]]] 
 			if [string eq -nocase SB7 $file] { set file core }
-			if [string eq -nocase CORE [none $file core]] { return [file exists ./scripts/sb7/sb7.tcl] }
+			if [string eq -nocase CORE [none $file core]] { return [file exists [file dirname [info nameofexecutable]]/scripts/sb7/sb7.tcl] }
 			regsub -nocase -- {^sb7_} $file "" file
-			if [file exists ./scripts/sb7/sb7_${file}.tcl] { return 1 }
-			if [file exists ./scripts/sb7/sb7_${file}.txt] { return 1 }
-			if [file exists ./scripts/sb7/${file}.sb7] { return 1 }
+			if [file exists [file dirname [info nameofexecutable]]/scripts/sb7/sb7_${file}.tcl] { return 1 }
+			if [file exists [file dirname [info nameofexecutable]]/scripts/sb7/sb7_${file}.txt] { return 1 }
+			if [file exists [file dirname [info nameofexecutable]]/scripts/sb7/${file}.sb7] { return 1 }
 			return 0
 		}
 
@@ -6092,17 +6086,17 @@ proc debug args {
 }
 
 proc procdef { proc { tab2space 5 } } {
-debug tab2space
+#debug tab2space
 	if { [lsearch -exact [list tab \t] [string tolower $tab2space]] != -1 } {
-debug =TAB
+#debug =TAB
 		set tab \t
 		set tab2space 0
 	} {
-debug =No\ tab
+#debug =No\ tab
 		set tab [string repeat " " $tab2space]
 	}
-binary scan $tab H* h
-debug tab h
+#binary scan $tab H* h
+#debug tab h
 	set alias [interp alias {} $proc]
 	if ![string eq "" $alias] { return "interp alias {} $proc {} $alias" }
 	if [string eq "" [info procs $proc]] { error "\[DEFPROC\] No such PROC: $proc"  }
@@ -6113,7 +6107,8 @@ debug tab h
 	}
 	set body [info body $proc]
 	if $tab2space { regsub -all -- \t $body $tab body }
-	return "proc $proc \{ $args \} \{[iff ![instr $body \n] " "][string trim ${body} " "][iff ![instr $body \n] " "]\}"
+#	return "proc $proc \{ $args \} \{[iff ![instr $body \n] " "][string trim ${body} " "][iff ![instr $body \n] " "]\}"
+	return "proc $proc \{ $args \} \{[regsub -all -- {[ \t]+\n} $body \n]\}"
 }
 
 proc findinprocs text {
@@ -7008,6 +7003,7 @@ interp alias {} FLAGS {} sb7 parseflags ; # Case sensitive!
 interp alias {} lmatch {} ldestroy -not
 interp alias {} path:rel {} path:relative 
 interp alias {} degrees {} angle
+interp alias {} fixmath {} expr:fix
 
 # --- Deprecated commands ---
 

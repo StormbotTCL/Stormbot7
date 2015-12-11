@@ -123,12 +123,18 @@ proc @debug { nick host handle chan arg } {
 				print -help $nick "TCL: [info patchlevel] (major: $tclmaj - minor: $tclmin - patch level: $tclpatch) from [info library]"
 				print -help $nick "TCL interactive mode: [boolean -truefalse $::tcl_interactive]"
 				print -help $nick "TCL floating-point precision: $::tcl_precision"
-				print -help $nick "TCL package path: $::tcl_pkgPath"
+				print -help $nick "TCL package path:"
 				if [info exists ::tcl_libPath] {
 					print -help $nick "TCL library path (\$tcl_libPath):"
 					foreach p $::tcl_libPath { print -help $nick "[space 5]$p" }
 				} {
 					print -help $nick "TCL library path (\$tcl_libPath): <undefined>"
+				}
+				if [info exists ::auto_path] {
+					print -help $nick "TCL library auto-path (\$auto_path):"
+					foreach p $::auto_path { print -help $nick "[space 5]$p" }
+				} {
+					print -help $nick "TCL library path (\$auto_path): <undefined>"
 				}
 			}
 

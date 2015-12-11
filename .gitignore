@@ -3,6 +3,9 @@ tcl.sb7
 bservice.sb7
 distro.sb7
 67.sb7
+_sb7_tail.tcl
+sb7_gitlog.txt
+git.sb7
 
 # Windows image file caches
 Thumbs.db
@@ -39,6 +42,3 @@ Icon
 # Files that might appear on external disk
 .Spotlight-V100
 .Trashes
-_sb7_tail.tcl
-sb7_gitlog.txt
-git.sb7

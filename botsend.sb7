@@ -16,6 +16,8 @@ proc @botsend { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick BOTSEND STATUS"
 			print -help $nick "Syntax: $::botnick BOTSEND SHIFT \[wildcard\]"
 			print -help $nick "Syntax: $::botnick BOTSEND SET <option> \[value\]"
+			print -help $nick "Syntax: $::botnick BOTSEND PRE <command to run before when an incoming transfer is detected>"
+			print -help $nick "Syntax: $::botnick BOTSEND POST <command to run after a file is transferred>"
 			print -help $nick ""
 			print -help $nick "The BOTSEND command is a rudimentary re-write of the SB5/SB6 command which sends files from one bot to another (via the botnet). Obviously, both sending and target bots must be connected into the same botnet (anywhere / any configuration will do)."
 			print -help $nick "For now, BOTSEND can NOT handle file names with spaces in them. All file names must be without any spaces (underscore, dash, and other printable characters are legal)."
@@ -165,6 +167,24 @@ debug id direction
 			}
 		}
 
+		pre {
+			if [isempty 2] { print -return $nick "\[BOTSEND PRE\] Current PRE command: [data array get -join botsend pre]" }
+			if [string eq -nocase NONE $2] { data array set botsend pre "" ; saveme data ; print -return $nick "\[BOTSEND PRE\] Command cleared." }
+			data array set botsend pre $2e
+			saveme data
+			print -return $nick "\[BOTSEND PRE\] Command set to: $2je"
+			return
+		}
+
+		post {
+			if [isempty 2] { print -return $nick "\[BOTSEND POST\] Current POST command: [data array get -join botsend post]" } 
+			if [string eq -nocase NONE $2] { data array set botsend post "" ; saveme data ; print -return $nick "\[BOTSEND POST\] Command cleared." }
+			data array set botsend post $2e
+			saveme data
+			print -return $nick "\[BOTSEND POST\] Command set to: $2je"
+			return
+		}
+
 		quick {
 			if [instr $2e :] {
 				lassign [split $2e :|] temp_bots1 temp_files
@@ -207,7 +227,7 @@ debug id direction
 				binary scan $data H* hex
 
 				set size 250
-				foreach bot $bots { putbot $bot [list botsend:quick start $tail] }
+				foreach bot $bots { putbot $bot [list botsend:quick start $tail $handle] }
 				while { [notempty hex] } {
 					set line [left $hex $size]
 					foreach bot $bots { putbot $bot [list botsend:quick data $tail $line] }
@@ -413,6 +433,11 @@ proc @botsend:receiver { bot - arg } {
 				botsend:sender reject $id
 				return
 			}
+			
+			if [is auth $2 $0] { # Redundant
+				set pre [data array get -join botsend pre]
+				if [notempty pre] { sb7:dispatch $0 $1 $2 $3 $pre }
+			}
 			data array set @BOTSEND:RECEIVE $id [list rx $0 $1 $2 $3 $4 $5 $6 $bot "" $7]
 			# direction nick host handle chan tail ts milli from data size
 #debug =DATA([data array get @BOTSEND:RECEIVE $id])
@@ -498,6 +523,10 @@ proc @botsend:receiver { bot - arg } {
 #sb7 log =BOTSEND =EOF =8
 			print -home "\[BOTSEND\] Successfully saved${text_autoshift}${text_autoload}: [file tail ${path}/$filename] ([comma $size] bytes / [format %.3f $time] $timeword / [format %.3f $speed] KiB/s)"
 #sb7 log =BOTSEND =EOF =9
+			if [is auth $handle $nick] { # Redundant
+				set post [data array get -join botsend post]
+				if [notempty post] { sb7:dispatch $nick $host $handle $chan $post }
+			}
 			return
 		}
 
@@ -643,10 +672,15 @@ proc putfile { file mode text } {
 }
 
 proc @botsend:quick { bot cmd arg } {
-	set data [lassign $arg cmd tail]
+	set data [lassign $arg cmd tail handle] ; # $HANDLE needed for start option
 	switch -exact -- [string tolower $cmd] {
 
 		start {
+			lassign [whois $handle] nick host handle chan auth_handle auth_nick
+			if [is auth $auth_handle $auth_nick] { # Redundant
+				set pre [data array get -join botsend pre]
+				if [notempty pre] { sb7:dispatch $nick $host $handle $chan $pre }
+			}
 			data array set @botsend:quick $tail ""
 			return
 		}
@@ -685,6 +719,10 @@ proc @botsend:quick { bot cmd arg } {
 				}
 			}
 			print -home "\[BOTSEND QUICK\] File transfer complete: ${tail}$tag"
+			if [is auth $auth_handle $auth_nick] { # Redundant
+				set post [data array get -join botsend post]
+				if [notempty post] { sb7:dispatch $nick $host $handle $chan $post }
+			}
 			return
 		}
 
