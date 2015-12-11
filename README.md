@@ -1,15 +1,21 @@
 [![Gitter chat][gitter-img]][gitter-url]
 [![Stories in Ready][ready-img]][waffle]
 [![Stories in Progress][progress-img]][waffle]
-<!--- [![Feature Requests][feat-img]][feat-url] --->
+<!-- [![Feature Requests][feat-img]][feat-url] -->
 
 [gitter-img]: https://img.shields.io/badge/Gitter-Join%20Chat%20%E2%86%92-1dce73.svg
 [gitter-url]: https://gitter.im/StormbotTCL
-<!---[feat-img]: http://feathub.com/StormbotTCL/Stormbot7?format=svg
-[feat-url]: http://feathub.com/StormbotTCL/Stormbot7 --->
+<!-- [feat-img]: http://feathub.com/StormbotTCL/Stormbot7?format=svg
+[feat-url]: http://feathub.com/StormbotTCL/Stormbot7 -->
 [waffle]: https://waffle.io/StormbotTCL/Stormbot7
 [ready-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=ready&title=Ready
 [progress-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=in+progress&title=In+Progress
+[throughput-img]: https://graphs.waffle.io/StormbotTCL/Stormbot7/throughput.svg
+[throughput-url]: https://waffle.io/StormbotTCL/Stormbot7/metrics
+
+Throughput Graph
+================
+[![Throughput Graph][throughput-img]][throughput-url]
 
 If you would like to request a feature for Stormbot7, please do so on [FeatHub](http://feathub.com/demonicpagan).
 
