@@ -1,7 +1,13 @@
-# StormBot.TCL 7 version Changelog -- 2015-12-11 11:36:06 UTC #
+# StormBot.TCL 7 version Changelog -- 2015-12-29 12:29:54 UTC #
 # Version: 7.00.0001 #
 
 # Current Working Version #
+2015-12-29 11:21:18 UTC: #555 [bservice, debug, distro, pastebin, & readme] Fixed README; PASTEBIN, DISTRO, DEBUG, & BSERVICE (updated addresses: bothouse.net --> stormbot.org)
+2015-12-24 09:36:41 UTC: #554 [chanstats] Fixed CHANSTATS (added exempts and invexes to output)
+2015-12-24 02:50:31 UTC: #553 [config & tail] Upgraded CONFIG & SB7:DISPATCH (new option: snuff error: if a bad command word is used, do we complain (''unknown command: blah'') or just ignore [snuff] it?)
+2015-12-22 04:14:20 UTC: #552 [botsend] Fixed BOTSEND ALIAS DEL (cosmetic: was originally copied from BOTSEND ALIAS ADD, so the result said ''added'' instead of ''deleted'')
+2015-12-22 03:59:34 UTC: #551 [tail] Fixed FORMAT:DATE (when switching to the $ARGS format, forgot to allow a default time of ''now'' when one isn't specified)
+2015-12-22 02:10:56 UTC: #550 [tail] Added IS EMAIL (syntax checker; may need to be opened up even more due to no further restrictions on gTLDs)
 2015-12-01 03:57:19 UTC: #549 [tail] Added DATE:SHORT (short version formatting of date)
 2015-11-30 08:57:04 UTC: #548 [tail] Added LSORT:RANGE
 2015-11-27 06:14:46 UTC: #547 [tail] Fixed EXPR:FIX (multi-arg math was being processed as a protected LIST (with braces), causing no math to be done)

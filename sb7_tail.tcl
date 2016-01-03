@@ -560,8 +560,8 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# Valid command?
 
 	if [isempty cmdinfo(cmd)] {
-#putlog [effects DISPATCH:10.1 11,12 bold]
-		print -error $nick "\[SB7\] Unknown command: $cmd"
+#putlog [effects DISPATCH:10.1 11,12 bold]"
+		if ![data array get -normalize config snuff:error] { print -error $nick "\[SB7\] Unknown command: $cmd" }
 		return 1
 	}
 
@@ -594,7 +594,10 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# -DEFAULT is needed because the PUB bind, which comes straight here, isn't set into @LASTBIND like the others are
 	data array set @OUTPUT $nick [list $nick $host $handle $tchan [data get -default @LASTBIND pub]]
 #putlog "\[SB7:DISPATCH\] NICK($nick):HOST($host):HANDLE($handle):CHAN($chan):TCHAN($tchan):LASTBIND([data get @LASTBIND]):@OUTPUT([data array get @output $nick])"
-	# ALL OUTPUT MUST COME AFTER THIS POINT!!
+
+	############################################
+	# ALL OUTPUT MUST COME AFTER THIS POINT !! #
+	############################################
 
 # if not -CHANSPECIFIC, ignore "*" as a chan (used for commands like LOGIN & REHASH)
 	if [string eq * $tchan] {
@@ -4594,6 +4597,7 @@ if $debug { debug nick handle chan flags output queue type speedflag }
 proc format:date args {
 	flags:simple $args [list -gmt -cliptz] text flags
 	lassign $text time handle
+	if [isempty time] { set time [clock seconds] }
 	set default %c
 #	set default "%a %b %d %H:%M:%S %Y %z" ; # ISO compliant (not to ISO-8601!)
 	set default "%Y-%m-%d %H:%M:%S %z"
@@ -5771,6 +5775,8 @@ proc get { cmd args } {
 proc is { cmd args } {
 	set args [join $args]
 	switch -exact -- [string tolower $cmd] {
+
+		email { return [regexp -nocase -- {^[A-Z0-9._%+-]+@(?:[A-Z0-9-]+\.)+[A-Z]{2,6}$} [lindex [split $args] 0]]] ; # With gTLDs now essentially open, last element may need to be removed }
 
 		suspended {
 			putlog "\[IS SUSPENDED\] [color 4]Command not complete yet.[color] (ARGS: $args)"

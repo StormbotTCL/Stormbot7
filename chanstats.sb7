@@ -1,0 +1,79 @@
+# Originally suggested by Thomas Noel on: 2000-10-05 16:44:05 -0000
+sb7 command add chanstats 100 cstat chanstat ; # Can't use "CS" (CHANSET)
+
+proc @chanstats { nick host handle chan arg } {
+	FLAGS
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[CHANSTATS\]:"
+		print -help $nick "Syntax: $::botnick CHANSTATS \[channel\]"
+		print -help $nick ""
+		print -help $nick "This command gives current information about the users in the channel."
+		print -help $nick "While it provides some of the same information as the WHO command, CHANSTATS also provides additional information useful for bot service operators and channel owners."
+		return
+	}
+	set chanlist [chanlist $chan]
+	set ll [llength $chanlist]
+	print $nick "Channel Stats for: $chan"
+	print $nick "Channel mode: [getchanmode $chan] ([plural -show -comma user $ll])"
+	print $nick "Protected / monitored modes: [channel get $chan chanmode]"
+	print $nick "Channel topic: [topic $chan]"
+
+	# Channel owner present?
+	set owner ""
+	foreach user [userlist &n $chan] {
+		set mini ""
+		foreach c $chanlist {
+			if [string eq -nocase [nick2hand $c $chan] $user] { lappend mini $c }
+		}
+		if [string eq "" $mini] { print $nick "Channel owner: $user (not present)" } { print $nick "Channel owner: $user ([ajl $mini])" }
+	}
+
+	array set ops [list q "" a "" o "" h "" v "" visitor ""]
+	foreach user $chanlist {
+		set mode_found 0
+		foreach { cmd mode } [list own q prot a op o halfop h voice v] {
+			if [validcmd is$cmd] { if [is$cmd $user $chan] { lappend ops($mode) $user ; set mode_found 1 ; break } }
+		}
+		if $mode_found { lappend ops(-) $user }
+	}
+	foreach { name mode } [list own q prot a op o halfop h voice v] {
+		set ll [llength $ops($mode)]
+		if $ll { print $nick "[plural -show -comma $name $ll] (+${mode}): [ajl $ops($mode)]" }
+	}
+
+	#%# IRCops?
+
+	set global ""
+	foreach user $chanlist {
+		set h [nick2hand $user $chan]
+		if [matchattr $h +nmtolv] { lappend global [nph $user $h] }
+	}
+	print $nick "Global users in channel: [none [ajl $global] <none>]"
+
+	set bots ""
+	foreach bot $chanlist {
+		set h [nick2hand $user $chan]
+		if ![matchattr $h b] continue
+		set tag ""
+		if [string eq -nocase $h [data array get config cservice]] { set tag " \{cservice bot[iff [isop $user $chan] "" " - [color 4]not opped[color]"]\}" } ; # A linked bot shouldn't be a CService bot
+		if [islinked $h] { lappend bots "[nph $bot $h]$tag \[linked\]" } { lappend bots [nph $bot $h]$tag }
+	}
+
+	##################################################################
+	# Do we list BANS / EXEMPTS / INVEXES that match GLOBAL versions #
+	# (but won't show up on the local lists)?                        #
+	##################################################################
+
+	foreach word [list ban exempt invite] list [list banlist exemptlist invexlist] {
+		print $nick "[string totitle $word]s:"
+		set error [ catch { set list [$list $chan] } crap ]
+		if $error {
+			if [string eq -nocase invexlist $list] { set list [invitelist $chan] } { error $crap }
+		}
+		foreach element $list {
+			lassign $element mask reason expire added last who
+			print $nick "[space 5]\002${mask}\002 (by $who - [date:short -ymd $added] [iff $expire "to [date:short -ymd $expire]" (permanent)]): [join $reason]"
+		}
+	}
+	return
+}
