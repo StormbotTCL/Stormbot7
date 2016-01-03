@@ -28,28 +28,75 @@ proc @deown    { nick host handle chan arg } { @op:mode $nick $host $handle $cha
 
 proc @op:mode { nick host handle chan polarity mode arg } {
 	# All OP commands (voice, halfop, op, prot, & own) come through here
-	FLAGS
+	FLAGS -force
 
 	if [string eq -nocase HELP $1] {
 		print -help $nick "\[$0u\]"
-		print -help $nick "Syntax: $::botnick $0u HELP"
-		print -help $nick "Syntax: $::botnick $0u <list of nicks>"
+		print -help $nick "Syntax: $::botnick $0u \[-force\] <list of nicks>"
 		print -help $nick "Makes $::botnick $0u (${polarity}${mode}) you or a list of users"
+		print -help $nick "Note: if you specify the handle of your target, $::botnick will find your target by nick (all mask-matching clones) and mode change as appropriate."
+		print -help $nick "Users must have appropriate masks to prevent the wrong target being affected."
 		return
 	}
 
-	empty ok bad
+	# Check is bot is opped (at the right level: e.g. must be +q to set +a), or, is -FORCE being used.
+
+	# Continue on ....
+	empty perform ok bad access
 	foreach user [none $1e $nick] {
-		lassign:array target [whois $user $handle] - nick - handle
-		if [access compare -self:ok $handle $target(handle) $chan] { 
-			lappend ok $user
-			raw "MODE $chan ${polarity}${mode} $target(nick)"
-		} {
+		lassign:array target [whois $user $handle] online nick - handle
+		if { $target(online) != 1 } {
 			lappend bad $user
+			continue
+		}
+
+		if [access compare -self:ok $handle $target(handle) $chan] { 
+			# Was the handle specified? If so, target all matching users
+			if { [string eq -nocase $target(handle) $user] && ![string eq $user $target(nick)] } {
+				foreach a [chanlist $chan] {
+					if [string eq $target(handle) [nick2hand $a $chan]] { lappend perform [list $a $user] }
+				}
+			} {
+				lappend perform [list $user $target(nick)]
+			}
+		} {
+			lappend access $user
 		}
 	}
+
+#debug perform
+	empty buffer
+	set modes 1
+	if [info exists ::modes-per-line] { if ${::modes-per-line} { set modes ${::modes-per-line} } }
+
+	foreach a $perform {
+		lassign $a a b
+		lassign [whois $a $b $chan] - n - h
+		lappend buffer [list $polarity $mode $n]
+#debug a b n h
+		lappend ok [nph $n $h]
+	}
+#debug buffer
+	while { ![string eq "" $buffer] } {
+		set pol_old ""
+		set buffer_mode ""
+		set buffer_param [list]
+		set list [lrange $buffer 0 [ expr $modes - 1 ]]
+		foreach element $list {
+			lassign $element pol mod par
+			append buffer_mode [iff { $pol != $pol_old} $pol]$mod
+			lappend buffer_param $par
+			set pol_old $pol
+		}
+		set buffer [lrange $buffer $modes end]
+#debug buffer_mode buffer_param buffer
+		raw "MODE $chan $buffer_mode [join $buffer_param]"
+	}
+
+#debug ok bad access
 	if [notempty ok] { print $nick "\[${0u}\] Successful ${0u}s: [ajl -unique $ok]" }
-	if [notempty bad] { print $nick "\[${0u}\] Failed ${0u}s (insufficient access): [ajl -unique $bad]" }
+	if [notempty bad] { print $nick "\[${0u}\] Failed ${0u}s (not on channel): [ajl -unique $bad]" }
+	if [notempty access] { print $nick "\[${0u}\] Failed ${0u}s (insufficient access): [ajl -unique $access]" }
 	return
 }
 

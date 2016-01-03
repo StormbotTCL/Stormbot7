@@ -3,7 +3,7 @@ sb7 command add CONFIG 501 -chanspec CF CFG
 sb7 register global [concat [data array value @CONFIG global] [data array value @CONFIG chan]]
 
 proc @config { nick host handle chan arg } {
-	set valid_global [list mute color burst pubcmd group rank shortcut debug binds chon backup access cservice bindver debuglevel format:time]
+	set valid_global [list mute color burst pubcmd group rank shortcut debug binds chon backup access cservice bindver debuglevel format:time snuff]
 	set valid_chan   [list mute color]
 	set valid_abbr   [list shortcut sc binds bind pubcmd pc]
 
@@ -30,7 +30,7 @@ proc @config { nick host handle chan arg } {
 	set types(integer) [list debuglevel]
 	set types(boolean) [list mute rank bindver]
 	set types(channel) [list home]
-	set types(text)    [list group backup access cservice format:time]
+	set types(text)    [list group backup access cservice format:time snuff]
 	set types(custom)  [list pubcmd shortcut burst color debug chon]
 	# Custom: Debug(chan), color("",block), shortcut(local,global,owner), burst(allow,all)
 
@@ -419,6 +419,47 @@ proc @config { nick host handle chan arg } {
 
 		rank {
 			#
+		}
+
+		snuff {
+			if ![validflag -global] { print -help -return $nick "\[GLOBAL -GLOBAL SNUFF\] This option is for global users only." }
+			switch -exact -- [string tolower $2] {
+
+				help {
+					print -help $nick "\[CONIG -GLOBAL SNUFF\]:"
+					print -help $nick "Syntax: $::botnick CONFIG -GLOBAL SNUFF ERROR (shows current status)"
+					print -help $nick "Syntax: $::botnick CONFIG -GLOBAL SNUFF ERROR OFF"
+					print -help $nick "Syntax: $::botnick CONFIG -GLOBAL SNUFF ERROR ON"
+					# If any other options, like snuff:debug are added, include their HELPs here
+					print -help $nick ""
+					print -help $nick "The SNUFF ERROR command determines whether or not $::botnick will complain if a non-command word is used with any of the valid triggers (normal \[PUB\] or PUBCMD \[PUBM\]). Turning this on will allow the bot to \"quietly ignore\" any non-command words used with a matching trigger. This reduces \"channel noise\" (text output) from the bot. Options: OFF, ON"
+					# If any other options, like snuff:debug are added, include their detailed HELPs here
+					return
+				}
+
+				error {
+					set value [normalize [data array get config snuff:error]]
+					switch -exact -- [string tolower $3] {
+
+						help { print -help -return $nick "The SNUFF ERROR command determines whether or not $::botnick will complain if a non-command word is used with any of the valid triggers (normal \[PUB\] or PUBCMD \[PUBM\]). Turning this on will allow the bot to \"quietly ignore\" any non-command words used with a matching trigger. This reduces \"channel noise\" (text output) from the bot. Options: OFF, ON" }
+
+						"" { print -return $nick "\[CONFIG -GLOBAL SNUFF ERROR\] Current value: [boolean -offon $value]" }
+
+						off - on {
+							set new [boolean $3]
+							data array set config snuff:error $new
+							saveme data
+							print -return $nick "\[CONFIG -GLOBAL SNUFF ERROR\] New value: [boolean -offon $new]"
+						}
+
+						default { print -help -return $nick "\[CONFIG -GLOBAL SNUFF\] Unknown option: $3" }
+
+					}
+				}
+
+				default { print -help -return $nick "\[CONFIG -GLOBAL SNUFF\] Unknown option: $2" }
+
+			}
 		}
 
 		default { print -help -return $nick "Unknown CONFIG option: $1" }

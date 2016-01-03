@@ -135,7 +135,7 @@ debug id direction
 							if { $m == -1 } { lappend bad $bot } { lappend ok $bot ; set alias [lreplace $alias $m $m] }
 						}
 						data array set BOTSEND ALIAS:$3 $alias
-						if [notempty ok] { saveme data ; print -short $nick "Added: [ajl $ok]" }
+						if [notempty ok] { saveme data ; print -short $nick "Deleted: [ajl $ok]" }
 						if [notempty bad] { print -short $nick "Never existed: [ajl $bad]" }
 					}
 					print $nick "Current alias: [none [ajl $alias] <none>]"
