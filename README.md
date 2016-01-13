@@ -1,12 +1,12 @@
 [![Gitter chat][gitter-img]][gitter-url]
 [![Stories in Ready][ready-img]][waffle]
 [![Stories in Progress][progress-img]][waffle]
-<!-- [![Feature Requests][feat-img]][feat-url] -->
+[![Feature Requests][feat-img]][feat-url]
 
 [gitter-img]: https://img.shields.io/badge/Gitter-Join%20Chat%20%E2%86%92-1dce73.svg
 [gitter-url]: https://gitter.im/StormbotTCL
-<!-- [feat-img]: http://feathub.com/StormbotTCL/Stormbot7?format=svg
-[feat-url]: http://feathub.com/StormbotTCL/Stormbot7 -->
+[feat-img]: http://feathub.com/StormbotTCL/Stormbot7?format=svg
+[feat-url]: http://feathub.com/StormbotTCL/Stormbot7
 [waffle]: https://waffle.io/StormbotTCL/Stormbot7
 [ready-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=ready&title=Ready
 [progress-img]: https://badge.waffle.io/StormbotTCL/Stormbot7.svg?label=in+progress&title=In+Progress
@@ -26,7 +26,7 @@ This is the next version of Stormbot. This release is another complete rewrite o
 
 David wrote the original Stormbot code at the University of Aarhus in Denmark and created the original Stormbot IRC channel, #storm_chasers. Later, Dave Klein came aboard the project and they moved to the #Bothouse IRC channel which also gave birth to a host of immitators that still exist to this day.
 
-Since that time, StormBot has moved to its own IRC network (irc://chat.bothouse.net). Many people have contributed to StormBot.TCL over the years. Contributions include donation of time in debugging the script, donating bots to test new functions, donating servers when forming the test-bed network, and the ALPHA and BETA testers of the most-recent incartion (Presently version 6.0). Also included are those whom have donated web servers, wrote helper scripts, and/or donated command bead code (or code suggestions).
+Since that time, StormBot has moved to its own IRC network (irc://irc.stormbot.org). Many people have contributed to StormBot.TCL over the years. Contributions include donation of time in debugging the script, donating bots to test new functions, donating servers when forming the test-bed network, and the ALPHA and BETA testers of the most-recent incartion (Presently version 6.0). Also included are those whom have donated web servers, wrote helper scripts, and/or donated command bead code (or code suggestions).
 
 ### History of Stormbot
 

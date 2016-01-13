@@ -568,7 +568,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# Target channel?
 	# 1/Check if channel is specified
 	# 2/If not: did the user use a command (targetting a channel) recently?
-	# 3/If not: is command channel-exempt? (-INVALID:OK)
+	# 3/If not: is command channel-exempt? (-BADCHAN:OK)
 	# 4/If not: use $HOME / [HOME]
 	# 5/At some stage, $TCHAN should be occupied; it should never be empty
 
@@ -603,7 +603,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 	if [string eq * $tchan] {
 		if { [lsearch -exact $cmdinfo(flags) -chanspecific] != -1 } { print -help -return $nick "\[SB7\] You must specify a channel in which to apply the $cmdinfo(cmd) command." }
 	} {
-		if { ![validchan $tchan] && ( [lsearch -exact $cmdinfo(flags) -ok:invalid] == -1 ) } { print -help -return $nick "\[SB7\] Illegal channel: $tchan" }
+		if { ![validchan $tchan] && ( [lsearch -exact $cmdinfo(flags) -badchan:ok] == -1 ) } { print -help -return $nick "\[SB7\] Illegal channel: $tchan" }
 	}
 # Why? -- set tchan [iff ![validchan $tchan] [data array value @OUTPUT LAST:$nick] $tchan]
 	set chan $tchan
@@ -716,10 +716,10 @@ proc sb7:dispatch { nick host handle chan arg } {
 	# Account for normal RETURN codes of "" "0" & "1" (not really an error)
 	if $error { if [info exists uh_oh] { if { [lsearch -exact [list "" 0 1] $uh_oh] != -1 } { zero error } } }
 
-	#####
-	# Do NOT exit the dispatcher prematurely: output overrides need to be
-	# cleared (immediately before the final exit). Don't use ERROR here!
-	#####
+	#######################################################################
+	# Do NOT exit the dispatcher prematurely: output overrides need to be #
+	# cleared (immediately before the final exit). Don't use ERROR here!  #
+	#######################################################################
 
 #putlog [effects DISPATCH:24 11,12 bold]
 	if $error {
@@ -2273,12 +2273,13 @@ proc normalize args {
 }
 
 proc number:clean number {
-	if [regexp -- {^[\+\-]} $number] { set sign [left $number 1] ; set number [mid $number 2] } { set sign "" }
+	if [regexp -- {^(\-?\d\.?\d*[eE][\+\-]\d+)$} [string trimleft $number +] - scinot] { return $scinot } ; # Don't mess with SCINOT
+	if ![regexp -- {^(\-?)([0-9]*\.?\d+[eE]?[\+\-]?\d*)$} [string trimleft $number +] - sign number] { return 0 }
 	lassign [split $number .] int mant
 	set int [string trimleft $int 0]
-	if [isempty int] { set int 0 }
+	if [string eq "" $int] { set int 0 }
 	set mant [string trimright $mant 0]     
-	if [isempty mant] { return ${sign}$int } { return ${sign}${int}.$mant }
+	if [string eq "" $mant] { return ${sign}$int } { return ${sign}${int}.$mant }
 }
 
 proc st= a { return $a } ; # Just a forced non-change so that flags / variables can keep their position (against others like STL)
@@ -4183,6 +4184,21 @@ proc chanstaff { chan modes } {
 	empty chanstaff
 	foreach mode [explode $modes] { set chanstaff [concat $chanstaff [data array get @chanmode ${chan}:$mode]] }
 	return $chanstaff
+}
+
+proc mode_combine args {
+	#%# If the IRCD 005 info is available, adjust this to respect channel modes that can be included here
+	array set need_param [list + [list b e I q a o h v l L k] - [list b e I q a o h v k]]
+	set modes 1 ; # Default to 1 mode-per-line
+	if [info exists ::modes-per-line] {
+		set modes [normalize ${::modes-per-line}]
+		if !$modes { set modes 1 }
+	}
+	empty buffer
+	# Loop through, splitting the first word (+ab-cd+e-f+g param1 param2 param3) and combine which need params ....
+
+	# For now, just combine each list into dumpable groups. Make loop clip off most-recently processed group
+	# so the dump will include the last chunk (that's less than 'full size' -- see OP.SB7 for example).
 }
 
 # --- Output commands ---
@@ -6341,7 +6357,7 @@ proc gmt:format { type { gmt "" } } {
 			return ${sign}[addzero $gmt 2]${colon}[addzero $mantissa 2]
 		}
 
-		default {error "[sb7 header] Illegal option \"${type}\""}
+		default {error "\[GMT:FORMAT\] Illegal option \"${type}\""}
 
 	}
 	return 0

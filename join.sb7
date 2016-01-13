@@ -1,97 +1,42 @@
-return ; # Not ready yet
-SB:command add JOIN  700 -core -invalidok ADDCHAN
+sb7 command add JOIN 700 -core -badchan:ok
 
-proc SB:proc_join {nick host handle chan arg} {
-	SB:setmiscvariables
-
-	if ![info exists ::max-logs] {set ::max-logs 5}; # Was 10 for some dumb reason
-	if [isempty 1] {set 1 $chan}
+proc @join { nick host handle chan arg } {
+	FLAGS
+	set join [none [join $1] $chan]
 
 	if [string eq -nocase HELP $1] {
 		printh $nick "\[JOIN\]:"
 		printh $nick "Syntax: $::botnick JOIN <#channel>"
-		printh $nick "The bot will join a channel."
+		printh $nick "The bot will join and monitor #channel"
 		printh $nick ""
 		printh $nick "Syntax: $::botnick JOIN <#channel> <chankey>"
-		printh $nick "     This will make the bot join the channel using a key (if the channel = MODE +k)"
-		printh $nick "     Note: this alternate syntax will work whether or not the bot already monitors the specified channel."
+		printh $nick "     This will make the bot re-join the channel using a key (if the channel = MODE +k), in case it's locked out of the channel"
 		printh $nick ""
-		printh $nick "By default, EGGDROP can join several types of channels, however not all networks support \"server only\" channels (&channel) or other types of channels (!chan). Therefore, in most cases, StormBot.TCL only supports standard network channels (#channel). An on-going update is occurring to change that, but if some channels fail to be recognized, please report it to the coder."
-		printh $nick "Currently, this network supports the following types of channels: [join [sbdget NETWORK:CHANTYPES] ", "]"
-		printh $nick ""
-		printh $nick "\002Related topics:\002 PART BLOCK"
+		printh $nick "By default, IRC networks can offer multiple types of channels: # (default: channels that can be seen from any server), & (only visible on a given server\; each server has its own separate copy of any given & channel), or ! (special-case channel)."
+		printh $nick "Currently, this network supports the following types of channels: #"
+		printh $nick "\002Related topics\002: PART BLOCK"
 		return 0
 	}
 
-	if [validchan $1] {
-		if {$2 != ""} {# Manual JOIN with channel key
-			putquick "JOIN $1 $2"
-			return 0
-		} else {
-			set schanlist [sbdget SUSPENDCHAN:INDEX]
-			if {[channel get $1 inactive] || ([lsearch -exact [stl $schanlist] [stl $chan]] > -1)} {
-				printh $nick "I'm currently SUSPENDED from joining that channel right now."
-				msghome "[nph $nick $handle] tried to make me JOIN a SUSPENDED channel: $chan"
-				return 0
-			}
-
-			print $nick "I'm already in $1"
-			return 0
-		}
-	} else {
-		set 1 [split $chan]; set j1 $chan
+	if [validchan $join] {
+		if ![string eq "" $2] { putquick "JOIN $join [join $2]" -next; return 0 }
+		if [channel get $join inactive] { print -return -short $nick "$join is currently [effects inactive 4 b] at this time. Use \"$::botnick CHANSET $join -inactive\" to return me to the channel." }
+		#%# Suspended channel? (if different than a blocked channel)
+		print -return -short $nick "I'm already in ${join}!"
 	}
+	set blocked 0
+	if [data array notempty block $join] { set blocked 1 }
+	if [lmatch -glob -nocase -all -multiple -count $join [data array get block list]] { set blocked 1 }
+	if $blocked { print -return -short $nick "Can not join ${join}: currently blocked" }
 
-	# "set 1 <blah>" above will test true for [VALIDCHAN $1] above: won't get
-	# down here at all. Thus, $J1 below.
-
-	empty joined
-	zero needsave
-	foreach 1 [split $j1 ,] {
-		if ![isvalidchantype $1] {print $nick "$1 is not a valid channel name, remember they have to start with a [and [join [sbdget NETWORK:CHANTYPES] ", "] &]."; continue}
-
-		set index [string tolower [sbdget SUSPENDCHAN:INDEX]]
-		if {[lsearch -glob $index [string tolower $1]] > -1} {
-			print $nick "I'm sorry, but that channel is SUSPENDed."
-			msghome "\[JOIN\] [nph $nick $handle] tried to make me join a SUSPENDCHANed channel: $1"
-			continue
-		} else {
-			set match 0
-			set blocked [getfirst [sbd:get BLOCK]]
-			foreach checkme $blocked {
-				if [string match -nocase $checkme $1] {
-					print $nick "I'm sorry, but $1 is currently BLOCKED (matched: ${a})"
-					msghome "\[JOIN\] [nph $nick $handle] just tried to make me JOIN $1 (JOIN being denied by BLOCK)"
-					continue
-				}
-			}
-
-			# Regular JOIN
-			if {[llength [channels]] >= ${::max-logs}} {
-				set msg "Right now, I can't join any more channels because I'm already at the maximum number of logfiles. Please increase the max-logs variable in my configuration file before trying this JOIN again."
-				foreach a [split $::owner ,] {sendnote $::botnick $a [split $msg]}
-				print $nick $msg
-				return 0
-			}
-
-			lappend joined $1
-			channel add $1 [sbdget default_channel_options]
-			putquick "JOIN $1" -next
-			if {$2 != ""} {putquick "JOIN $1 $2" -next}; # Chan key
-
-			foreach chanmode [sbdget default_channel_modes] {channel set $1 $chanmode}
-
-			# Need to copy default channel settings to the new channel ?!
-
-			continue
-		}    
-	}
-
-	if $needsave savechannels
-	msghome "\[JOIN\] joining \002[ajl $joined]\002 (${dccnick})"
-	putcmdlog "\[JOIN\] ($nph) [ajl $joined]"
-	print $nick "I joined the following channels: [ajl $joined]"
-
+	# Removed multiple channel joins via #1,#2,#3. Only one channel at a time (because of the chan-key option above)
+	channel add $join
+	if [string eq "" $2] { putquick "JOIN $join" -next } { putquick "JOIN $join [join $2]" -next }
+	savechannels
+	set message "\[JOIN\] Joining \002${join}\002 ([nph $idx2nick $handle])"
+	putlog $message
+	print -home $message
+	print $nick $message
 	return 0
 }
 
