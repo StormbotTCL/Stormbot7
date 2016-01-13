@@ -35,7 +35,7 @@ proc @op:mode { nick host handle chan polarity mode arg } {
 		print -help $nick "Syntax: $::botnick $0u \[-force\] <list of nicks>"
 		print -help $nick "Makes $::botnick $0u (${polarity}${mode}) you or a list of users"
 		print -help $nick "Note: if you specify the handle of your target, $::botnick will find your target by nick (all mask-matching clones) and mode change as appropriate."
-		print -help $nick "Users must have appropriate masks to prevent the wrong target being affected."
+		print -help $nick "Users must have appropriate masks to prevent the wrong target(s) being affected."
 		return
 	}
 

@@ -1,0 +1,86 @@
+sb7 command add PART  700 -core -chanspec
+proc @part { nick host handle chan arg } {
+	FLAGS -mass
+	set access_all 800
+
+	if [string eq -n HELP $1] {
+		print -help $nick "\[PART\]:"
+		print -help $nick "Syntax: $::botnick PART <#channel> \[reason\]"
+		print -help $nick "Syntax: $::botnick PART -MASS #chan1 #chan2 #chan3 ... #chanN \[reason\] \{parts all listed channels (instead of making you do one at a time)\}"
+		print -help $nick "The bot will leave a channel. You may add a reason if desired."
+		print -help $nick "-MASS: removes multiple channels at once. Must be level $access_all to use this flag."
+		return
+	}
+
+	set chanlist $chan
+	set reason [none $1je "requested by [nph $idx2nick $handle]"]
+
+	if [validflag -mass] {
+		if ![access check $access_all $handle] { print -help -return $nick "\[PART\] You must have level $access_all access to use the -MASS flag." }
+		set chanlist ""
+		set reason $1e
+		foreach check $1e {
+			set check [join $check]
+			if [validchan $check] {
+				lappend chanlist $check ; set reason [lreplace $reason 0 0] 
+			} {
+				break
+			}
+		}
+		set reason [join $reason]
+	}
+
+	empty ok bad
+	foreach channel $chanlist {
+		if ![validchan $channel] { lappend bad $channel ; continue }
+		msg $channel "\[PART\] Parting $channel ([nph $idx2nick $handle]\002): $reason"
+		foreach user [userlist] {
+			catch { delchanrec $user $channel } 
+			foreach type [sb7 register list] {
+				foreach element [sb7 register list $type] {
+					if ![instr $element #] continue
+					set name $element
+					regsub -all -- # $name $channel name
+					regsub -all -- ! $name $user name
+					if [string eq -nocase USER $type] {
+						userinfo set $user $name ""
+					} {
+						data set $name ""
+						set names [data array names $element]
+						foreach _ $names {
+							if ![instr $_ #] continue
+							set name $_
+							regsub -all -- # $name $channel name
+							regsub -all -- ! $name $user name
+							data array set $element $name ""
+						}
+					}
+				}
+			}
+		}
+		rawoutput "PART $channel $reason"
+		channel remove $channel
+		lappend ok $channel
+	}
+
+	# Useless user check
+	# Separate this from the main loop
+	foreach user [userlist] {
+		zero saveuser
+		foreach channel [channels] {
+			if [matchattr $user nmtolvfqrdk|nmtolvfqrdk $channel] { one saveuser ; break }
+		}
+		if !$saveuser { deluser $user }
+	}
+
+	save; # Due to DEL'd users. Will also do SAVECHANNELS.
+	saveme data
+	if [notempty ok] {
+		msghome "\[PART\] PARTing \002[ajl $ok]\002 (${idx2nick})"
+		print $nick "[nph $idx2nick $handle] parted me from: [ajl $ok]"
+		putcmdlog "\[PART\] [ajl $ok] ([nph $idx2nick $handle])"
+	}
+	if [notempty bad] { print $nick "Failed PARTs: [ajl $bad]" }
+	return 0
+}
+
