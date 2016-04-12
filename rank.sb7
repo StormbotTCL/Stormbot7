@@ -1,0 +1,251 @@
+sb7 command add RANK 0 -none RANKS
+
+proc @rank { nick host handle chan arg } {
+	sb7 parseflags -navy -coastguard -army -airforce -marines
+	# Last choice (in given order) is used
+	if [isempty flags] { set service -navy } { set service [lindex $flags end] }
+
+	switch -exact -- $1l {
+
+		help {
+			print -help $nick "\[RANK\]:"
+			print -help $nick "Syntax: $::botnick RANK HELP"
+			print -help $nick "Syntax: $::botnick RANK"
+			print -help $nick "Syntax: $::botnick RANK \[-Army -Navy -AirForce -CoastGuard -Marines\]"
+			print -help $nick "Syntax: $::botnick RANK LIST \[-Army -Navy -AirForce -CoastGuard -Marines\]"
+			print -help $nick "The RANK command comparatives your access in a given channel (which is overridden by your global level, if applicable) against the United States Armed Forces ranks. By default, USN (United States Navy) ranks are used."
+			print -help $nick "Use the LIST command to display the list of ranks for the given service\; use the flag options to change which service rank list is used."
+			print -help $nick "For those with local (channel-level) access only, enlisted ranks will be used\; for global users, warrant officer or commissioned officer ranks will be used."
+			return
+		}
+
+		list {
+			set arg [lreplace $arg 1 1]
+			sb7 parseflags -navy -coastguard -cg -army -airforce -af -marines
+			set flags [lindex [none $flags -navy] end] ; # Take the last flag only
+			array set ranks [rank $flags list]
+			set max 0
+			foreach rank [array names ranks] { set max [expr ([string length $rank] > $max) ? [string length $rank] : $max] }
+			switch -exact -- [string tolower $flags] {
+				-navy { set name Navy }
+				-coastguard - -cg { set name "Coast Guard" }
+				-army { set name Army }
+				-airforce - af { set name "Air Force" }
+				-marines { set name Marines }
+			}
+			print $nick "Ranks list (based on the United States ${name}):"
+			foreach rank [lsort -decreasing -real [array names ranks]] {
+				print $nick "[format %${max}s $rank]: $ranks($rank)"
+			}
+			return
+		}
+
+		default {
+			set g [access get $handle]
+			if { $g > 500 } { print -return $nick "Global rank: $g ([rank $service $g])" }
+			set c [access get $handle $chan]
+			print -return $nick "$chan rank: $c ([rank $service $c])"
+			return
+		}
+
+	}
+	?
+}
+
+proc rank args {
+	flags:simple $args [list -global -navy -coastguard -cg -army -airforce -af -marines] text flags
+	if [isempty flags] { set flags -navy } ; # Default
+	lassign $text who chan
+
+	if [validflag -navy] { set abbr na }
+	if [validflag -coastguard -cg] { set abbr cg }
+	if [validflag -army] { set abbr ar }
+	if [validflag -airforce -af] { set abbr af }
+	if [validflag -marines] { set abbr ma }
+	array set ranks [list]
+
+	# "E-10" (E-9 Special) ranks are not used: they would imply a global user
+
+	##### NAVY #####
+
+	# Global levels
+	set ranks(na:1001) "Fleet Admiral" ; # O-11
+	set ranks(na:1000) Admiral ; # O-10
+	set ranks(na:975) "Vice Admiral" ; # O-9
+	set ranks(na:950) "Rear Admiral" ; # O-8
+	set ranks(na:925) Commodore ; # O-7*
+	set ranks(na:900) Captain ; # O-6
+	set ranks(na:800) Commander ; # O-5
+	set ranks(na:700) "Lieutenant Commander" ; # O-4
+	set ranks(na:600) Lieutenant ; # O-3
+	set ranks(na:575) "Lieutenant, Junior Grade" ; # O-2
+	set ranks(na:550) Ensign ; # O-1
+	set ranks(na:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(na:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(na:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(na:510) "Chief Warrant Officer-2" ; # CWO-2
+	set ranks(na:505) "Warrant Officer-1" ; # WO-1
+	set ranks(na:504) "Midshipman 1st Class" ; # MIDN-1/C
+	set ranks(na:503) "Midshipman 2nd Class" ; # MIDN-2/C
+	set ranks(na:502) "Midshipman 3rd Class" ; # MIDN-3/C
+	set ranks(na:501) "Midshipman 4th Class" ; # MIDN-4/C
+
+	# Local levels
+	set ranks(na:500) "Master Chief Petty Officer" ; # E-9
+	set ranks(na:450) "Senior Chief Petty Officer" ; # E-8
+	set ranks(na:400) "Chief Petty Officer" ; # E-7
+	set ranks(na:300) "Petty Officer 1st Class" ; # E-6
+	set ranks(na:200) "Petty Officer 2nd Class" ; # E-5
+	set ranks(na:100) "Petty Officer 3rd Class" ; # E-4
+	set ranks(na:75) Seaman ; # E-3
+	set ranks(na:50) "Seaman Apprentice" ; # E-2
+	set ranks(na:1) "Seaman Recruit" ; # E-1
+	set ranks(na:0) Civilian
+	set ranks(na:-1) Civilian
+
+	##### COAST GUARD #####
+	# No O-11 in Coast Guard -- set ranks(cg:1001) "Fleet Admiral" ; # O-11
+	set ranks(cg:1000) Admiral ; # O-10
+	set ranks(cg:975) "Vice Admiral" ; # O-9
+	set ranks(cg:950) "Rear Admiral" ; # O-8
+	set ranks(cg:925) Commodore ; # O-7*
+	set ranks(cg:900) Captain ; # O-6
+	set ranks(cg:800) Commander ; # O-5
+	set ranks(cg:700) "Lieutenant Commander" ; # O-4
+	set ranks(cg:600) Lieutenant ; # O-3
+	set ranks(cg:575) "Lieutenant, Junior Grade" ; # O-2
+	set ranks(cg:550) Ensign ; # O-1
+	# No CWO-5 in Coast Guard -- set ranks(cg:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(cg:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(cg:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(cg:505) "Chief Warrant Officer-2" ; # CWO-2
+	# No WO-1 in Coast Guard -- set ranks(cg:505) "Warrant Officer-1" ; # WO-1
+	set ranks(cg:504) "Midshipman 1st Class" ; # MIDN-1/C
+	set ranks(cg:503) "Midshipman 2nd Class" ; # MIDN-2/C
+	set ranks(cg:502) "Midshipman 3rd Class" ; # MIDN-3/C
+	set ranks(cg:501) "Midshipman 4th Class" ; # MIDN-4/C
+
+	# Local levels
+	set ranks(cg:500) "Master Chief Petty Officer" ; # E-9
+	set ranks(cg:450) "Senior Chief Petty Officer" ; # E-8
+	set ranks(cg:400) "Chief Petty Officer" ; # E-7
+	set ranks(cg:300) "Petty Officer 1st Class" ; # E-6
+	set ranks(cg:200) "Petty Officer 2nd Class" ; # E-5
+	set ranks(cg:100) "Petty Officer 3rd Class" ; # E-4
+	set ranks(cg:75) Seaman ; # E-3
+	set ranks(cg:50) "Seaman Apprentice" ; # E-2
+	set ranks(cg:1) "Seaman Recruit" ; # E-1
+	set ranks(cg:0) Civilian
+	set ranks(cg:-1) Civilian
+
+	##### ARMY ##### 
+
+	set ranks(ar:1001) "General of the Army" ; # O-11
+	set ranks(ar:1000) General ; # O-10
+	set ranks(ar:975) "Lieutenant General" ; # O-9
+	set ranks(ar:950) "Major General" ; # O-8
+	set ranks(ar:925) "Brigadier General" ; # O-7
+	set ranks(ar:900) Colonel ; # O-6
+	set ranks(ar:800) "Lieutenant Colonel" ; # O-5
+	set ranks(ar:700) Major ; # O-4
+	set ranks(ar:600) Captain ; # O-3
+	set ranks(ar:575) "First Lieutenant" ; # O-2
+	set ranks(ar:550) "Second Lieutenant" ; # O-1
+	set ranks(ar:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(ar:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(ar:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(ar:510) "Chief Warrant Officer-2" ; # CWO-2
+	set ranks(ar:501) "Warrant Officer-1" ; # WO-1
+
+	# Local levels
+	set ranks(ar:500) "Sergeant Major" ; # E-9
+	set ranks(ar:450) "Master Sergeant" ; # E-8 (First Sergeant)
+	set ranks(ar:400) "Sergeant First Class" ; # E-7
+	set ranks(ar:300) "Staff Sergeant" ; # E-6
+	set ranks(ar:200) "Sergeant" ; # E-5
+	set ranks(ar:100) "Corporal" ; # E-4
+	set ranks(ar:75) "Private First Class" ; # E-3
+	set ranks(ar:50) "Private E-2" ; # E-2
+	set ranks(ar:1) "Private" ; # E-1
+	set ranks(ar:0) Civilian
+	set ranks(ar:-1) Civilian
+
+	##### AIR FORCE #####
+
+	set ranks(af:1001) "General of the Air Force" ; # O-11
+	set ranks(af:1000) General ; # O-10
+	set ranks(af:975) "Lieutenant General" ; # O-9
+	set ranks(af:950) "Major General" ; # O-8
+	set ranks(af:925) "Brigadier General" ; # O-7
+	set ranks(af:900) Colonel ; # O-6
+	set ranks(af:800) "Lieutenant Colonel" ; # O-5
+	set ranks(af:700) Major ; # O-4
+	set ranks(af:600) Captain ; # O-3
+	set ranks(af:550) "First Lieutenant" ; # O-2
+	set ranks(af:501) "Second Lieutenant" ; # O-1
+	# Air Force does not use Warrant Officers
+
+	# Local levels
+	set ranks(af:500) "Chief Master Sergeant" ; # E-9 (First Sergeant)
+	set ranks(af:450) "Senor Master Sergeant" ; # E-8 (First Sergeant)
+	set ranks(af:400) "Master Sergeant" ; # E-7 (First Sergeant)
+	set ranks(af:300) "Technical Sergeant" ; # E-6
+	set ranks(af:200) "Staff Sergeant" ; # E-5
+	set ranks(af:100) "Senior Airman" ; # E-4
+	set ranks(af:75) "Airman First Class" ; # E-3
+	set ranks(af:50) Airman ; # E-2
+	set ranks(af:1) "Airman Basic" ; # E-1
+	set ranks(af:0) Civilian
+	set ranks(af:-1) Civilian
+
+	##### MARINES #####
+
+	# Marines do not use O-11 -- set ranks(ma:1001) "General of the Army" ; # O-11
+	set ranks(ma:1000) General ; # O-10 (Commandant of the Marine Corps)
+	set ranks(ma:975) "Lieutenant General" ; # O-9
+	set ranks(ma:950) "Major General" ; # O-8
+	set ranks(ma:925) "Brigadier General" ; # O-7
+	set ranks(ma:900) Colonel ; # O-6
+	set ranks(ma:800) "Lieutenant Colonel" ; # O-5
+	set ranks(ma:700) Major ; # O-4
+	set ranks(ma:600) Captain ; # O-3
+	set ranks(ma:575) "First Lieutenant" ; # O-2
+	set ranks(ma:550) "Second Lieutenant" ; # O-1
+	set ranks(ma:540) "Chief Warrant Officer-5" ; # CWO-5
+	set ranks(ma:530) "Chief Warrant Officer-4" ; # CWO-4
+	set ranks(ma:520) "Chief Warrant Officer-3" ; # CWO-3
+	set ranks(ma:510) "Chief Warrant Officer-2" ; # CWO-2
+	set ranks(ma:501) "Warrant Officer-1" ; # WO-1
+
+	# Local levels
+	set ranks(ma:500) "Sergeant Major" ; # E-9 (Master Gunnery Sergeant)
+	set ranks(ma:450) "Master Sergeant" ; # E-8 (First Sergeant)
+	set ranks(ma:400) "Gunnery Sergeant" ; # E-7
+	set ranks(ma:300) "Staff Sergeant" ; # E-6
+	set ranks(ma:200) Sergeant ; # E-5
+	set ranks(ma:100) Corporal ; # E-4
+	set ranks(ma:75) "Lance Corporal" ; # E-3
+	set ranks(ma:50) "Private First Class" ; # E-2
+	set ranks(ma:1) Private ; # E-1
+	set ranks(ma:0) Civilian
+	set ranks(ma:-1) Civilian
+
+	if [isnum -integer $who] {
+		set level $who
+	} elseif [string eq -nocase LIST $who] {
+		if [isempty flags] { return [list -navy -coastguard -army -airforce -marines] }
+		empty list
+		foreach a [array names ranks ${abbr}:*] { lappend list [mid $a 4] $ranks($a) }
+		return $list
+	} {
+		if ![validuser $who] { error "\[RANK\] Syntax error: \"${who}\" (expected user handle or literal access level)" }
+		if [validflag -global] { set level [access get $who] } { set level [access get $who $chan] }
+	}
+
+	foreach loop [lsort -dec -uni -dictionary [array names ranks ${abbr}:*]] {
+		set rank [lindex [split $loop :] 1]
+		if { $level >= $rank } { return $ranks($loop) }
+	}
+	?
+}
+
