@@ -1,0 +1,60 @@
+sb7 command add PASSHINT 1 -locklevel -core -logout:ok PH ; # Levels -1 & 0 don't require authing
+sb7 register user PASSHINT:PASS
+sb7 register user PASSHINT:OPASS
+
+proc @passhint { nick host handle chan arg } {
+	sb7 security
+	sb7 parseflags
+	set base PASSHINT:PASS
+
+	# Only allow HELP & GET to be used when the user is logged-out ....
+	switch -exact -- $1l {
+
+		"" - help {
+			print -help $nick "\[PASSHINT\]:"
+			print -help $nick "Syntax: $::botnick PASSHINT HELP"
+			print -help $nick "Syntax: $::botnick PASSHINT GET \[-OPASS\] \[your handle\]"
+			print -help $nick "Syntax: $::botnick PASSHINT SET \[-OPASS\] <password hint>"
+			print -help $nick "Syntax: $::botnick PASSHINT SET \[-OPASS\]"
+			print -help $nick ""
+			print -help $nick "The PASSHINT command allows you to set a \"password hint\" so common to websites nowadays. Your hint can be ANY text you choose."
+			print -help $nick "Using SET without giving a hint will blank your current hint."
+			print -help $nick "The -OAUTH flag lets you set your hint for your owner login (=1000 users only)."
+			print -help $nick "Don't be too obvious (\"my birthday\"), because the info could be somewhere else in the bot (\"$::botnick info $handle bday\")"
+			return
+		}
+
+		get {
+			flags:simple [join $2e] -opass who flags
+			if [validflag -opass] {
+				if ![access check 1000 $handle] { print -help -error -return $nick "You don't have access to the -OAUTH flag here." }
+				set base PASSHINT:OPASS
+			}
+			if [isempty who] { set who $handle } { lassign [whois $who $handle] - wn - wh ; set who $wh }
+			if ![validhost $host $who] { print -help -return $nick "\[PASSHINT GET\] You don't match any userhosts for the user: $who" }
+			set hint [userinfo get $who $base]
+			print -private $nick "Your [lindex [list "" "OPASS "] [validflag -opass]]password hint: [none $hint <blank>]"
+			return
+		}
+
+		set {
+			if ![is authed $handle $nick $host] { print -error -help -header -return $nick "You must be logged-in to use this command." }
+			flags:simple [join $2e] -opass new flags
+			if [validflag -opass] {
+				if ![access check 1000 $handle] { print -help -error -return $nick "You don't have access to the -OAUTH flag here." }
+				if ![is oauthed $handle $nick $host] { print -error -help -header -return $nick "You must be ologged-in to use this command." }
+				set base PASSHINT:OPASS
+			}
+			set hint [join $new]
+			userinfo set $handle $base $hint
+			saveme user
+			print -private $nick "Your password hint: [none $hint <blank>]"
+			return
+		}
+
+		default { print -help -short -return $nick "Unknown option: $1" }
+
+	}
+	?
+}
+

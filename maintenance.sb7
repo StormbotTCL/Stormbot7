@@ -1,4 +1,4 @@
-sb7 command add MAINTENANCE 1000 -locklevel -core MAINT MAITN
+sb7 command add MAINTENANCE 1000 -locklevel -core MAINT MAITN MAIN
 
 proc @maintenance { nick host handle chan arg } {
 #debug *
@@ -19,7 +19,7 @@ proc @maintenance { nick host handle chan arg } {
 			return 0
 		}
 
-		l - ld - laod - load {
+		l - ld - laod - tload - load {
 #debug nick host handle chan arg 1 2e
 			if [isempty 2] { sb7 error $nick * "Missing list of beads to load" }
 			empty ok dne bad wrong text files
@@ -77,4 +77,5 @@ proc @maintenance { nick host handle chan arg } {
 
 	}
 }
+
 

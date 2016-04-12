@@ -111,7 +111,7 @@ proc @config { nick host handle chan arg } {
 					default { set data [data get $base $a] }
 
 				}
-				
+
 				print $nick "[format %${max}s $a]: [none $data <none>]"
 			}
 			return 0
@@ -127,6 +127,8 @@ proc @config { nick host handle chan arg } {
 
 		dl - debug - debuglevel {
 			if [string eq "" $2] { print -return -help $nick "\[CONFIG\] ${1u}: [data get -normalize $base bind:version]" }
+			if [string eq -nocase HELP $2] { print -return -help $nick "\[CONFIG -GLOBAL DEBUGLEVEL\] Debug level determines how much information will be shown when an error occurs. Options: \"0\" (no information), \"1\" (minimal information), & \"2\" (all debug information, only needed at the coder's request, usually)" }
+			if { [lsearch -exact [list 0 1 2] $2] == -1 } { print -return -help $nick "\[CONFIG -GLOBAL DEBUGLEVEL\] Illegal value \"${2}\" (valid options: 0, 1, & 2)" }
 			set value $2
 			data set $base debuglevel $value
 			saveme data
@@ -516,4 +518,5 @@ proc config:check:backup { min hour day month year } {
 
 bind chon - * config:check:chon
 bind time - "00 *" config:check:backup
+
 

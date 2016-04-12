@@ -13,7 +13,7 @@ proc end args { return -code return }
 
 proc sb7 { args } { # General
 	global sb7
-	lassign $args cmd 1 2 3 4 5 6 7 8 9      
+	lassign $args cmd 1 2 3 4 5 6 7 8 9
 	switch -exact -- [string tolower $cmd] {
 
 		sec - security {
@@ -1065,7 +1065,7 @@ proc data args {
 
 		file - filename { if [string eq -nocase TAIL $arg1] { return ${::nick}.data } { return [pwd]/${::nick}.data } }
 
-		names { set p * ; if [notempty arg1] { set p [string tolower $arg1] } ; return [array names sb7 $p] }
+		names { set p * ; if [notempty arg1] { set p [string tolower $arg1] } ; return [lsort -increasing -dictionary [array names sb7 $p]] }
 
 		fetch - val - value - get {
 			set arg2 [string tolower $arg2]
@@ -1330,7 +1330,7 @@ proc data args {
 					if [info exists sb7($name)] { array set temp $sb7($name) } { array set temp "" }
 					set matchme *
 					if [notempty arg3] { set matchme [string tolower $arg3] }
-					return [array names temp $matchme]
+					return [lsort -increasing -dictionary [array names temp $matchme]]
 				}
 
 				fetch - val - value - get {
@@ -7023,9 +7023,10 @@ interp alias {} userflags {} userflag
 interp alias {} getflags {} sb7 parseflags
 interp alias {} FLAGS {} sb7 parseflags ; # Case sensitive!
 interp alias {} lmatch {} ldestroy -not
-interp alias {} path:rel {} path:relative 
+interp alias {} path:rel {} path:relative
 interp alias {} degrees {} angle
 interp alias {} fixmath {} expr:fix
+interp alias {} now {} clock seconds
 
 # --- Deprecated commands ---
 
@@ -7094,4 +7095,5 @@ proc @version { nick host handle chan arg } {
 # We're done!
 
 putlog "\[StormBot.TCL\] Version [data array get @VERSION stormbot] (by Mai \"Domino\" Mizuno) loaded"
+
 

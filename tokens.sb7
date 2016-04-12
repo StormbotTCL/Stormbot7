@@ -1,0 +1,43 @@
+sb7 command add TOKENS 1 -none TOKEN
+
+proc @tokens { nick host handle chan arg } {
+	sb7 setvars
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[TOKENS\]:"
+		print -help $nick "Syntax: $::botnick TOKENS HELP"
+		print -help $nick "Syntax: $::botnick TOKENS"
+		print -help $nick "Syntax: $::botnick TOKENS <user>"
+		print -help $nick "Syntax: $::botnick TOKENS <token>"
+		print -help $nick "The TOKENS command will identify the different \"hard tokens\" available in various commands (ACCESS, NOTE, et cetera). This command will do a look-up based on your input."
+		print -help $nick "If you provide a user name, the command will show you what tokens that person would be part of. If you specify an established token, the command will show all users who are part of that group."
+		print -help $nick "Using the command without any parameters will show you all established tokens."
+		print -help $nick "Note: to use a token within a command, you must be 400+ access (chanmaster or higher) for local \[channel\] tokens, or 501+ access (global friend or higher) for the global tokens."
+		return
+	}
+
+	set list [ldestroy -all -not -mult -glob [get first [data get userlevels]] [list chan* global* bot*]]
+	if [isempty 1] { print -short -return $nick "Currently available tokens: [ajl $list]" }
+
+	# Find by token name ....
+	set matches [ldestroy -all -not -glob -nocase -mult $list [regsub -all -- {\$} $1e "" ]]
+	if [notempty matches] {
+		foreach token $matches {
+			set data [get token $token $chan]
+debug token data
+			if [notempty data] { print $nick "[string toupper $token]: $data" }
+		}
+		return
+	}
+
+	# Find by user ....
+	lassign [whois $1 $nick $chan] wo wn wm wh wc wa
+	if [isempty wh] { set user $wn } { if [notempty wa] { set user $wa } { set user $wh } }
+	empty o
+	foreach element $list {
+		set token [get token $element]
+		if { [lsearch -exact $token $handle] != -1 } { lappend o $element }
+	}
+	if [isempty o] { print -short $nick "$user is not part of any tokenized groups." } { print -short $nick "$user is part of the following tokens: [ajl $o]" }
+	return
+}
+

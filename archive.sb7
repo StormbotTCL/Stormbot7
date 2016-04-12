@@ -1,0 +1,134 @@
+return
+
+# 2016-04-02 02:07:00 -0700: not converted yet
+sb7 command add ARCHIVE 1000 -locklevel ARCH
+
+proc @archive { nick host handle chan arg } {
+	# In case -ALL is used, it should only apply to these flags:
+	set validflags [list -autosend -test -config -datafile -userfile -chanfile -notefile -botchk]
+	set all_ok [list -config -datafile -userfile -chanfile -notefile -botchk]
+
+	# Otherwise, ....
+	set allflags [concat -all -day -hour -full -refresh $validflags]
+
+	FLAGS $allflags
+	if [validflag -all] { set flags [concat $flags $all_ok] }
+
+	switch -exact -- [string tolower $1] {
+		help {
+			print -help $nick "\[ARCHIVE\]:"
+			print -help $nick "Syntax: $::botnick ARCHIVE HELP"
+			print -help $nick "Syntax: $::botnick ARCHIVE TEST"
+			print -help $nick "Syntax: $::botnick ARCHIVE \[flags\] MAKE \[-autosend <target bot>\]"
+			print -help $nick "The ARCHIVE command prepares a tarball of the following files: config file, userfile, chanfile, datafile, botchk file (if applicable), and notefile (if applicable)."
+			print -help $nick "TEST    : checks if the TAR & GZIP commands are available from the shell. This command will fail without it."
+			print -help $nick "-DAY    : rounds file's name (which contains the date/time) to the current day"
+			print -help $nick "-HOUR   : rounds file's name (which contains the date/time) to the current hour"
+			print -help $nick "-FULL   : adds the full timestamp to the file's name: [clock format [now] -format "%Y%m%d%H%M%S%z"]"
+			print -help $nick "-REFRESH: if the file already exists, delete it and make a new tarball"
+			print -help $nick "The following flags tell you which files to include: (or you can use -ALL)"
+			print -help $nick "-ALL | -CONFIG -USERFILE -CHANFILE -DATAFILE -BOTCHK -NOTEFILE"
+
+			empty tag
+			one available
+			if {[SB:issuspended cmd BOTSEND $chan] || ![SB:commandlist iscmd BOTSEND]} {set available 0; set tag " (You'll have to copy the resulting file manually to that bot.)"}
+			set message " By the way, BOTSEND is[lindex [list " \002\037[color 4,5]NOT[color]\037\002"] $available] available for use with the -AUTOSEND flag.$tag"
+			print -help $nick "The -AUTOSEND flag automatically sends the resultant data file to another bot, employing a command that already exists: BOTSEND.$message"
+			return 0
+		}
+
+		test {
+			set tar [SB:shell_findcmd tar]
+			if [isempty tar] {print $nick "I can not find TAR in either the WHEREIS or WHICH shell commands."; return 0}
+			print $nick "I found TAR as: $tar"
+
+			set gzip [SB:shell_findcmd gzip]
+			if [isempty gzip] {print $nick "I can not find GZIP in either the WHEREIS or WHICH shell commands."; return 0}
+			print $nick "I found GZIP as: $gzip"
+			print $nick "I have what I need to use this command. (:"
+
+			return 0
+		}
+
+		make {
+			# Find-out what bot to send this (if applicable) #
+
+			empty targetbot sh
+			if [isvalidflag $flags -autosend] {set targetbot $j1}
+
+			set timestamp %Y%m%d%H%M
+			if [isvalidflag $flags -day ] {set timestamp %Y%m%d}
+			if [isvalidflag $flags -hour] {set timestamp %Y%m%d%H00}
+			if [validflag -full] { set timestamp %Y%m%d-%H%M%S%z }
+			set archive "[clock format [now] -format ${timestamp}-${::nick}.archive.tar]"
+
+			if [isvalidflag $flags -refresh] {
+				if [file exists $archive     ] { file delete $archive      }
+				if [file exists ${archive}.gz] { file delete ${archive}.gz }
+			}
+
+			# Now check if the file exists #
+			if [file exists $archive     ] {print $nick "I can't create the TARBALL \"${archive}\" (already exists). Use -REFRESH flag to overwrite it."; return 0}
+			if [file exists ${archive}.gz] {print $nick "I can't create the TARBALL GZIP \"${archive}.gz\" (already exists). Use -REFRESH flag to overwrite it."; return 0}
+
+			empty checked
+			foreach a [list config userfile chanfile notefile] {
+				if [isvalidflag $flags -$a] {
+					if ![info exists ::$a] {print -help $nick "I can't ARCHIVE for a variable that isn't even defined: $a is not in the config file!"; return 0}
+				}
+			}
+
+			set flag c
+			lappend sh "#!/bin/sh"
+
+			# Since the BOTHCK file isn't in a CONFIG variable, let's catch it by
+			# $::NICK (case-sensitive), and lower-case $::NICK
+
+			foreach {file validflag} [list $::config -conf $::userfile -userfile $::chanfile -chanfile $::notefile -notefile ${::nick}.data -datafile ${::nick}.botchk -botchk [stl $::nick].botchk -botchk] {
+				if [file exists $file] {
+					if [validflag $validflag] {
+						if [file exists $file] {
+							# In case of BOTCHK, we're checking for 2 possibilities
+							lappend sh "tar -${flag}f $archive $file"
+							set flag r
+						}
+					}
+				}
+			}
+
+			if ![string eq $flag r] {print $nick "I couldn't find any of the requested data files!"; return 0}
+
+			lappend sh "gzip $archive"
+			append archive .gz
+
+			# Dump the shell script #
+			set tempfile archive.[now].[rand 9999999].sh
+			dumpfile $tempfile $sh 1
+			exec chmod 755 $tempfile
+
+			# Execute it! #
+			set error [ catch { exec ./$tempfile } ohshit ]
+			if $error {error "Error while preparing tarball: $ohshit"}
+
+			# Clean-up #
+			file delete $tempfile
+
+			# Let's dispatch to BOTSEND if necessary .... #
+
+			if [isvalidflag $flags -autosend] {
+				print $nick "> Using BOTSEND to send this file to $targetbot ...."
+				empty botlist botgone
+				foreach targetbot2 [split $targetbot ,] { if [ islinked $targetbot2 ] { lappend botlist $targetbot2 } { lappend botgone $targetbot2 } }
+				if [notempty botlist] {SB:dispatch $nick $host $handle $chan "BOTSEND ## SEND [join $botlist ,] $archive"}
+				if [notempty botgone] {print -help $nick "Not linked to the botnet at this time (your information can not be transferred): [join $botgone ", "]"}
+			}
+			print $nick "File created: $archive"
+			return 0
+		}
+
+		default {print -help $nick [jtext baka]; return 0}
+
+	}
+	return 0
+}
+

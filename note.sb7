@@ -1,6 +1,13 @@
+#putlog "\[NOTE\] This command is deprecated."
+catch { sb7 command del note }
+catch { sb7 abbr del note notes }
+#catch { file mkdir ./scripts/sb7/purged }
+#catch { file rename -force ./scripts/sb7/note.sb7 ./scripts/sb7/purged/note.sb7 }
+return
+
 # When a note is sent somewhere else (FWD / copy / BOTNET), restore the modes to the original note text!
 
-sb7 command add note 1 -core notes ntoe no
+sb7 command add note 1 -core note ntoe no
 sb7 register user note:setting:*
 sb7 register global note
 sb7 register global notes:!
@@ -36,7 +43,7 @@ proc @note { nick host handle chan arg } {
 	if ![regexp -- {^[a-z][a-z0-9]*$} $archivename] {print -help $nick "\[NOTE\] Illegal archive name \"${archivename}\" (must start with \"A-Z\" and otherwise must consist of: \"0-9\" or \"A-Z\")" ; return }
 
 	switch -exact -- [string tolower $1] {
- 
+
 		help {
 			# Regardless of syntax or params / args needed, FLAGS goes before the target user
 			print -help $nick "\[NOTE\]:"
@@ -81,7 +88,7 @@ proc @note { nick host handle chan arg } {
 			# Wedge
 			if [string eq -nocase UNREAD $1] { lappend flags -unread }
 
-			if [validflag -unread] { set range 1- } 
+			if [validflag -unread] { set range 1- }
 			if [isempty range] { set range 1- }
 			set count [@notes count $handle $archivename]
 			if !$count { print -short -return $nick "You have no notes to read." }
@@ -149,8 +156,8 @@ proc @note { nick host handle chan arg } {
 				print -help $nick "MARK <any valid ISO-readable date string>: set the timestamp manually (advanced users only)"
 				return
 			}
-			if [isnum -integer $2] { 
-				set markme $2 
+			if [isnum -integer $2] {
+				set markme $2
 				if !$markme {
 					userinfo set $handle note:setting:lastread $markme
 					saveme data
@@ -211,7 +218,7 @@ proc @note { nick host handle chan arg } {
 				lappend from([string tolower $who]) $count
 			}
 			print -short $nick "You have [comma $count] [plural note $count]:"
-			if { [llength [array names from]] == 1 } { 
+			if { [llength [array names from]] == 1 } {
 				print $nick "[array names from]: all"
 			} {
 				foreach a [lsort -increasing -dictionary -unique [array names from]] { print $nick "[handle $a]: [process numberlist $from($a)]" }
@@ -361,7 +368,7 @@ proc @note { nick host handle chan arg } {
 					lassign [whois $target $handle] - target_nick - target_handle
 					if [isempty target_handle] { set target_handle $target }
 					if [isempty target_nick] { set target_nick $target_handle }
-					
+
 					set what "Originally sent [formatdate $when $target_handle]: $what"
 					# Do NOT copy modes when forwarding notes (save "always-private")
 					# Maybe later: add fresh flag options (same as normal)?
@@ -423,7 +430,7 @@ proc @note { nick host handle chan arg } {
 
 			# Send to all targets
 			array set error [list]
-			foreach target $targets { 
+			foreach target $targets {
 				lassign [whois $target $handle $chan] - target_nick - target_handle
 #debug target handle target_nick target_handle
 				set result [@notes send $target_handle main $handle [clock seconds] $note]
@@ -482,7 +489,7 @@ proc @notes { cmd args } {
 			foreach archive [data array names NOTES:$handle] {
 				foreach match $matches {
 					if [string match -nocase $match $archive] { lappend names $archive }
-				}	
+				}
 			}
 			return [lsort -inc -uni -dict $names]
 		}
@@ -649,7 +656,7 @@ proc @notes { cmd args } {
 			foreach pos [lsort -decreasing -unique -integer [get range $range 1 $ll]] {
 				set index [expr $pos - 1]
 				set notes [lreplace $notes $index $index]
-				lappend delete $pos 
+				lappend delete $pos
 			}
 			data array set NOTES:$handle $archive $notes
 			return [lsort -increasing -unique -integer $delete]
@@ -811,7 +818,7 @@ proc @notes:bootstrap args {
 	# Move all "standard" notes[2].tcl notes under our control ....
 	@notes:convert *
 
-	return	
+	return
 }
 
 #####

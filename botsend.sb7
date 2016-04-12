@@ -607,10 +607,8 @@ proc @botsend:complete { bot - id } {
 
 proc @botsend:queue args {
 #sb7 log @BOTSEND:QUEUE=1
-	sb7 killtimer -quiet @botsend:queue
-#sb7 log @BOTSEND:QUEUE=2
-	utimer 0 @botsend:queue
-#sb7 log @BOTSEND:QUEUE=3
+	if [data array get -boolean errors utimer] { utimer 0 @botsend:queue }
+	if [string eq "" [data array find @botsend]] { return 0 }
 
 	set option_buffer 25000 ; # How many characters to stuff into the buffer
 	if [data array get -notempty botsend option:buffer] { set option_buffer [data array get botsend option:buffer] }
@@ -694,7 +692,7 @@ proc @botsend:quick { bot cmd arg } {
 			set dir [none [data array get botsend option:dir] ./botsend]
 			if ![file isdirectory $dir] { file mkdir $dir }
 			set target ${dir}/$tail
-			
+
 			file:write $target [binary format H* [data array get @botsend:quick $tail]]
 			data array set @botsend:quick $tail ""
 			empty tag
@@ -750,7 +748,8 @@ proc @botsend:bootstrap args {
 	data array clear @botsend *
 	data array set botsend options $defaults
 	sb7 killtimer -quiet @botsend:queue
-	utimer 0 @botsend:queue
+	set error [ catch { utimer 0 @botsend:queue 0 } ]
+	if $error { utimer 0 @botsend:queue ; data array set error utimer 1 }
 }
 
 #####
@@ -763,4 +762,5 @@ bind bot - botsend:sender @botsend:sender
 bind bot - botsend:quick @botsend:quick
 
 @botsend:bootstrap
+
 

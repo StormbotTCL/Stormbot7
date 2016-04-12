@@ -8,7 +8,7 @@ proc @bot { nick host handle chan arg } {
 	switch -exact -- [string tolower $1] {
 
 		help {
-			print -help $nick "\[BOTS\]:"
+			print -help $nick "\[BOT\]:"
 			print -help $nick "Syntax: $::botnick BOT HELP"
 			print -help $nick "Syntax: $::botnick BOT ISLINKED <target>"
 			print -help $nick "Syntax: $::botnick BOT LINK <target>"
@@ -267,4 +267,5 @@ proc @bot { nick host handle chan arg } {
 
 	return
 }
+
 
