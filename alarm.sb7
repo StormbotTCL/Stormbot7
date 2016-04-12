@@ -78,7 +78,9 @@ proc @alarm { nick host handle chan arg } {
 proc @alarm:timer args {
 	utimer 0 @alarm:timer
 	zero triggered
-	foreach user [userlist -b] { # Bots don't need alarms (that they don't already have internally)!
+	set userlist [data array names alarm]
+	if [string eq "" $userlist] return
+	foreach user $userlist { # Bots don't need alarms (that they don't already have internally)!
 		set alarms [data array get alarm $user]
 		empty new
 		foreach alarm $alarms {

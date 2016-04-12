@@ -1,0 +1,29 @@
+sb7 command add ACT 400 -chanspec DO ; # ACT is less of a security risk than SAY (SB6:ACT = 500)
+
+proc @act { nick host handle chan arg } {
+	sb7 parseflags
+		switch -exact -- [string tolower $1] {
+
+			help {
+				print -help $nick "\[ACT\]:"
+				print -help $nick "Syntax: $::botnick ACT HELP"
+				print -help $nick "Syntax: $::botnick ACT <message>"
+				print -help $nick "Makes $::botnick perform an action, via the ACTION CTCP, to the channel."
+				print -help $nick "An action, in this case, is the same as you typing \"/me does something\" in your chat client."
+				return
+			}
+
+			hint { print -help -short -return $nick "No HINTs available for this command." }
+
+			default { 
+				if [isempty 1] { print -help -short -return $nick "You forgot to tell me what to act out." }
+				# Don't use PRINT: something keeps it from working 
+				msg $chan "\001ACTION [join $1e]\001"
+				return
+			}
+
+		}
+	}
+	return
+}
+

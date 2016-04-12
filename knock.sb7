@@ -1,0 +1,20 @@
+sb7 command add KNOCK 100 -chanspecific -core
+
+proc @knock { nick host handle chan arg } {
+	FLAGS
+	if [string eq -nocase HELP $1] {
+		print -help $nick "\[KNOCK\]:"
+		print -help $nick "Syntax: $::botnick KNOCK HELP"
+		print -help $nick "Syntax: $::botnick KNOCK \[#channel\]"
+		print -help $nick ""
+		print -help $nick "This command knocks on the door of a channel, asking the channel operators to issue an INVITE into the channel for the bot."
+		print -help $nick "KNOCK can only be used in channels where the bot would normally try to enter\; it can't be used on random channels; It can not be used to KNOCK on behalf of other users."
+		return
+	}
+
+	if ![validchan $chan] { print -help -short -return $nick "$::botnick doesn't join that channel normally, so, this KNOCK request is invalid." }
+	raw "KNOCK $chan :It's ${::botnick}, your channel bot, requesting to get invited back into the channel. :)"
+	print -short $nick "I knocked on ${chan}."
+	return
+}
+

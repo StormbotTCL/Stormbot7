@@ -16,7 +16,7 @@ proc @abuse { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick ABUSE EXEMPT <add | del | list | clear> \[#channel\] (exempts channels from ABUSE reports)"
 			print -help $nick "Syntax: $::botnick ABUSE REPORTALL <on | off> (\037ON\037: report even when global staff \[> 500\] abuses the bot, \037OFF\037: all global users are exempt)"
 			print -help $nick "Syntax: $::botnick ABUSE SCAN \[-ALLCHANS\] \[target user | * \[minutes | URT:time range to go back\]\] (finds and displays ABUSE records)"
-			print -help $nick "The ABUSE command reports (tattle-tails) on any user who deops or kicks $::botnick out of any channel."
+			print -help $nick "The ABUSE command reports (tattle-tales) on any user who deops or kicks $::botnick out of any channel."
 			print -help $nick "URT: date reference from \"now\" (such as: +1h (1 hour), +2.5d (2.5 days), 25m30s (25 minutes & 30 seconds))"
 			print -help $nick "> End of ABUSE HELP."
 			return 0
@@ -194,3 +194,4 @@ proc @abuse:verify_data args {
 @abuse:verify_data
 bind mode - "*-o*" @abuse:deop
 bind kick - * @abuse:kick
+

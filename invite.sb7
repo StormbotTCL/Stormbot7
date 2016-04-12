@@ -1,0 +1,53 @@
+sb7 command add INVITE 100 -chanspecific -core ; # Must keep INVITE separate
+
+proc @invite { nick host handle chan arg } {
+	# Hint: explain invite vs invex
+	FLAGS
+	switch -exact -- [string tolower $1] {
+
+		help {
+			print -help $nick "\[INVITE\]:"
+			print -help $nick "Syntax: $::botnick INVITE HELP"
+			print -help $nick "Syntax: $::botnick INVITE <nick>"
+			print -help $nick ""
+			print -help $nick "This command issues a single invitation to the channel."
+			print -help $nick "Note: if there are any channel limits or bans in place, the INVITE might not override them."
+			print -help $nick ""
+			print -help $nick "To issue a long-term / permanent invitation, see the INVEX command (which sets channel mode +I (India / 'capital eye') with a standing invite)"
+			return
+		}
+
+		hint {
+			print -help $nick "\[INVITE\]:"
+			print -help $nick "Syntax: $::botnick INVITE <nick> (invite a specific user to the channel)"
+			print -help $nick "Syntax: $::botnick BAN \[-time <time> | -perm\] -INVEX <host> (set a channel mode +I to protect a long-term invitation)"
+			return
+		}
+
+		default {
+			set targets [join $1e]
+			empty ok bad
+			foreach target $targets {
+				lassign [whois $target $handle] - inviteme
+				if [onchan $inviteme $chan] { lappend bad $target ; continue }
+				if [regexp -- {^[\#\&]} $target] {
+					set message "[nph $nick $handle] Full-channel invite attempt: $target"
+					lappend bad $target
+					continue
+				}
+				print $inviteme "[nph $nick $handle] is inviting you to: $chan"
+				putserv "INVITE $inviteme :$chan"
+				lappend ok [nph $target $inviteme]
+			}
+			if [notempty ok] { 
+				msg $chan "\[INVITE\] [nph $nick $handle] invited to ${chan}: [ajl $ok]"
+				print -short $nick "Invited to ${chan}: [ajl $ok]"
+			}
+			if [notempty bad] { print -short $nick "Already on channel: [ajl $bad]" }
+			return
+		}
+
+	}
+	?
+}
+

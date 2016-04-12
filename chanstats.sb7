@@ -64,16 +64,29 @@ proc @chanstats { nick host handle chan arg } {
 	# (but won't show up on the local lists)?                        #
 	##################################################################
 
-	foreach word [list ban exempt invite] list [list banlist exemptlist invexlist] {
-		print $nick "[string totitle $word]s:"
-		set error [ catch { set list [$list $chan] } crap ]
-		if $error {
-			if [string eq -nocase invexlist $list] { set list [invitelist $chan] } { error $crap }
-		}
-		foreach element $list {
-			lassign $element mask reason expire added last who
-			print $nick "[space 5]\002${mask}\002 (by $who - [date:short -ymd $added] [iff $expire "to [date:short -ymd $expire]" (permanent)]): [join $reason]"
+	foreach word [list ban exempt invite] type [list banlist exemptlist invexlist] {
+		set error [ catch { set list [$type $chan] } crap ]
+		if $error { if [string eq -nocase invexlist $type] { set list [invitelist $chan] } { error $crap } }
+		if ![string eq "" $list] {
+ 			print $nick "[string totitle $word]s ([llength $list]):"
+			foreach element $list {
+				lassign $element mask reason expire added last who
+				print $nick "[string repeat " " 5]\002${mask}\002 (by $who - [date:short -ymd $added] [iff $expire "to [date:short -ymd $expire]" (permanent)]): [join $reason]"
+			}
 		}
 	}
+	foreach word [list ban exempt invite] type [list chanbans chanexempts chaninvites] {
+		set error [ catch { set list [$type $chan] } crap ]
+		if $error { error $crap }
+		if ![string eq "" $list] {
+			print $nick "Channel [string totitle $word]s ([llength $list]):"
+			foreach element $list {
+				lassign $element mask who age
+				print $nick "[string repeat " " 5]\002${mask}\002 (by $who - [urt +$age " "] ago)"
+			}
+		}
+	}
+	print $nick "End of CHANSTATS."
 	return
 }
+

@@ -1,2 +1,1 @@
-stormbot7.00.0001 1410757257 {Current working version}
-
+stormbot7.00.0001.zenkai.tar.gz 1459588304 quick
