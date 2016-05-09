@@ -21,9 +21,9 @@ proc @botsend { nick host handle chan arg } {
 			print -help $nick ""
 			print -help $nick "The BOTSEND command is a rudimentary re-write of the SB5/SB6 command which sends files from one bot to another (via the botnet). Obviously, both sending and target bots must be connected into the same botnet (anywhere / any configuration will do)."
 			print -help $nick "For now, BOTSEND can NOT handle file names with spaces in them. All file names must be without any spaces (underscore, dash, and other printable characters are legal)."
-			print -help $nick "All files will default to the \"botsend\" sub-directory ( [none [data array get botsend option:dir] [sb7 target dir .]/botsend/] ), unless AUTOSHIFT is on (see \"SET\" below)."
+			print -help $nick "All files will default to the \"botsend\" sub-directory ( [none [data array get botsend option:dir] [sb7 target dir .]/botsend_files/] ), unless AUTOSHIFT is on (see \"SET\" below)."
 			print -help $nick ""
-			print -help $nick "SHIFT: move the files from the \"incoming directory\" ( [none [data array get botsend option:dir] [sb7 target dir .]/botsend/] ) to a more-logical directory. Example: SB7 component files (say.sb7) would be moved to: [sb7 target dir .]/scripts/sb7/"
+			print -help $nick "SHIFT: move the files from the \"incoming directory\" ( [none [data array get botsend option:dir] [sb7 target dir .]/botsend_files/] ) to a more-logical directory. Example: SB7 component files (say.sb7) would be moved to: [sb7 target dir .]/scripts/sb7/"
 			print -help $nick "SET / GET / LIST: adjust options for BOTSEND"
 		}
 
@@ -41,7 +41,6 @@ proc @botsend { nick host handle chan arg } {
 			zero count_tx count_rx
 			foreach id $entries {
 				set direction [data array lindex @botsend $id]
-debug id direction
 				if [string eq -nocase TX $direction] {
 					lassign [data array get @botsend $id] - _nick _host _handle _chan _bot _ts _milli _tail _data _size
 					incr count_tx
@@ -70,7 +69,7 @@ debug id direction
 #debug =0
 			if [string eq -nocase LIST $2] {
 #debug =1
-				set files [glob -nocomplain -tails -directory [sb7 target dir ""]/botsend -- *]
+				set files [glob -nocomplain -tails -directory [sb7 target dir ""]/botsend_files -- *]
 #debug =1.5
 				if [isempty files] { print -header -return $nick "No files need to be shifted." }
 #debug =1.6
@@ -78,11 +77,11 @@ debug id direction
 #debug =1.7
 				print $nick "Done."
 #debug =1.8
-				return 
+				return
 			}
 #debug =2
 			if [isempty 2] { set pattern * } { if [string eq ALL $2u] { set pattern * } { set pattern $2 } }
-			set path [file dirname [file normalize $::config]]/botsend
+			set path [file dirname [file normalize $::config]]/botsend_files
 			set files [glob -nocomplain -directory $path -tails -- $pattern]
 			if [isempty files] { print -short -help -return $nick "No files to shift." }
 			empty ok bad
@@ -469,7 +468,7 @@ proc @botsend:receiver { bot - arg } {
 			data array set @BOTSEND:RECEIVE $id
 #debug =BOTSEND =EOF =1
 			#set path [sb7 target dir $filename]
-			set path [none [data array get botsend option:dir] [sb7 target dir ""]/botsend]
+			set path [none [data array get botsend option:dir] [sb7 target dir ""]/botsend_files]
 #debug =BOTSEND =EOF =2 path
 
 			# Auto-shift?
@@ -689,7 +688,7 @@ proc @botsend:quick { bot cmd arg } {
 		}
 
 		eof {
-			set dir [none [data array get botsend option:dir] ./botsend]
+			set dir [none [data array get botsend option:dir] ./botsend_files]
 			if ![file isdirectory $dir] { file mkdir $dir }
 			set target ${dir}/$tail
 
@@ -738,7 +737,7 @@ proc @botsend:timeout args {
 }
 
 proc @botsend:bootstrap args {
-	set options [list autoshift:false autoload:false dir:[sb7 target dir ""]/botsend timeout:300]
+	set options [list autoshift:false autoload:false dir:[sb7 target dir ""]/botsend_files timeout:300]
 	empty defaults
 	foreach option $options {
 		lassign [split $option :] a b

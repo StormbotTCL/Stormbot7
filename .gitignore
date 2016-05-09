@@ -6,6 +6,7 @@ distro.sb7
 _sb7_tail.tcl
 sb7_gitlog.txt
 git.sb7
+purged
 
 # Windows image file caches
 Thumbs.db
