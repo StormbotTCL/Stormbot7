@@ -1,11 +1,26 @@
-# StormBot.TCL 7 version Changelog -- 2016-04-10 14:03:28 UTC #
-# Version: 7.00.0004 #
+# StormBot.TCL 7 version Changelog -- 2016-05-09 03:42:40 UTC #
+# Version: 7.00.0006 #
 
 # Current Working Version #
-2016-04-10 13:40:12 UTC: #594 [core] ===== New distribution: version 7.00.0004 =====
-2016-04-10 13:36:20 UTC: #593 [calc] Neutered all commands in the CALC bead (CALC, GRAPH, FORMULAE, PASCAL, QUAD, PI, & SPEED: apparently, I have no business programming math-related functions. Thanks to freenode/#Eggdrop/kyak for setting me straight on the differences between integers and floating-point numbers)
-2016-04-06 13:33:25 UTC: #592 [botmon] Fixed BOTMON (when no data is returned (QUIET mode), don't print the header with blank data on its own)
-2016-04-06 06:21:36 UTC: #591 [note] Fixed The Albatross (deprecated NOTE outright; SB6 is doing a phase-out method.)
+2016-05-09 03:40:04 UTC: #609 [core] Fixed SB7:SETUP (the autopurge was looking in the bot's home directory instead of the scripts/sb7 directory for the ''if X exists'' check. This repairs CHANGELOG #606)
+2016-05-09 03:28:17 UTC: #608 [botsend] Fixed BOTSEND STATUS (debug line left in)
+2016-05-09 03:24:34 UTC: #607 [core] Fixed SB7:SETUP ((1) cleaned up the log data for autopurged items & (2) removed CONFIG variable spew [which only showed anything during a *warm* start])
+2016-04-23 03:48:53 UTC: #606 [core] Fixed SB7:SETUP (when auto-purging files, if they didn't exist, the FILE RENAME failed (threw an exception))
+2016-04-18 10:27:29 UTC: #605 [core] Fixed SB7:SETUP (created auto-purge list, starting off with: TAIL)
+2016-04-17 09:15:23 UTC: #604 [core] Fixed CORE (added Eggdrop / TCL / LIB info into log before beginning of script prcoessing)
+2016-04-17 09:15:23 UTC: #603 [core] Fixed SB7:PARSEFLAGS (cosmetic: complaint output was tidied up a bit)
+2016-04-17 09:15:23 UTC: #602 [core] Fixed @EVENT:SIGILL (removed all extraneous output text to match SB6 version. Also, made DCCLIST list of users-in-the-party-line check restricted to DCCLIST CHAT)
+2016-04-17 09:15:23 UTC: #601 [core] Fixed SB7:BIND:RAW:004 (left-over debug line)
+2016-04-17 09:15:23 UTC: #600 [core] Fixed ANGLE (cosmetic: ASCII code for degree mark)
+2016-04-17 09:15:23 UTC: #599 [core] Fixed CORE & TAIL (combined CORE & TAIL into one file: CORE)
+2016-04-13 11:15:07 UTC: #598 [core] ===== New distribution: version 7.00.0006 =====
+2016-04-13 09:45:13 UTC: #597 [tail] Fixed SB7:RAW:MODE (bad variable in default->switch->default [level 2]: $A instead of $MODE)
+2016-04-10 14:13:55 UTC: #596 [core] ===== New distribution: version 7.00.0005 =====
+2016-04-10 14:13:19 UTC: #595 [snapshot] Fixed SNAPSHOT (forced default directory to (botdir)/snapshots)
+2016-04-10 13:39:52 UTC: #594 [core] ===== New distribution: version 7.00.0004 =====
+2016-04-10 13:36:21 UTC: #593 [calc] Neutered all commands in the CALC bead (CALC, GRAPH, FORMULAE, PASCAL, QUAD, PI, & SPEED: apparently, I have no business programming math-related functions. Thanks to freenode/#Eggdrop/kyak for setting me straight on the differences between integers and floating-point numbers)
+2016-04-06 13:33:18 UTC: #592 [botmon] Fixed BOTMON (when no data is returned (QUIET mode), don't print the header with blank data on its own)
+2016-04-06 06:21:12 UTC: #591 [note] Fixed The Albatross (deprecated NOTE outright; SB6 is doing a phase-out method.)
 2016-04-06 02:48:19 UTC: #590 [botmon] Fixed BOTMON (a typo made the QUIET option fail)
 2016-04-05 12:59:57 UTC: #589 [tail] Added NOW (alias to ''CLOCK SECONDS,'' ported from SB6)
 2016-04-04 05:16:07 UTC: #588 [alarm & delay] Fixed ALARM & DELAY (still chasing CPU% spikes, seem to be coming from these two's secondly parser. Changed to check for any existing first (bail if not), then only process that list, instead of cycling the entire userlist every second)
@@ -173,7 +188,7 @@
 2015-01-07 11:14:14 UTC: #426 [macro & tail] Added MACRO (ported from SB6)
 2015-01-07 11:12:17 UTC: #425 [host] Fixed HOST ADD (added nick-based options, including ''!NICK'')
 2015-01-07 11:11:14 UTC: #424 [tail] Fixed TAIL (binds were in place for SPLT & REJN; no code was written / in place yet. Wrote dummy / holder code for now. Same as CHANGELOG #419 for SIGN)
-2015-01-07 11:05:42 UTC: #423 [botmon] Fixed BOTMON (due to changes in LDESTROY's -NOCASE option (when re-coded for -COMMON, the resulting list was forced lowercase. Fixed locally (within BOTMON) with CASEALL)
+2015-01-07 11:05:42 UTC: #423 [botmon] Fixed BOTMON (due to changes in LDESTROY's -NOCASE option (when re-coded for -COMMON), the resulting list was forced lowercase. Fixed locally (within BOTMON) with CASEALL)
 2015-01-07 11:04:54 UTC: #422 [tail] Fixed VALIDHOST (don't always presume we're matching a host that needs a ''!'' in it, unless there's a ''@'' in it already. HOST DEL is used for removing ''funky'' hosts but this kept messing it up)
 2015-01-07 09:42:10 UTC: #421 [tail] Fixed LDESTROY (for some reason, when transiting from SB6 to SB7, I changed how LDESTROY works: collect the terms instead of the indeces. The list got bastardized when using -NOCASE. Exposed by BOTMON; reverted to index method)
 2015-01-05 13:39:24 UTC: #420 [jump] Added JUMP (re-written from scratch. Also, incorporated SB6:SERVERS into SB7:JUMP to combine the two commands into one)
@@ -190,7 +205,7 @@
 2015-01-02 10:40:22 UTC: #409 [who] Fixed WHO (cosmetic: swapped =1000 / =1001 colors; =1001 should diametrically oppose the colours of <=0)
 2015-01-02 10:38:25 UTC: #408 [who] Fixed WHO (cosmetic: code to show proper color for -GLOBAL mode permowners (1000/1001) was always defaulting to =1001 colors regardless of their [non-]existence)
 2015-01-02 10:35:25 UTC: #407 [who] Fixed WHO (cosmetic: JOIN issue in output of each of the list of chanmodes)
-2015-01-02 10:31:07 UTC: #406 [who] Fixed WHO (when a unknown-and-unopped user was being processed, the previously-looped user's $OP_SYMBOL was carrying through: $OP wasn't being assigned by REGEXP (variable-assignment mode))
+2015-01-02 10:31:07 UTC: #406 [who] Fixed WHO (when an unknown-and-unopped user was being processed, the previously-looped user's $OP_SYMBOL was carrying through: $OP wasn't being assigned by REGEXP (variable-assignment mode))
 2015-01-02 10:18:26 UTC: #405 [core & readme] Fixed CORE & README (updated copyright date)
 2014-12-18 22:24:38 UTC: #404 [tail] Fixed SB7:SETUP (a security measure had a bad REGEXP: the proper name of the variable is created by the loop but the inlaid REGEXP was flawed)
 2014-12-14 01:19:35 UTC: #403 [tail] Fixed WHOIS (the ''$<handle>'' mode test wasn't being handled properly; it was falling through to a lower portion of code that (originally) returned the right information but now does something different)
@@ -242,8 +257,8 @@
 2014-11-14 08:15:58 UTC: #357 [config] Added CONFIG -GLOBAL CSERV (the WHO code already anticipated it, but, I hadn't written it yet)
 2014-11-14 07:45:43 UTC: #356 [tail] Fixed WHOIS user lookup (when a nick matched a known handle, but didn't mask-match, it was returning aconfusing reply (mode #0: known-but-offline); this, in turn, confused the WHO command. Fixed: this situation now reports mode #4 (unknown user even though familiar nick))
 2014-11-14 07:22:15 UTC: #355 [tail] Moved VERSION (put it into TAIL for now; have to evade short-name conflict with sb7_version.txt. But if I do this, then shouldn't MAINTENANCE also be moved here? And LOGIN? Oh, this just got real ...)
-2014-11-14 06:38:54 UTC: #354 [botsend] Fixed BOTSEND (I shifted the element identities of the data stream, but, didn't update EVERYTHING: one place was still pulling datat from the sending-bot's nick, causing idiocy)
-2014-11-14 03:57:57 UTC: #353 [say] Fixed SAY & ACT (didn't check for blacnk input: SAY would just print a blacnk line, but, ACT would potentially cause the CTCP bug to be mimicked)
+2014-11-14 06:38:54 UTC: #354 [botsend] Fixed BOTSEND (I shifted the element identities of the data stream, but, didn't update EVERYTHING: one place was still pulling data from the sending-bot's nick, causing idiocy)
+2014-11-14 03:57:57 UTC: #353 [say] Fixed SAY & ACT (didn't check for blank input: SAY would just print a blacnk line, but, ACT would potentially cause the CTCP bug to be mimicked)
 2014-11-13 09:05:59 UTC: #352 [tail] Fixed PLURAL (moved flags to just-before the count, after the root word)
 2014-11-13 08:56:55 UTC: #351 [snapshot] Upgraded SNAPSHOT (when changing the target directory, now moves file from old directory to new directory)
 2014-11-13 08:39:57 UTC: #350 [tail] Added PATH:RELATIVE (shows the relative path to FILE from PATH, or the default path ''.'')
@@ -262,10 +277,10 @@
 2014-11-11 07:30:59 UTC: #337 [rehash] Fixed REHASH (moved all SAVE-like commands to their own bead, SAVE.SB7, leaving only REHASH & RESTART in this bead)
 2014-11-11 07:30:39 UTC: #336 [save] Fixed SAVE (moved all SAVE-like commands to their own bead, SAVE.SB7, as it was originally in SB7 development. This matches SB6's format)
 2014-11-11 01:33:11 UTC: #335 [help] Fixed HELP (when an unknown command is checked, there was no complaint. Fixed)
-2014-11-11 01:24:37 UTC: #334 [tail] Upgraded SB7:DISPATCH (added flag (snuff all to-user output, but, not affect normal command output like SAY. Also, clarified the flags that are allowed: [--]notice, msg, chan, burst, mute. Up until now, open-ended flags were being allowed through and PRINT (output parser) would just use what it needed. Inspired by Demonicpagan)
+2014-11-11 01:24:37 UTC: #334 [-] tail Upgraded SB7:DISPATCH (added flag to snuff all to-user output, but, not affect normal command output like SAY. Also, clarified the flags that are allowed: [--]notice, msg, chan, burst, mute. Up until now, open-ended flags were being allowed through and PRINT (output parser) would just use what it needed. Inspired by Demonicpagan)
 2014-11-10 04:37:47 UTC: #333 [rehash] Added SNAPSHOT (takes timestamped-snapshots of the user, channel, and data files. Makes them reloadable. Inspired by Demonicpagan)
-2014-11-10 03:53:32 UTC: #332 [tail] fixed DATA LOAD (allowed for open-format file name (needed by SNAPSHOT))
-2014-11-10 03:35:46 UTC: #331 [tail] fixed DATA SAVE (allowed for open-format file name (needed by SNAPSHOT))
+2014-11-10 03:53:32 UTC: #332 [-] tail Fixed DATA LOAD (allowed for open-format file name (needed by SNAPSHOT))
+2014-11-10 03:35:46 UTC: #331 [-] tail Fixed DATA SAVE (allowed for open-format file name (needed by SNAPSHOT))
 2014-11-08 14:25:25 UTC: #330 [botsend] Fixed BOTSEND (nearly a complete re-write was necessary to create queue buffering, similar to SB6. Trying to mad-dash the botnet with data just wasn't working. The update will break the old code (two bots, one updated, one not, can NOT send each other data))
 2014-11-08 13:24:19 UTC: #329 [topic] Fixed SB7:TOPIC:LOCKCHECK:TIMER (the KILLTIMER command needed to be -QUIET; wasn't)
 2014-11-08 12:00:40 UTC: #328 [maintenance] Upgraded MAINTENANCE (added typo-abbreviation ''MAITN'' because I keep typing it)
