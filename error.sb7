@@ -10,3 +10,4 @@ proc @error { nick host handle chan arg } {
 	error "Intentional error"
 }
 
+

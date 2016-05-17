@@ -323,3 +323,4 @@ proc @invite { nick host handle chan arg } {
 	if [notempty bad] { print $nick "Failed invitations (not users): [ajl $bad]" }
 	return
 }
+

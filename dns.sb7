@@ -117,3 +117,4 @@ proc @dns { nick host handle chan arg } {
 	}
 	return ""
 }
+

@@ -123,3 +123,4 @@ print -help -return $nick "\[WHO -UNKNOWN\] Not ready yet."
 	return
 }
 
+

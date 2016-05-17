@@ -22,7 +22,8 @@ data array set @IRCD chgname CHGNAME
 ########################
 
 proc @vhost { nick host handle chan arg } {
-
+	# 2016-03-12 03:04:00 -0800
+	print -short -return $nick "This command hasn't been fully converted to SB7 format yet."
 	FLAGS
 
 	switch -exact -- [stl $1] {
@@ -54,9 +55,9 @@ proc @vhost { nick host handle chan arg } {
 			} else {
 				print -help $nick "Please use \"$::botnick VHOST HELP ALL\" for \x1fIMPORTANT\x1f information about problems related to the use of this command."
 				print -help $nick "To activate your own VHOST, use: $::botnick $u0 FORCE"
-				print -help $nick "To have a bot give me ($::botnick) my VHOST, use: $::botnick $u0 ASK \[-auto\] <targetbot> \[channel list\] (that bot should be an OPER and capable of setting VHOSTS, and know what your desired VHOST is). The -AUTO flag will make the bot automatically ask whenever it joins any room \[or can restrict the choice of rooms\]"
+				print -help $nick "To have a bot give me ($::botnick) my VHOST, use: $::botnick [string toupper $0] ASK \[-auto\] <targetbot> \[channel list\] (that bot should be an OPER and capable of setting VHOSTS, and know what your desired VHOST is). The -AUTO flag will make the bot automatically ask whenever it joins any room \[or can restrict the choice of rooms\]"
 			}
-			if [SB:checkaccess 700 $handle] {print -help $nick "See module bead [SB:commandlist source VHOST] for variables that may need setting."}
+			if [SB:checkaccess 700 $handle] {print -help $nick "See module bead [sb7 command get vhost source] for variables that may need setting."}
 			return 0
 		}
 
@@ -305,4 +306,5 @@ proc @vhost:bootstrap args {
 # BootStrap:
 
 @vhost:bootstrap
+
 

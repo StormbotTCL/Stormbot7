@@ -232,3 +232,4 @@ proc @copyuser:receive { bot cmd arg } {
 
 bind bot - sb7:copyuser:receive @copyuser:receive
 
+
