@@ -25,3 +25,4 @@ proc @modekill {nick host handle chan arg} {
 	return
 }
 
+

@@ -525,3 +525,4 @@ proc @textpad:settings handle {
 	array get settings
 }
 
+

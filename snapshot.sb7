@@ -13,7 +13,7 @@ proc @snapshot { nick host handle chan arg } {
 			print -help $nick "Syntax: $::botnick SNAPSHOT SAVE \[-QUIET\] \[all (default) | user | chan | data\]"
 			print -help $nick "Syntax: $::botnick SNAPSHOT LOAD <date> \[all (default) | user | chan | data\]"
 			print -help $nick "Syntax: $::botnick SNAPSHOT FIND <date | \"user\" | \"chan\" | \"data\">"
-			print -help $nick "Syntax: $::botnick SNAPSHOT DIR \[target directory (default: [file normalize ./snapshots])\]"
+			#print -help $nick "Syntax: $::botnick SNAPSHOT DIR \[target directory (default: [file normalize ./snapshots])\]"
 			print -help $nick "The bot will save (or load) the requested snapshot files."
 			print -help $nick "The target directory for these files is: $snapshot_dir"
 			print -help $nick "The following files will be created (or loaded), depending on your choice(s):"
@@ -29,29 +29,29 @@ proc @snapshot { nick host handle chan arg } {
 			return
 		}
 
-		dir {
-			if [isempty 2] { print -help -return $nick "\[SNAPSHOT DIR\] Current SNAPSHOT directory: [data array get snapshot dir]" }
-			if [string eq -nocase HELP $2] {
-				print -help $nick "\[SNAPSHOT DIR\]:"
-				print -help $nick "Syntax: $::botnick SNAPSHOT DIR"
-				print -help $nick "Syntax: $::botnick SNAPSHOT DIR HELP"
-				print -help $nick "Syntax: $::botnick SNAPSHOT DIR <new target directory>"
-				print -help $nick ""
-				print -help $nick "SNAPSHOT DIR sets (or shows) the directory into which the SNAPSHOTs are saved."
-				print -help $nick "Using \"SNAPSHOT DIR\" alone will show you the current directory"
-				print -help $nick "Current directory: [data array get snapshot dir]"
-				return
-			}
-			set dir [join $2e]
-			data array set snapshot dir $dir
-			saveme data
-			print $nick "\[SNAPSHOT DIR\] SNAPSHOT directory is now: $dir"
-			set glob [glob -nocomplain -- ${snapshot_dir}/*.snapshot]
-			if [notempty glob] {
-				set ll [llength $glob]
-				foreach file $glob { file rename -force $file ${dir}/[file tail $file] } 
-				print $nick "[plural -show -comma file $ll] moved: $snapshot_dir --> $dir"
-			}
+		`dir {
+			#if [isempty 2] { print -help -return $nick "\[SNAPSHOT DIR\] Current SNAPSHOT directory: [data array get snapshot dir]" }
+			#if [string eq -nocase HELP $2] {
+			#	print -help $nick "\[SNAPSHOT DIR\]:"
+			#	print -help $nick "Syntax: $::botnick SNAPSHOT DIR"
+			#	print -help $nick "Syntax: $::botnick SNAPSHOT DIR HELP"
+			#	print -help $nick "Syntax: $::botnick SNAPSHOT DIR <new target directory>"
+			#	print -help $nick ""
+			#	print -help $nick "SNAPSHOT DIR sets (or shows) the directory into which the SNAPSHOTs are saved."
+			#	print -help $nick "Using \"SNAPSHOT DIR\" alone will show you the current directory"
+			#	print -help $nick "Current directory: [data array get snapshot dir]"
+			#	return
+			#}
+			#set dir [join $2e]
+			#data array set snapshot dir $dir
+			#saveme data
+			#print $nick "\[SNAPSHOT DIR\] SNAPSHOT directory is now: $dir"
+			#set glob [glob -nocomplain -- ${snapshot_dir}/*.snapshot]
+			#if [notempty glob] {
+			#	set ll [llength $glob]
+			#	foreach file $glob { file rename -force $file ${dir}/[file tail $file] } 
+			#	print $nick "[plural -show -comma file $ll] moved: $snapshot_dir --> $dir"
+			#}
 			return
 		}
 
@@ -214,7 +214,7 @@ proc @snapshot { nick host handle chan arg } {
 }
 
 proc @snapshot:bootstrap args {
-	set dir [data array get snapshot dir]
+	# Force default dir! set dir [data array get snapshot dir]
 	if [isempty dir] {
 		set dir [file normalize ./snapshots]
 		data array set snapshot dir $dir

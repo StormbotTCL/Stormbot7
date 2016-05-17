@@ -108,7 +108,7 @@ proc @botsend { nick host handle chan arg } {
 					if [isempty 4] { print -short -return $nick "What am I adding to that alias?" }
 					set alias [data array get BOTSEND ALIAS:$3]
 					empty ok bad
-					foreach bot $4e { 
+					foreach bot $4e {
 						set m [lsearch -exact [string tolower $alias] [string tolower $bot]]
 						if { $m == -1 } { lappend ok $bot ; lappend alias $bot } { lappend bad $bot }
 					}
@@ -129,7 +129,7 @@ proc @botsend { nick host handle chan arg } {
 					} {
 						set alias [data array get BOTSEND ALIAS:$3]
 						empty ok bad
-						foreach bot $4e { 
+						foreach bot $4e {
 							set m [lsearch -exact [string tolower $alias] [string tolower $bot]]
 							if { $m == -1 } { lappend bad $bot } { lappend ok $bot ; set alias [lreplace $alias $m $m] }
 						}
@@ -230,7 +230,7 @@ proc @botsend { nick host handle chan arg } {
 				while { [notempty hex] } {
 					set line [left $hex $size]
 					foreach bot $bots { putbot $bot [list botsend:quick data $tail $line] }
-					set hex [right $hex -$size] 
+					set hex [right $hex -$size]
 				}
 				foreach bot $bots { putbot $bot [list botsend:quick eof $tail] }
 			}
@@ -256,11 +256,11 @@ proc @botsend { nick host handle chan arg } {
 			foreach bot $tempbots { set bot [trim $bot] ; if [islinked $bot] { lappend send(bots) $bot } { lappend status(botnet) $bot } }
 			foreach file $files {
 				set file [sb7 component [trim $file]]
-				if [file exists $file] { 
+				if [file exists $file] {
 					if [is component $file] { lappend send(names) [sb7 shortname $file] } { lappend send(names) $file }
 					lappend send(files) $file
 				} {
-					lappend status(utl) $file 
+					lappend status(utl) $file
 				}
 			}
 			if [notempty status(botnet)] { print -help $nick "\[BOTSEND\] Not part of the botnet: [ajl $status(botnet)]" }
@@ -432,7 +432,7 @@ proc @botsend:receiver { bot - arg } {
 				botsend:sender reject $id
 				return
 			}
-			
+
 			if [is auth $2 $0] { # Redundant
 				set pre [data array get -join botsend pre]
 				if [notempty pre] { sb7:dispatch $0 $1 $2 $3 $pre }
@@ -589,12 +589,12 @@ proc @botsend:complete { bot - id } {
 	set elapsed [expr $now - $time]
 	set elapsed_milli [expr abs( $now_milli - $milli )]
 #putlog "\[@BOTSEND:COMPLETE\] SIZE($size):NOW($now):NOW_MILLI($now_milli):ELAPSED($elapsed):ELAPSED_MILLI($elapsed_milli)"
-	if { $elapsed_milli > 1000 } { 
+	if { $elapsed_milli > 1000 } {
 		set elapsed_milli [expr $elapsed_milli / 1000.0]
 		set word seconds
 		set abbr s
 		set factor .001 ; # Tested OK
-	} { 
+	} {
 		set word milliseconds
 		set abbr ms
 		set factor 1 ; # Tested OK

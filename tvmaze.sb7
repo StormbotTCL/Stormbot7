@@ -1,0 +1,240 @@
+sb7 command add tvmaze 0 -none tvmaze TV
+sb7 register global TVM
+sb7 register user TVM:*
+
+namespace eval tvmaze {
+	# Define search URLs
+	variable tvurl ; # Declare its scope (it is still undefined!)
+	array set tvurl [list search_shows http://api.tvmaze.com/search/shows single_show http://api.tvmaze.com/singlesearch/shows show_lookup http://api.tvmaze.com/lookup/shows ppl_search http://api.tvmaze.com/search/people eps_sched http://api.tvmaze.com/schedule shows http://api.tvmaze.com/shows/]
+
+	proc tvmaze:check_packages args {
+		set header {[TVMAZE]}
+
+		# Make sure the required packages are installed
+		if [isempty args] { set args [list http json] }
+		empty fails
+
+		foreach package $args {
+			set error [ catch { package require $package } crap ]
+			if $error { lappend fails $package }
+		}
+
+		if [notempty fails] {
+			set message "$header Unable to load the following pakcages: [ajl $fails] (can't function)"
+			putlog $message
+			catch { if [onchan $::botnick [home]] { msghome $message } }
+		}
+
+		return $fails
+	}
+}
+
+proc @tvmaze { nick host handle chan arg } {
+	sb7 parseflags
+	set header {[TVMAZE]}
+
+	switch -exact -- $1l {
+		help {
+			print -help $nick "\[TVMAZE\]:"
+			print -help $nick "Syntax: $::botnick TVMAZE HELP"
+			print -help $nick "Syntax: $::botnick TVMAZE SUMMARY <ID> (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE SCHEDULE <date: YYYY-MM-DD or MM/DD/YYYY or \"TODAY\" or \"TOMORROW\"> \[list of countries, 2-character codes (US, GB, et cetera), space-delimited\] (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE EPISODES <ID> \[PREV | NEXT | specific episode number | ALL \] (default = \"NEXT\") (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE CAST (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE SEARCH <SHOW | <ACTOR> <search params> (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE PERSON <ID> (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE INDEX[color] (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE ID LIST \[wildcard: OK\] (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE SET COUNTRIES <list of countries, 2-character codes> (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE ALIAS SET <ACTOR | SHOW> <ID> <NAME>"
+			print -help $nick "Syntax: $::botnick TVMAZE ALIAS DEL <ACTOR | SHOW> <ID> (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE ALIAS LIST <ACTOR | SHOW> \[wildcard: OK\] (WIP)"
+			print -help $nick "Syntax: $::botnick TVMAZE ALIAS CLEAR <ACTOR | SHOW> (WIP)"
+			print -help $nick ""
+			print -help $nick "The TVMAZE command searches the online database at TV Maze (.com) for TV show information. The website is restricted to television shows and does not handle movies (like IMDB.com does)."
+			print -help $nick "For some commands, you need the show's (or person's) TV Maze ID number. Do a search for the person to get the ID number. Future updates to this command will allow you to store the ID numbers for later (easier) use."
+			print -help $nick "Episode numbers can be expressed in all normal internet formats: S01E02, 01x02, 0102, S1E02, 1x02, or 102 (all = season 1, episode 2); this command will list all episodes in 00x00 format."
+			print -help $nick "For any ID # requests, the command will automatically look up any name given (from both the global pool or from you alias list) for the appropriate ID number as needed."
+			print -help $nick "For this bead to work, $::botnick must have access to the internet-at-large (WAN TCP ability) and the HTTP package. $::botnick will also need the JSON package (the website only provides JSON data for processing)."
+			set fails [tvmaze:check_packages]
+			print -help $nick "Required packages (HTTP & JSON): [none $fails [color 3]<none>[color] "[color 4][ajl $fails][color]"]"
+			print -help $nick "TV Maze API & data provided by TVMaze.com by CC BY-SA licensing."
+			return 0
+		}
+
+		set {
+			switch -exact -- $2l {
+				alias {
+					if {[lsearch -exact [list help ""] $3l] != -1} {
+						print -help $nick "Syntax: $::botnick TVMAZE SET ALIAS ADD <ACTOR | SHOW> <ID> <SHORTCUT NAME>"
+						print -help $nick "Syntax: $::botnick TVMAZE SET ALIAS DEL <ACTOR | SHOW> <ID>"
+						print -help $nick "Syntax: $::botnick TVMAZE SET ALIAS LIST <ACTOR | SHOW> \[wildcard: OK\]"
+						print -help $nick "Syntax: $::botnick TVMAZE SET ALIAS CLEAR <ACTOR | SHOW> "
+						return 0
+					}
+					if [isempty 3] { print -help $nick "$header Missing: command (set / del / list / clear)" ; return 0 }
+					if [isempty 4] { print -help $nick "$header Missing: type (show / actors)" ; return 0 }
+					set um [uniquematch [list show actor] $4]
+					if [isempty um] {print -help $nick "$header Unknown ALIAS option: [join $4]" ; return 0}
+					set data [userinfo get $handle TVM:$um]
+					array set array $data
+
+					switch -exact -- [uniquematch [list add del list clear] $3] {
+						add {
+							if [isempty 5] { print -help $nick "$header Missing: ID" ; return 0 }
+							if [isempty 6] { print -help $nick "$header Missing: Name" ; return 0 }
+							if [info exists array($5)] { print $nick "$header Deleting old definition: \"$array($5)\"" }
+							set array($5) $6e
+							userinfo set $handle TVM:$um [array get array]
+							saveme user
+							print $nick "$header Added new alias: \"${6e}\" (ID #${5})"
+							return 0
+						}
+						del {
+							if [isempty 5] { print -help $nick "$header Missing: ID" ; return 0 }
+							if [info exists array($5)] { set old $array($5) } { set old <null> }
+							set array($5) ""
+							unset array($5)
+							userinfo set $handle TVM:$um [array get array]
+							saveme user
+							print $nick "$header Deleted alias for ID #$5 ($old)"
+							return 0
+						}
+						list {
+							if [isempty 5] { set matchme * } { set matchme [join $5e] }
+							set ll [array size array]
+							array set temp [data array get TVM:SHOW]
+							print $nick "$header Listin [comma $ll] [plural match $ll es]:"
+							zero c
+							foreach a [lsort -inc -real [array names array]] {
+								if [string match -nocase $matchme $array($a)] {
+									incr c
+									empty name
+									if [info exists temp($a)] { set name " --> $temp($a)" }
+									print $nick "[comma $c]/$ll) ID #${a}: [stu $array($a)]$name"
+								}
+							}
+							print $nick "[comma $c] [plural entry $c] displayed."
+							return 0
+						}
+						clear {
+							if ![string eq -nocase CLEAR $5] { print -help $nick "$header Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." ; return 0 }
+							userinfo set $handle TVM:$um
+							saveme user
+							print $nick "$header Cleared all $um alias data."
+							return 0
+						}
+						default { ? $0u $1u $2u $3u $4u $5u }
+					}
+					? $0u $1u $2u $3u $4u $5u
+				}
+				c - co - cty - country - countries {
+					switch -exact -- $3l {
+						add {
+							set list [lsort -increasing -dictionary -unique [stu [concat [userinfo get $handle TVM:SCHEDULE:COUNTRIES] [singlespace [regsub -all -- , $4e " "]]]]]
+							userinfo set $handle TVM:SCHEDULE:COUNTRIES $list
+							saveme user
+							print $nick "$header New country list: [none [ajl $list] <none>]"
+							return 0
+						}
+						del {
+							set list [lsort -increasing -dictionary -unique [stu [ldestroy -all -nocase -multiple -- [userinfo get $handle TVM:SCHEDULE:COUNTRIES] $4e]]]
+							userinfo set $handle TVM:SCHEDULE:COUNTRIES $list
+							saveme user
+							print $nick "$header New country list: <none>"
+							return 0
+						}
+						"" - list {
+							print $nick "$header Current country list: [none [ajl [lmatch -glob -multiple -nocase -all -- [userinfo get $handle TVM:SCHEDULE:COUNTRIES] [none [join $4e] *]]] <none>]"
+							return 0
+						}
+						clear {
+							if ![string eq -nocase CLEAR $4] { print -help $nick "$header Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." ; return 0 }
+							userinfo set $handle TVMAZE:SCHEDULE:COUNTRIES ""
+							saveme user
+							print $nick "$header New country list: <none>"
+							return 0
+						}
+						default { print -help $nick "\[TVMAZE SET COUNTRIES\] What are we doing here?" ; return 0 }
+					}
+				}
+				net - network - networks {
+					set new [split [regsub -all -- {[ ]+,|,[ ]+|[ ]+,[ ]+} [join $4e] ,] ,]
+					switch -exact -- $3l {
+						add {
+							set list [lsort -increasing -dictionary -unique [stu [concat [userinfo get $handle TVM:SCHEDULE:NETWORKS] $new]]]
+							userinfo set $handle TVM:SCHEDULE:NETWORKS $list
+							saveme user
+							print $nick "$header New network list: [none [ajl $list] <none>]"
+							return 0
+						}
+						del {
+							set list [lsort -increasing -dictionary -unique [stu [ldestroy -all -nocase -multiple -- [userinfo get $handle TVM:SCHEDULE:NETWORKS] $new]]]
+							userinfo set $handle TVM:SCHEDULE:NETWORKS $list
+							saveme user
+							print $nick "$header New network list: [none [ajl $list] <none>]"
+							return 0
+						}
+						"" - list {
+							print $nick "$header Current network list: [none [ajl [lmatch -glob -multiple -nocase -all -- [userinfo get $handle TVM:SCHEDULE:NETWORKS] [none [join $4e *]]] <none>]"
+							return 0
+						}
+						clear {
+							if ![string eq -nocase $4] { print -help $nick "$header Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." ; return 0 }
+							userinfo set $handle TVM:SCHEDULE:NETWORKS ""
+							saveme user
+							print $nick "$header New network list: <none>"
+							return 0
+						}
+						default { print -help $nick "\[TVMAZE SET NETWORKS\] What are we doing here?" ; return 0 }
+					}
+				}
+				show - shows {
+					set new [split [regsub -all -- {[ ]+,|,[ ]+|[ ]+,[ ]+} [join $4e] ,] ,]
+					switch -exact -- $3l {
+						add {
+							set list [lsort -increasing -dictionary -unique [stl [concat [userinfo get $handle TVM:SCHEDULE:SHOWS] $new]]]
+							userinfo set $handle TVM:SCHEDULE:SHOWS $list
+							saveme user
+							print $nick "$header New show list: [none [ajl $list] <none>]"
+							return 0
+						}
+						del {
+							set list [lsort -increasing -dictionary -unique [stl [ldestroy -all -nocase -multiple -- [userinfo get $hndle TVM:SCHEDULE:SHOWS] $new]]]
+							userinfo set $handle TVM:SCHEDULE:SHOWS ""
+							saveme user
+							print $nick "$header New show list: [none [ajl $list] <none>]"
+							return 0
+						}
+						"" - list {
+							print $nick "$header Current show list: [none [ajl [lmatch -glob -multiple -nocase -all -- [userinfo get $handle TVM:SCHEDULE:SHOWS] [none [join $4e *]]] <none>]"
+							return 0
+						}
+						clear {
+							if ![string eq -nocase CLEAR $4] {print -help $nick "$header Are you \002\037SURE\037\002?! Use \"CLEAR CLEAR\" to convince me." ; return 0 }
+							userinfo set $handle TVM:SCHEDULE:SHOWS ""
+							saveme user
+							print $nick "$header New show list: <none>"
+							return 0
+						}
+						default {
+							print -help $nick "\[TVMAZE SET SHOWS\] What are we doing here?"
+							return 0
+						}
+					}
+					default {
+						print -help $nick "$header Unknown SET option: \"${2j}\" (valid options: alias countires networks shows)"
+						return 0
+					}
+				}
+			}
+			? SET
+		}
+	}
+}
+
+proc @tvmaze:bootstrap args ::tvmaze::check_packages
+
+#####
+# BootStrap:
+@tvmaze:bootstrap

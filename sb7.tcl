@@ -328,6 +328,37 @@ proc validproc cmd { expr ![string eq "" [info procs $cmd]] }
 
 proc end args { return -code return }
 
+if [string eq "" [info procs _unknown]] {
+	## This was making TCL not load MSGCAT (and not find packages at all, no matter what)
+	##if ![string eq "" [info procs unknown]] { rename unknown _unknown }
+	catch { rename unknown _unknown }
+}
+
+proc unknown { args } {
+	# We will =IGNORE= the difference between Var++ and ++Var (which reports the value before/after the increment, respectively)
+	if ![regexp -nocase -- {^[[:space:]]*(.+?)[[:space:]]*(==?|[-+\*/%^]=|\+\+|\-\-|<<=|>>=|\*\*=)[[:space:]]*(.*)} $args - variable type value] {
+		return [uplevel 1 eval _unknown $args]
+	}
+	upvar 1 $variable local
+	switch -exact -- $type {
+		=   { set local $value ; return $local }
+		==  { set local [ expr $value ] ; return $local }
+		+=  { set local [ expr { $local + $value } ] ; return $local }
+		-=  { set local [ expr { $local - $value } ] ; return $local }
+		*=  { set local [ expr { $local * $value } ] ; return $local }
+		/=  { set local [ expr { $local / $value } ] ; return $local }
+		%=  { set local [ expr { $local % $value } ] ; return $local }
+		^=  { set local [ expr { $local ** $value } ] ; return $local }
+		~=  { set local [ expr { ~$value } ] ; return $local }
+		++  { incr local  1 ; return $local }
+		--  { incr local -1 ; return $local }
+		<<= { set local [ expr { $local << $value } ] ; return $local }
+		>>= { set local [ expr { $local >> $value } ] ; return $local }
+		**= { if { [ catch { expr 1 ** 1 } ] || ( $value < 0 ) } { set local [ expr pow( {$local} , {$value} ) ] } { set local [ expr { $local ** $value } ] } ; return $local }
+	}
+	uplevel 1 eval _unknown $args
+}
+
 proc sb7 { args } { # General
 	global sb7
 	lassign $args cmd 1 2 3 4 5 6 7 8 9
@@ -1218,11 +1249,11 @@ proc sb7:setup args {
 	if ![string eq "" $autopurge] {
 		set source ./scripts/sb7
 		set target ./scripts/sb7/purged
-		if ![file isdirectory ./scripts/sb7/purged] { file mkdir ./scripts/sb7/purged }
+		if ![file isdirectory $target] { file mkdir $target }
 		foreach purge $autopurge {
 			if [file exists ${source}/$purge] {
 				putlog "\[SB7 - AUTOPURGE\] Purging: $autopurge"
-				file rename -force ${source}/$purge ${target}/[file tail $purge] 
+				file rename -force ${source}/$purge ${target}/[file tail $purge]
 			}
 		}
 	}

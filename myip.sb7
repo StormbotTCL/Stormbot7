@@ -29,3 +29,4 @@ proc @myip { nick host handle chan arg } {
 	}
 	return 0
 }
+

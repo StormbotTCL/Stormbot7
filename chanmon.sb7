@@ -2,6 +2,7 @@ sb7 command add CHANMON 500 -chanspec CMON CM
 sb7 register chan CHANMON:#
 
 proc @chanmon { nick host handle chan arg } {
+print -short -help -return $nick "This command is not converted to SB7 format yet."
 	FLAGS -global -default -force
 	set base $chan
 	if [validflag -global] { lappend flags -default }; # I keep using "-global"
@@ -22,7 +23,7 @@ proc @chanmon { nick host handle chan arg } {
 	switch -exact -- [string tolower $1] {
 
 		"" - help {
-			print -help $nick "\[CHANMON\]:"                
+			print -help $nick "\[CHANMON\]:"
 			print -help $nick "Syntax: $::botnick CHANMON ON"
 			print -help $nick "Syntax: $::botnick CHANMON OFF"
 			print -help $nick "Syntax: $::botnick CHANMON CALC"
@@ -454,4 +455,5 @@ bind PART - * @chanmon:del
 #bind REJN - * @chanmon:add
 bind SIGN - * @chanmon:del
 bind KICK - * @chanmon:del
+
 

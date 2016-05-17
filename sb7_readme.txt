@@ -1,12 +1,12 @@
-This is the README for StormBot.TCL version 7.0 by Mai 'Domino' Mizuno (Domino@stormbot.org).
+This is the README for StormBot.TCL version 7.0 by Mai 'Domino' Mizuno (Domino@StormBot.Org).
 
 Here is how you you should set-up SB7 with your eggdrop:
 
 Step #0:
      # unzip / untar the script in the bot's HOME directory (this is a change!): 
      cd <bot's home directory>
-     tar -zxvf <stormbot tarball>
-     # All files will dump into "scripts/sb7/"
+     tar zxvf <stormbot tarball>
+     # All files will dump into "./scripts/sb7/"
 
 Step #1:
      cd scripts/sb7
@@ -17,7 +17,7 @@ Step #1:
 Step #2:
      add this line to your eggdrop bot at the BOTTOM (make it the last line)
      (Do not SOURCE any other script fragments other than this!)
-     source scripts/sb7/sb7.tcl
+     source ./scripts/sb7/sb7.tcl
 
 Step #3:
      if your bot is alive, REHASH it:
@@ -30,7 +30,7 @@ Step #3:
      if it's not active, start it now (bot's directory: "./eggdrop [-m] <config file>")
 
 Step #4:
-     if your bot was running StormBot.TCL Version 3, 4, 5, or 6:
+     if your bot was running StormBot.TCL Version 3, 3.5, 4, 5, or 6:
 
           * you will have to edit sb7.tcl from scratch. None of the values
                from previous versions carry over (I did this on purpose).
@@ -74,8 +74,8 @@ module beads. I =ALWAYS= give credit to donated code / beads / contributions.
 As always, help can be found in-vivo:
 
 IRC.BOTHOUSE.NET in #BotHouse
-[ irc://irc.bothouse.net:6667/Bothouse ]
-[ ircs://irc.bothouse.net:7001/Bothouse ]
+[ irc://irc.stormbot.org:6667/Bothouse ]
+[ ircs://irc.stormbot.org:7001/Bothouse ]
 
 Enjoy!
 
@@ -90,4 +90,5 @@ Enjoy!
 # (C) 2000 - 2003: [V3.1b- 3.2] David P. Hansen, Mai Mizuno
 # (C) 1998 - 2000: [V3.0 - 3.1] David P. Hansen, Dave Klein, Justin Hammond, & Mai "Domino" Mizuno
 # (C) 1997 - 1998: [V1.0 - 2.0] David P. "Xone" Hansen, Dave "CyberMac" Klein, & Justin "ElriC" Hammond
+
 

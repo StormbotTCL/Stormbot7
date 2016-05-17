@@ -1,7 +1,12 @@
-# StormBot.TCL 7 version Changelog -- 2016-05-09 03:42:40 UTC #
-# Version: 7.00.0006 #
+# StormBot.TCL 7 version Changelog -- 2016-05-16 07:03:51 UTC #
+# Version: 7.00.0007 #
 
 # Current Working Version #
+2016-05-16 07:00:34 UTC: #614 [core] ===== New distribution: version 7.00.0007 =====
+2016-05-16 06:47:21 UTC: #613 [tvmaze] Added TVMAZE (ported from SB6)
+2016-05-16 06:47:02 UTC: #612 [core] Added TVMAZE to ZENKAI
+2016-05-16 05:52:04 UTC: #611 [core] Added TITLECASE (ported from SB6)
+2016-05-16 05:45:26 UTC: #610 [core] Fixed ESCAPE, AJ, NUMBER:CLEAN, STT, & LEFT (extra spaces in code)
 2016-05-09 03:40:04 UTC: #609 [core] Fixed SB7:SETUP (the autopurge was looking in the bot's home directory instead of the scripts/sb7 directory for the ''if X exists'' check. This repairs CHANGELOG #606)
 2016-05-09 03:28:17 UTC: #608 [botsend] Fixed BOTSEND STATUS (debug line left in)
 2016-05-09 03:24:34 UTC: #607 [core] Fixed SB7:SETUP ((1) cleaned up the log data for autopurged items & (2) removed CONFIG variable spew [which only showed anything during a *warm* start])
