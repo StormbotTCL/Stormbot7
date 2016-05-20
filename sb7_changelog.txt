@@ -1,7 +1,12 @@
-# StormBot.TCL 7 version Changelog -- 2016-05-16 07:03:51 UTC #
-# Version: 7.00.0007 #
+# StormBot.TCL 7 version Changelog -- 2016-05-20 02:24:57 UTC #
+# Version: 7.00.0010 #
 
 # Current Working Version #
+2016-05-20 02:18:40 UTC: #619 [core] ===== New distribution: version 7.00.0010 =====
+2016-05-20 02:08:13 UTC: #618 [calc] Removed CALC from distribution (all distributions, political reasons)
+2016-05-20 02:06:01 UTC: #617 [distro] Fixed DISTRO CHANGELOG DELETE ((1) output when deleting a line wasn't parsing the data, &, (2) added alias DELETE to DEL)
+2016-05-20 02:06:00 UTC: #616 [distro] Fixed DISTRO DEL (cosmetic: ''DISTRO ADD'' copied from DISTRO ADD in DISTRO DEL output. Also, added alias ''DELETE'' to DISTRO DEL)
+2016-05-20 01:58:29 UTC: #615 [core & tvmaze] Fixed TVMAZE ((1) added -QUIET flag to SCHEDULE -DAYS option: internally uses -SNUFFEMPTY flag to not display when there are no programs for a given data within a range, &, (2) fixed GET TIME: wasn't initializing $TEXT to empty (which gummed-up $COUNTRIES in SCHEDULE -DAYS))
 2016-05-16 07:00:34 UTC: #614 [core] ===== New distribution: version 7.00.0007 =====
 2016-05-16 06:47:21 UTC: #613 [tvmaze] Added TVMAZE (ported from SB6)
 2016-05-16 06:47:02 UTC: #612 [core] Added TVMAZE to ZENKAI
