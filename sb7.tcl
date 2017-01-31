@@ -739,7 +739,7 @@ proc sb7 { args } { # General
 			lassign:array authed $auth handle nick host
 #putlog "\[AUTH\] 04:AUTH($auth):OUTH($outh)"
 			switch -exact -- [string tolower $cmd] {
-		
+
 				authed - isauth - isauthed - check {
 					set message "\[SB7 AUTH [string toupper $cmd]\] Use \"is authed\" instead! From: [info level [expr [info level] -1]]"
 					rawhome $message
@@ -750,7 +750,7 @@ proc sb7 { args } { # General
 					if { [notempty arg2] && [notempty _host] && ![valididx $arg1] } { if ![string eq -nocase $_host $arg2] { return 0 } }
 					return 1
 				}
-		
+
 				outhed - isouth - isouthed {
 					set message "\[SB7 AUTH [string toupper $cmd]\] Use \"is outhed\" instead! From: [info level [expr [info level] -1]]"
 					rawhome $message
@@ -761,32 +761,32 @@ proc sb7 { args } { # General
 					if { [notempty arg2] && [notempty _host] && ![valididx $arg1] } { if ![string eq -nocase $_host $arg2] { return 0 } }
 					return 1
 				}
-		
+
 				auth -  login -  set { data array set @AUTH $user [list [casehandle $user] $arg1 $arg2] ; return }
-		
+
 				outh - ologin - oset { data array set @OUTH $user [list [casehandle $user] $arg1 $arg2] ; return }
-		
+
 				get {
 					if ![validuser $user] { error "\[SB7 AUTH GET\] Unknown user: $user" }
 					set data [data array value @AUTH $user]
 					switch -exact -- [string tolower $arg1] {
-		
+
 						handle { return [lindex $data 0] }
-		
+
 						nick   { return [lindex $data 1] }
-		
+
 						host   { return [lindex $data 2] }
-		
+
 						default { error "\[SB7 AUTH GET\] Unknown command: [string toupper $user]" }
-		
+
 					}
 				}
-		
+
 				find {
 					# Loop through data array get {A b}, match by index, return REQUESTED type!
 					# (if NICK is specified, return the matching NICK [presumably matched by
 					# the handle])
-		
+
 					switch -exact -- [string tolower $user] {
 						handle { set l 0 ; set c [list 1 2] }
 						nick   { set l 1 ; set c [list 0 2] }
@@ -810,14 +810,14 @@ proc sb7 { args } { # General
 					}
 					return
 				}
-		
+
 				logout {
 					# Take out both LOGIN & OLOGIN!
 					data array set @AUTH $user
 					data array set @OUTH $user
 					return
 				}
-		
+
 				default { error "\[SB7 AUTH\] Unknown command: [string toupper $cmd]" }
 			}
 		}
@@ -2418,7 +2418,7 @@ proc boolean args {
 	istrue $value
 }
 
-proc escape { text { extra "" } } { 
+proc escape { text { extra "" } } {
 	regsub -all -- {\\|\{|\}|\[|\]|\$|\;|\"} $text {\\&} text
 	if [notempty extra] { regsub -all -- "\\[join [split $extra ""] |\\]" $text {\\&} text }
 	return $text
@@ -2501,7 +2501,7 @@ proc ajl args {
 }
 
 proc aj { list { join ", " } { and & } } {
-	if [isempty list] return 
+	if [isempty list] return
 	switch -exact -- [llength $list] {
 
 		1 { return $list }
@@ -2642,13 +2642,13 @@ proc number:clean number {
 	lassign [split $number .] int mant
 	set int [string trimleft $int 0]
 	if [string eq "" $int] { set int 0 }
-	set mant [string trimright $mant 0]     
+	set mant [string trimright $mant 0]
 	if [string eq "" $mant] { return ${sign}$int } { return ${sign}${int}.$mant }
 }
 
 proc st= a { return $a } ; # Just a forced non-change so that flags / variables can keep their position (against others like STL)
 
-proc stt a {# TITLE case (every word is Capped) 
+proc stt a {# TITLE case (every word is Capped)
 	set a [split $a]
 	# May cause 2nd level, redundant SPLIT, which is okay.
 
@@ -2656,6 +2656,7 @@ proc stt a {# TITLE case (every word is Capped)
 	foreach c $a {lappend b [string totitle $c]}
 	join $b
 }
+
 
 proc str a {
 	# Note: since digits & punctuation are not considered a 'letter,' all of
@@ -2694,8 +2695,70 @@ proc jstt  a    { join [stt $a] }
 proc jstr  a    { join [str $a] }
 proc jst^ {a b} { join [st^ $a $b] }
 
+proc titlecase { temp { more "" } } { # Ported from SB6
+	set lower [concat $more a to in on with without from of an the for at by]
+	if [instr $temp =] {
+		regsub -all -- = $temp " = " temp
+	} {
+		# NO! - regsub -all -- " - " $temp " = " temp
+		regsub -all -- "--" $temp " = " temp
+	}
+	regsub -all -- % $temp $$    temp
+	regsub -all -- _ $temp " "   temp
+
+	regsub -all -- {\(}  $temp {( }  temp
+	regsub -all -- {\[}  $temp {\[ } temp
+	regsub -all -- {\{}  $temp {\{ } temp
+	regsub -all -- !	$temp {! }  temp
+	regsub -all -- @	$temp {@ }  temp
+	regsub -all -- #	$temp {# }  temp
+	regsub -all -- {\$}  $temp {\$ } temp
+	regsub -all -- %	$temp {% }  temp
+	regsub -all -- {\^}  $temp {\^ } temp
+	regsub -all -- {\\&} $temp {\& } temp
+	regsub -all -- {\.}  $temp { . } temp
+	# NO! - regsub -all -- - $temp " - " temp; # Will protect intentional " - "
+
+	empty new
+	one first
+	foreach word $temp {
+		if { [ string is upper $word ] && ( [ len $word ] > 1 ) } {# Protect full-CAPS (intentional): "DJ"
+			# Avoid "A" always getting through this test
+			lappend new $word
+		} else {
+			if $first {# Always capitalise 1st word regardless
+				lappend new [stt $word]
+			} {
+				if {[lsearch -exact $lower [stl $word]] < 0} {lappend new [stt $word]} {lappend new [stl $word]}
+			}
+
+			# Those Irish ....
+			if { [left [stl $word] 2 mc ] && ( [ len $word ] > 2 ) } { set word "Mc[stt $word]" }
+			zero first
+		}
+		#if [regexp -nocase -- {^[A-Z]} $word] {zero first}
+		if [string eq = $word] {one first}
+	}
+
+	set new [join $new]
+	# NO! - regsub -all -- " - " new - $new
+	regsub -all -- {\{ }  $new {\{} new
+	regsub -all -- {\[ }  $new {[}  new
+	regsub -all -- {\( }  $new {(}  new
+	regsub -all -- {! }   $new !    new
+	regsub -all -- {@ }   $new @    new
+	regsub -all -- {# }   $new #    new
+	regsub -all -- {\$ }  $new {\$} new
+	regsub -all -- {% }   $new %    new
+	regsub -all -- {\^ }  $new {\^} new
+	regsub -all -- {\\& } $new {\&} new
+	regsub -all -- { \. } $new {.}  new
+	regsub -all -- " = " $new = new
+	return $new
+}
+
 proc left args {
-	lassign $args a b 
+	lassign $args a b
 	set args [lreplace $args 0 1]
 	empty flags
 	while { [lsearch -glob [string tolower [lindex [split $args] 0]] -n*] != -1 } {
@@ -2824,9 +2887,9 @@ if ![iseggcorecmd iff] {
 	proc iff { condition true { false "" } } {
 		# UPLEVEL because someone might do {$m > 0} instead of just "$m > 0"
 		set ::_IFF_CONDITION $condition
-	
+
 		# MUST USE "!= 0" check: otherwise, values of "2" won't trigger TRUE (due to -STRICT).
-		uplevel 1 { set ::_IFF_ANSWER [ expr ( $::_IFF_CONDITION != 0 ) ] }
+		uplevel 1 { set ::_IFF_ANSWER [ expr ( $::_IFF_CONDITION ) ? 1 : 0 ] }
 		set iff $::_IFF_ANSWER
 		unset ::_IFF_CONDITION ::_IFF_ANSWER
 		if [string is true -strict $iff] { return $true } { return $false }
@@ -4617,7 +4680,7 @@ proc effects { text args } {
 
 	foreach a $args {
 		# Let DEFAULT handle the error ....
-putlog "\[EFFECTS\] A($a):TEXT($text)"
+#putlog "\[EFFECTS\] A($a):TEXT($text)"
 		switch -regexp -- [string tolower $a] {
 
 			{^\d{1,2}(,\d{1,2})?$} { append open [color $a] ; prepend close [color] }
@@ -6018,7 +6081,7 @@ proc get { cmd args } {
 			if [notempty var_text] { upvar 1 $var_text text }
 #debug =0 time text
 
-			empty time
+			empty time text
 			set _ [lindex $arg 0]
 #debug =1 time text
 
@@ -6039,7 +6102,7 @@ proc get { cmd args } {
 				set time [expr $current_time $sign $timeval]
 				set text [join [lreplace $arg 0 0]]
 				return $time
-			} 
+			}
 #debug =4 time text timeval
 
 			# Guess'timates show that a valid timestamp can consist of MANY(!) elements!
@@ -6054,12 +6117,13 @@ proc get { cmd args } {
 			for { set count 0 } { $count < $ll } { incr count } {
 #debug =LRANGE([lrange $arg 0 $count])
 				set error [ catch { set time [clock scan [lrange $arg 0 $count]] } ]
-#debug error time 
+#debug error time
 				if $error { # Return the last valid value
 					if [isempty time] { set text [join $arg] } { set text [join [lreplace $arg 0 [expr $count - 1]]] }
 					return $time
 				}
 			}
+#debug =8 time text arg
 			if [notempty time] { return $time }
 #debug =9 arg time text
 
