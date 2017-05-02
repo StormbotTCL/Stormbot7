@@ -30,7 +30,7 @@ StormBot.TCL is:
 (C) 1998 - 2000: \[V3.0 - 3.1\] David P. Hansen, Dave Klein, Justin Hammond, & Mai "Domino" Mizuno
 (C) 1997 - 1998: \[V1.0 - 2.0\] David P. "Xone" Hansen, Dave "CyberMac" Klein, & Justin "ElriC" Hammond
 
-StormBot.TCL was originally written in a dark, dank basement at the Department of Computer Science (DAIMI) at the University of Aarhus, Denmark, by David P. Hansen, who started the original StormBot channel, #storm_chasers. Dave Klein & Justin Hammond came on board, and they moved to #BotHouse \[which gave birth to a host of imitators that exist to this day\]. Since then, StormBot has moved to its own network (irc://irc.stormbot.org).
+StormBot.TCL was originally written in a dark, dank basement at the Department of Computer Science (DAIMI) at the University of Aarhus, Denmark, by David P. Hansen, who started the original StormBot channel, #storm_chasers. Dave Klein & Justin Hammond came on board, and they moved to #BotHouse \[which gave birth to a host of imitators that exist to this day\]. Since then, StormBot has been coded by Mai Mizuno and has moved to its own network (irc://irc.stormbot.org).
 
 Many people have contributed to StormBot.TCL over the years. Contributions include donation of time in debugging the script, donating bots to test new functions, donating servers when we formed our new testbed network, and the ALPHA and BETA testers of this most-recent incarnation, version 6.0 (ALPHA & BETA). Also included are those who donated web servers, wrote helper scripts, and / or donated command bead code (or code suggestions).
 <SNIP>
@@ -42,6 +42,8 @@ SB v7.0 code testers: Justin Hammond, Dustin Lennon; Bette, shade
 Machine / server donation major domo's: Justin Hammond, Dustin Lennon; Bette, shade
 
 Thanks to those who were contributors or bug reporters for SB3, SB4, SB5, & SB6. Everything I've learned has gone into making SB7 a better product.
+
+Bug finders: Demonicpagan & ElriC
 
 Reverse-credit acknowledgement: (#)NordicBots (quakenet), especially admin TheAvatar, because they ackowledged me for the assistance I gave them with their earlier work. Eventually, their coders created the Natasha bot. ( http://www.nordicbots.com/?id=143 ) That was very nice of them.
 
