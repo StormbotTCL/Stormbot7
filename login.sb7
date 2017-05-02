@@ -48,6 +48,7 @@ proc @login { nick host handle - arg } {
 		return
 	}
 
+	if { [lsearch -glob [string tolower $flags] -x*] != -1 } { if [@encrypt:bitch "LOGIN -XLOGIN & -XOLOGIN" $nick] return }
 	# Let's make sure the user has access to LOGIN to the target handle ....
 	if [isempty target] { print -private -short -return $nick "Login failed (missing target user)" }
 	if ![validuser $target] { print -private -short -return $nick "Login failed (illegal user)" }
@@ -283,5 +284,4 @@ proc @login:bootstrap args {
 # Bootstrap:
 
 @login:bootstrap
-
 
