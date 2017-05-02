@@ -32,7 +32,7 @@ proc @login { nick host handle - arg } {
 		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-xlogin\] \[-xologin\]"
 		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-invite #channel\]"
 		print -help $nick "Syntax: /msg $::botnick LOGIN <password> <handle> \[-voice #channel -halfop channel -op #channel -prot #channel -own #channel\]"
-		print -help $nick 
+		print -help $nick
 		print -help $nick "The LOGIN command identifies who YOU are and grants you access to my internal bits. By using the LOGIN command, you don't have to use your password with every single command you execute (Eggdrop standard protocol). This is the one feature that made StormBot.TCL an indispensible partner with Eggdrop."
 		print -help $nick "The OLOGIN is a separate \"owner login\" required for anyone with =1000 access. Due to the fact that some =1000 commands allow some form of shell-level manipulation, OLOGIN was created to allow for a second level of password security for those commands."
 		print -help $nick "Note: you are required to specify your \"handle\" (into which you're logging in). This is necessary because of users who have common hosts (like telia.net in general, or, those who connect form internet cafes). By specifying your handle, errors are minimized."
@@ -48,6 +48,7 @@ proc @login { nick host handle - arg } {
 		return
 	}
 
+	if { [lsearch -glob [string tolower $flags] -x*] != -1 } { if [@encrypt:bitch "LOGIN -XLOGIN & -XOLOGIN" $nick] return }
 	# Let's make sure the user has access to LOGIN to the target handle ....
 	if [isempty target] { print -private -short -return $nick "Login failed (missing target user)" }
 	if ![validuser $target] { print -private -short -return $nick "Login failed (illegal user)" }
@@ -125,7 +126,7 @@ proc @login:xlogin { bot cmd arg } {
 	sb7 security
 	set method_encoding 0
 	if [left $arg 1 +] {
-		set arg [decrypt \123\u053\x041 [reverse [mid $arg 2]]] 
+		set arg [decrypt \123\u053\x41 [reverse [mid $arg 2]]]
 		set nick [lindex $arg 0]
 		set handle [lindex $arg 1]
 		if ![validuser $handle] { return 0 }
@@ -176,15 +177,16 @@ proc @login:xlogin { bot cmd arg } {
 	}
 	if ![validuser $handle] { putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): unknown user" ; return 0 }
 	if !($method_encoding) { putlog "\[XLOGIN\] failed XLOGIN by: ${nick}!${host} (${handle}): bad password" ; return 0 }
+
 	sb7 auth login $handle $nick $host
-	putlog "\[XLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: $method_encoding\]"
+	putlog "\[XLOGIN\] ${nick}!${host} (${handle}) @ $bot \[ecm: ${method_encoding}\]"
 }
 
 proc @login:ologin { bot cmd arg } {
 	sb7 security
 	set method_encoding 0
 	if [left $arg 1 +] {
-		set arg [decrypt \123\u053\x041 [reverse [mid $arg 2]]] 
+		set arg [decrypt \123\u053\x41 [reverse [mid $arg 2]]]
 		set nick [lindex $arg 0]
 		set handle [lindex $arg 1]
 		if ![validuser $handle] { return 0 }
@@ -207,6 +209,7 @@ proc @login:ologin { bot cmd arg } {
 		set handle [binary format H* [lindex $decoded 2]]
 		set pass   [binary format H* [lindex $decoded 3]]
 		if ![validuser $handle] {return 0}
+		if [string eq "" [userinfo get $handle opass]] { putlog "\[OLOGIN\] $handle does not have an OPASS set." ; return }
 		if [string eq $pass [userinfo get $handle opass]] {set method_encoding 4}
 	} else {
 		# These methods are caught up with the "+" format above ... why?
@@ -281,5 +284,4 @@ proc @login:bootstrap args {
 # Bootstrap:
 
 @login:bootstrap
-
 

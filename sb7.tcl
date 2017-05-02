@@ -1,6 +1,6 @@
 # StormBot.TCL version 7.X series, add-on script for EGGDROP V1.3 - V1.8
-# (C) 2012 - 2016: [V7.0      ] David P. Hansen, Mai Mizuno
-# (C) 2009 - 2016: [V6.0      ] David P. Hansen, Mai Mizuno
+# (C) 2012 - 2017: [V7.0      ] David P. Hansen, Mai Mizuno
+# (C) 2009 - 2017: [V6.0 - 6.2] David P. Hansen, Mai Mizuno
 # (C) 2003 - 2010: [V5.0 - 5.2] David P. Hansen, Mai Mizuno
 # (C) 2000 - 2003: [V4.0 - 4.3] David P. Hansen, Mai Mizuno
 # (C) 2002 - 2003: [V3.5      ] David P. Hansen, Mai Mizuno
@@ -336,9 +336,11 @@ if [string eq "" [info procs _unknown]] {
 
 proc unknown { args } {
 	# We will =IGNORE= the difference between Var++ and ++Var (which reports the value before/after the increment, respectively)
-	if ![regexp -nocase -- {^[[:space:]]*(.+?)[[:space:]]*(==?|[-+\*/%^]=|\+\+|\-\-|<<=|>>=|\*\*=)[[:space:]]*(.*)} $args - variable type value] {
+#	if [regexp]
+	if ![regexp -nocase -- {^[[:space:]]*([0-9A-Z\(\)_\-]+)[[:space:]]*(\+\+|\-\-|[\-\+\*\/%\^=]?=|<<=|>>=|\*\*=)[[:space:]]*(.+)$} $args . variable type value] {
 		return [uplevel 1 eval _unknown $args]
 	}
+putlog "\00311,02\[UNKNOWN\] ARGS($args) --> VARIABLE($variable):TYPE($type):VALUE($value)\003"
 	upvar 1 $variable local
 	switch -exact -- $type {
 		=   { set local $value ; return $local }
@@ -354,7 +356,18 @@ proc unknown { args } {
 		--  { incr local -1 ; return $local }
 		<<= { set local [ expr { $local << $value } ] ; return $local }
 		>>= { set local [ expr { $local >> $value } ] ; return $local }
-		**= { if { [ catch { expr 1 ** 1 } ] || ( $value < 0 ) } { set local [ expr pow( {$local} , {$value} ) ] } { set local [ expr { $local ** $value } ] } ; return $local }
+		**= {
+			if {
+				[ catch { expr 1 ** 1 } ]
+				||
+				( $value < 0 )
+			} {
+				set local [ expr pow( {$local} , {$value} ) ]
+			} {
+				set local [ expr { $local ** $value } ]
+			}
+			return $local
+		}
 	}
 	uplevel 1 eval _unknown $args
 }
@@ -680,7 +693,15 @@ proc sb7 { args } { # General
 ##			set flargs [lrange $args 1 end]
 ##			if { ( [llength $flargs] == 1 ) && ( [llength [join $flagss]] != 1 ) } { set flargs [join $flargs] }
 ##			flags:simple $flarg $flargs ::sb7_parseflags_text flags
-			flags:simple [lrange $arg 1 end] [lrange $args 1 end] ::sb7_parseflags_text flags
+			set _ [lrange $args 1 end]
+			# Flags sent via variable (creating a single-element list?)
+			catch {
+				if { ( [llength $_] == 1 ) && ( [llength [lindex $_ 0]] != 1 ) } {
+					set _ [lindex $_ 0] ; # "!= 1" so "{}" gets pulled into ""
+				}
+			}
+			# Yes, $ARG is the text variable, $ARGS is the flags variable
+			flags:simple [lrange $arg 1 end] $_ ::sb7_parseflags_text flags
 #debug =0 ::sb7_parseflags_text flags
 			set ::sb7_parseflags_text [linsert $::sb7_parseflags_text 0 [lindex $arg 0]]
 #debug =1 ::sb7_parseflags_text flags
@@ -739,7 +760,7 @@ proc sb7 { args } { # General
 			lassign:array authed $auth handle nick host
 #putlog "\[AUTH\] 04:AUTH($auth):OUTH($outh)"
 			switch -exact -- [string tolower $cmd] {
-		
+
 				authed - isauth - isauthed - check {
 					set message "\[SB7 AUTH [string toupper $cmd]\] Use \"is authed\" instead! From: [info level [expr [info level] -1]]"
 					rawhome $message
@@ -750,7 +771,7 @@ proc sb7 { args } { # General
 					if { [notempty arg2] && [notempty _host] && ![valididx $arg1] } { if ![string eq -nocase $_host $arg2] { return 0 } }
 					return 1
 				}
-		
+
 				outhed - isouth - isouthed {
 					set message "\[SB7 AUTH [string toupper $cmd]\] Use \"is outhed\" instead! From: [info level [expr [info level] -1]]"
 					rawhome $message
@@ -761,32 +782,32 @@ proc sb7 { args } { # General
 					if { [notempty arg2] && [notempty _host] && ![valididx $arg1] } { if ![string eq -nocase $_host $arg2] { return 0 } }
 					return 1
 				}
-		
+
 				auth -  login -  set { data array set @AUTH $user [list [casehandle $user] $arg1 $arg2] ; return }
-		
+
 				outh - ologin - oset { data array set @OUTH $user [list [casehandle $user] $arg1 $arg2] ; return }
-		
+
 				get {
 					if ![validuser $user] { error "\[SB7 AUTH GET\] Unknown user: $user" }
 					set data [data array value @AUTH $user]
 					switch -exact -- [string tolower $arg1] {
-		
+
 						handle { return [lindex $data 0] }
-		
+
 						nick   { return [lindex $data 1] }
-		
+
 						host   { return [lindex $data 2] }
-		
+
 						default { error "\[SB7 AUTH GET\] Unknown command: [string toupper $user]" }
-		
+
 					}
 				}
-		
+
 				find {
 					# Loop through data array get {A b}, match by index, return REQUESTED type!
 					# (if NICK is specified, return the matching NICK [presumably matched by
 					# the handle])
-		
+
 					switch -exact -- [string tolower $user] {
 						handle { set l 0 ; set c [list 1 2] }
 						nick   { set l 1 ; set c [list 0 2] }
@@ -810,14 +831,14 @@ proc sb7 { args } { # General
 					}
 					return
 				}
-		
+
 				logout {
 					# Take out both LOGIN & OLOGIN!
 					data array set @AUTH $user
 					data array set @OUTH $user
 					return
 				}
-		
+
 				default { error "\[SB7 AUTH\] Unknown command: [string toupper $cmd]" }
 			}
 		}
@@ -983,7 +1004,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 #putlog [effects DISPATCH:14 11,12 bold]
 	# If authcmd, obfuscate $ARG
-	if { [lsearch -exact $cmdinfo(flags) AUTHCMD] != -1 } {
+	if { [lsearch -exact $cmdinfo(flags) -auth] != -1 } {
 		# Logging will be done later, after the command is thrown;
 		# obfuscate there, not here
 	}
@@ -1019,6 +1040,9 @@ proc sb7:dispatch { nick host handle chan arg } {
 	set time(2) [clock clicks -milliseconds]
 #putlog [effects DISPATCH:20.2:TIME\[2\]($time(2)) 11,12 bold]:ERROR($error):UH_OH($uh_oh)
 	set time(3) [ expr $time(2) - $time(1) ]
+	if [ catch { set stack [info errorstack] } ] { empty stack }
+     set error_frame [ catch { set frame [info frame] } ]
+     if $error_frame { empty frames } { empty frames ; for { set x $frame } { $x > 0 } { decr x } { lappend frames [info frame $x] } }
 
 	# Is command an original Eggdrop command that was rebound?
 	if [string eq -nocase HELP [lindex $arg 1]] {
@@ -1027,10 +1051,10 @@ proc sb7:dispatch { nick host handle chan arg } {
 				switch -exact -- [data get -lower @LASTBIND] {
 					msg { print $nick "\[[string toupper $cmd]\] The [string toupper $cmd] command is a core Eggdrop command\; the original command has been rebound to \"/${cmd}\" for /MSG commands: /msg $::botnick /${cmd} <args>" }
 					dcc { print $nick "\[[string toupper $cmd]\] The [string toupper $cmd] command is a core Eggdrop command\; the original command has been rebound to \"./${cmd}\" for .DCC commands: ./${cmd} <args>" }
-					not { # Do Nothing # }
-					pub { # Do Nothing # }
-					pubm { # Do Nothing # }
-					default { # Do Nothing # }
+					not { # Do nothing # }
+					pub { # Do nothing # }
+					pubm { # Do nothing # }
+					default { # Do nothing # }
 				}
 			}
 		}
@@ -1038,13 +1062,13 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 #putlog [effects DISPATCH:21 11,12 bold]
 	# If authcmd, obfuscate $ARG
-	if { [lsearch -exact $cmdinfo(flags) -authcmd] != -1 } { set arg "$cmd <password redacted>" }
+	if { [lsearch -exact $cmdinfo(flags) -auth] != -1 } { set arg "$cmd <password redacted>" }
 
 #putlog [effects DISPATCH:22 11,12 bold]
 	# If logging, ... log it!
 	if [data array value -normalize CONFIG LOG] {
 		set name ${::config}.command.global.log
-		set append_error [ catch { set append [open $name a] } append_uh_oh ] 
+		set append_error [ catch { set append [open $name a] } append_uh_oh ]
 		catch { puts $append [list $time(0) $time(3) $nick $host $handle $chan $cmd $arg $error $uh_oh] }
 		catch { close $append }
 		if $append_error { msghome "\[DISPATCH\] Error while writing command log ${name}: $append_uh_oh" }
@@ -1054,7 +1078,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 #putlog [effects DISPATCH:23 11,12 bold]
 	if [data array value -normalize CONFIG:$chan LOG] {
 		set name ${::config}.command.${chan}.log
-		set append_error [ catch { set append [open $name a] } append_uh_oh ] 
+		set append_error [ catch { set append [open $name a] } append_uh_oh ]
 		catch { puts $append [list $time(0) $time(3) $nick $host $handle $chan $cmd $arg $error $uh_oh] }
 		catch { close $append }
 		if $append_error { msghome "\[DISPATCH\] Error while writing command log ${name}: $append_uh_oh" }
@@ -1086,7 +1110,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 			1 {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
-				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) AUTHCMD] == -1} $original "<password blocked>"]"
+				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) -auth] == -1} $original "<password blocked>"]"
 				print $nick "Time/Stamp:[clock format $time(0) -format [data array value -default CONFIG format:time %c]]-0000 Time/Elapsed:$time(3)"
 				print $nick "Error message: $uh_oh"
 			}
@@ -1094,7 +1118,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 			2 {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
 				print $nick "$uh_oh"
-				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) AUTHCMD] == -1} $original "<password blocked>"]"
+				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) -auth] == -1} $original "<password blocked>"]"
 				print $nick "Please include the following debug information when reporting this bug (the coder will need all these details):"
 				set tag_threaded ""
 				if [info exists ::tcl_platform(threaded)] { set tag_threaded " OSTH:$::tcl_platform(threaded)" }
@@ -1106,6 +1130,38 @@ proc sb7:dispatch { nick host handle chan arg } {
 				set debug_cmdinfo [list]
 				foreach a [lsort -inc -uni -dict [array names cmdinfo]] { lappend debug_cmdinfo "CMDINFO/[string toupper $a]:$cmdinfo($a)" }
 				print $nick "[join $debug_cmdinfo]"
+			}
+
+			3 {
+				# Don't dump stack trace on auth commands!
+				if { [lsearch -exact $cmdinfo(flags) -auth] != -1 } { empty stack }
+				print $nick "An error occurred in the command [string toupper $cmd]:"
+				print $nick "$uh_oh"
+				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) -auth] == -1} $original "<password blocked>"]"
+				print $nick "Please include the following debug information when reporting this bug (the coder will need all these details):"
+				set tag_threaded ""
+				if [info exists ::tcl_platform(threaded)] { set tag_threaded " OSTH:$::tcl_platform(threaded)" }
+				print $nick "Time/Stamp:$time(0) Time/Local:[clock format $time(0) -format %Y%m%d-%H%M%S%z] Time/Zulu:[clock format $time(0) -format %Y%m%d-%H%M%S -gmt true]-0000 Time/Elapsed:$time(3)"
+				print $nick "SBV:[data array get @VERSION stormbot] SBT:[data array get @VERSION timestamp] SBTH:[clock format [data array get @VERSION timestamp] -format "%Y%m%d-%H%M%S" -gmt true]-0000 SBD:[join [split [data array get @VERSION distro]] _] N:${::nick} BN:${::botnet-nick} AN:${::altnick} BH:[nick2hand $::botnick $chan] C:$chan EDV:[lindex $::version 0] NL:${::nick-len} HL:$::handlen TCLV:[info patchlevel] OS:$::tcl_platform(os) OSP:$::tcl_platform(platform) OSV:$::tcl_platform(osVersion) OSBO:$::tcl_platform(byteOrder)${tag_threaded} OSM:$::tcl_platform(machine) OSWS:$::tcl_platform(wordSize) OSU:$::tcl_platform(user) LIB:$::tcl_library PWD:[pwd]"
+				print $nick "NH:${nick}!${host}\$$handle SC:$::server BO:[get opsymbol $nick $chan] AUTHED:[noyes [is authed $handle $nick $host]] OAUTHED:[noyes [is oauthed $handle $nick $host]] ACCESS:[access $handle]/[access $handle $chan]"
+				print $nick "LB:$::lastbind LB/SB:[data get -default @LASTBIND PUB] CSL:[boolean -noyes [is suspended cmd $cmd $chan]] CSG:[boolean -noyes [is suspended cmd $cmd]] USL:[boolean -noyes [is suspended user $handle $chan]] USG:[boolean -noyes [is suspended user $handle]]"
+				#print $nick "CIL:$cmdinfo(level) CIF:[join $cmdinfo(flags) ,] CIF:[join $cmdinfo(flags) ,] CIE:[join $cmdinfo(extra) ,]"
+				set debug_cmdinfo [list]
+				foreach a [lsort -inc -uni -dict [array names cmdinfo]] { lappend debug_cmdinfo "CMDINFO/[string toupper $a]:$cmdinfo($a)" }
+				print $nick "[join $debug_cmdinfo]"
+				if [notempty stack] {
+					print $nick "Stack trace ([plural -comma -show entry [ expr [ llength $stack ] / 2 ]]):"
+					zero c
+					foreach { a s } $stack {
+						incr c
+						print $nick "[space 5]Entry #[comma $c]: \[${a}\] $s"
+					}
+				}
+          	     if [data notempty @CONTEXT] {
+					print $nick "Last CONTEXT:"
+					foreach _ [data get @CONTEXT] { print $nick [space 5]$_ }
+					data empty @CONTEXT
+				}
 			}
 
 			default {
@@ -2328,7 +2384,7 @@ proc int args {
 			set local 0
 		} {
 			if [isempty local] {set local 0}
-	
+
 			# Error conditions: fake decimal, & non-digits #
 			if [string match *.*.* $local] {set local 0; return 0}
 			if [regexp -- {^[\+\-]?\d(\.\d+)?[Ee][\+\-]?\d+$} $local] { return $local }
@@ -2356,7 +2412,7 @@ proc mant args {
 			set local .0
 		} {
 			if [isempty local] { set local .0 }
-	
+
 			# Error conditions: fake decimal, & non-digits #
 			if [string match *.*.* $local] { set local .0 ; return .0 }
 			if [regexp -- {^[\+\-]?\d(\.\d+)?[Ee][\+\-]?\d+$} $local] { return $local }
@@ -2409,7 +2465,7 @@ proc singlespace text { set singlespace [regsub -all -- { [ ]+} $text " "] }
 
 proc boolean args {
 	flags:simple $args [list -integer -onoff -offon -truefalse -falsetrue -yesno -noyes] value flags
-	if [isnum -real $value] { set value [ expr $value ? 1 : 0 ] } 
+	if [isnum -real $value] { set value [ expr $value ? 1 : 0 ] }
 	if [istrue $value] { set value 1 } { set value 0 } ; # ISFALSE won't work here
 	if [validflag -integer] { return [istrue $value] }
 	if [validflag -offon -onoff] { return [offon [istrue $value]] }
@@ -2418,7 +2474,7 @@ proc boolean args {
 	istrue $value
 }
 
-proc escape { text { extra "" } } { 
+proc escape { text { extra "" } } {
 	regsub -all -- {\\|\{|\}|\[|\]|\$|\;|\"} $text {\\&} text
 	if [notempty extra] { regsub -all -- "\\[join [split $extra ""] |\\]" $text {\\&} text }
 	return $text
@@ -2501,7 +2557,7 @@ proc ajl args {
 }
 
 proc aj { list { join ", " } { and & } } {
-	if [isempty list] return 
+	if [isempty list] return
 	switch -exact -- [llength $list] {
 
 		1 { return $list }
@@ -2580,6 +2636,12 @@ proc alphabet args {
 
 proc nocolor text { regsub -all -- {\003([0-9]{1,2}(,[0-9]{1,2})?)?} $text "" }
 
+proc percentwildcard word {
+	if [isempty word] { return 0 }
+	set leftover [regsub -all "\\\*|\\\?" $word "" temp]
+	expr ( $leftover / [ len $word ].0 ) * 100
+}
+
 proc sgn { value { mode "" } } {
 	# Enter with: sgn value [pos | neg | both | all / force (zero also gets "+")]
 	if [string eq "" $value] { return 0 }
@@ -2642,13 +2704,13 @@ proc number:clean number {
 	lassign [split $number .] int mant
 	set int [string trimleft $int 0]
 	if [string eq "" $int] { set int 0 }
-	set mant [string trimright $mant 0]     
+	set mant [string trimright $mant 0]
 	if [string eq "" $mant] { return ${sign}$int } { return ${sign}${int}.$mant }
 }
 
 proc st= a { return $a } ; # Just a forced non-change so that flags / variables can keep their position (against others like STL)
 
-proc stt a {# TITLE case (every word is Capped) 
+proc stt a {# TITLE case (every word is Capped)
 	set a [split $a]
 	# May cause 2nd level, redundant SPLIT, which is okay.
 
@@ -2656,6 +2718,7 @@ proc stt a {# TITLE case (every word is Capped)
 	foreach c $a {lappend b [string totitle $c]}
 	join $b
 }
+
 
 proc str a {
 	# Note: since digits & punctuation are not considered a 'letter,' all of
@@ -2694,8 +2757,70 @@ proc jstt  a    { join [stt $a] }
 proc jstr  a    { join [str $a] }
 proc jst^ {a b} { join [st^ $a $b] }
 
+proc titlecase { temp { more "" } } { # Ported from SB6
+	set lower [concat $more a to in on with without from of an the for at by]
+	if [instr $temp =] {
+		regsub -all -- = $temp " = " temp
+	} {
+		# NO! - regsub -all -- " - " $temp " = " temp
+		regsub -all -- "--" $temp " = " temp
+	}
+	regsub -all -- % $temp $$    temp
+	regsub -all -- _ $temp " "   temp
+
+	regsub -all -- {\(}  $temp {( }  temp
+	regsub -all -- {\[}  $temp {\[ } temp
+	regsub -all -- {\{}  $temp {\{ } temp
+	regsub -all -- !	$temp {! }  temp
+	regsub -all -- @	$temp {@ }  temp
+	regsub -all -- #	$temp {# }  temp
+	regsub -all -- {\$}  $temp {\$ } temp
+	regsub -all -- %	$temp {% }  temp
+	regsub -all -- {\^}  $temp {\^ } temp
+	regsub -all -- {\\&} $temp {\& } temp
+	regsub -all -- {\.}  $temp { . } temp
+	# NO! - regsub -all -- - $temp " - " temp; # Will protect intentional " - "
+
+	empty new
+	one first
+	foreach word $temp {
+		if { [ string is upper $word ] && ( [ len $word ] > 1 ) } {# Protect full-CAPS (intentional): "DJ"
+			# Avoid "A" always getting through this test
+			lappend new $word
+		} else {
+			if $first {# Always capitalise 1st word regardless
+				lappend new [stt $word]
+			} {
+				if {[lsearch -exact $lower [stl $word]] < 0} {lappend new [stt $word]} {lappend new [stl $word]}
+			}
+
+			# Those Irish ....
+			if { [left [stl $word] 2 mc ] && ( [ len $word ] > 2 ) } { set word "Mc[stt $word]" }
+			zero first
+		}
+		#if [regexp -nocase -- {^[A-Z]} $word] {zero first}
+		if [string eq = $word] {one first}
+	}
+
+	set new [join $new]
+	# NO! - regsub -all -- " - " new - $new
+	regsub -all -- {\{ }  $new {\{} new
+	regsub -all -- {\[ }  $new {[}  new
+	regsub -all -- {\( }  $new {(}  new
+	regsub -all -- {! }   $new !    new
+	regsub -all -- {@ }   $new @    new
+	regsub -all -- {# }   $new #    new
+	regsub -all -- {\$ }  $new {\$} new
+	regsub -all -- {% }   $new %    new
+	regsub -all -- {\^ }  $new {\^} new
+	regsub -all -- {\\& } $new {\&} new
+	regsub -all -- { \. } $new {.}  new
+	regsub -all -- " = " $new = new
+	return $new
+}
+
 proc left args {
-	lassign $args a b 
+	lassign $args a b
 	set args [lreplace $args 0 1]
 	empty flags
 	while { [lsearch -glob [string tolower [lindex [split $args] 0]] -n*] != -1 } {
@@ -2824,9 +2949,9 @@ if ![iseggcorecmd iff] {
 	proc iff { condition true { false "" } } {
 		# UPLEVEL because someone might do {$m > 0} instead of just "$m > 0"
 		set ::_IFF_CONDITION $condition
-	
+
 		# MUST USE "!= 0" check: otherwise, values of "2" won't trigger TRUE (due to -STRICT).
-		uplevel 1 { set ::_IFF_ANSWER [ expr ( $::_IFF_CONDITION != 0 ) ] }
+		uplevel 1 { set ::_IFF_ANSWER [ expr ( $::_IFF_CONDITION ) ? 1 : 0 ] }
 		set iff $::_IFF_ANSWER
 		unset ::_IFF_CONDITION ::_IFF_ANSWER
 		if [string is true -strict $iff] { return $true } { return $false }
@@ -3764,6 +3889,19 @@ proc lsort:chanop { 1 2 } {
 	string compare $_1n $_2n
 }
 
+proc nodup { list { nocase "0" } } {# $B = 0/1: NOCASE?
+	empty nodup
+	foreach check $list {
+		if $nocase {
+			set m [lsearch -glob [stl $nodup] [stl $check]]
+		} {
+			set m [lsearch -glob $nodup $check]
+		}
+		if {$m < 0} {lappend nodup $check }
+	}
+	return $nodup
+}
+
 # --- Math helpers ---
 
 proc percent { number total { decimal "" } } {
@@ -3774,7 +3912,7 @@ proc percent { number total { decimal "" } } {
 	return ${%}%
 }
 
-proc float args { 
+proc float args {
 	set split [split $args]
 	set reset [string eq -nocase [lindex $split 0] -RESET]
 	if $reset { set split [join [lreplace $split 0 0]] ; set args [join $split] }
@@ -3998,7 +4136,7 @@ proc access args {
 			lassign $args - handle chan
 			if [isempty chan] {
 				# PermOwner
-				if [is permowner $handle] { 
+				if [is permowner $handle] {
 					set level 1000
 					regsub -all -- {,| [ ]+} $::owner " " o
 					if { [llength $o] > 1 } {
@@ -4011,7 +4149,7 @@ proc access args {
 				# Global
 				## WTF??
 				##if [isnum -integer [string eq "" [userinfo get $handle access:global]]] return
-				if ![string eq "" [userinfo get $handle access:global]] return
+				if [regexp -- {^[1-9]\d+\.?\d*} [userinfo get $handle access:global]] return
 				foreach { flag value } [list n 900 m 800 t 700 o 600 l 575 v 550 f 501] {
 					if [userflag check $handle $flag] { putcmdlog "\[ACCESS FIX\] Automatically adjusting user level: $handle (global -> $value)" ; userinfo set $handle access:global $value ; return $value }
 				}
@@ -4180,7 +4318,7 @@ proc whois { who { who2 "" } { chan "" } } {
 	if [string eq * $chan] { empty chan }
 
 	# Bot?
-	if { [isbotnick $who] || [isbotnick $who2] } { return "1 [findonchans nick $::botnick] {} {}" }
+	if { [isbotnick $who] || [isbotnick $who2] } { return [list 1 [findonchans nick $::botnick] "" ""] }
 
 	# Me?
 	if [notempty who2] {
@@ -4216,8 +4354,19 @@ proc whois { who { who2 "" } { chan "" } } {
 		} {
 			set chanlist $chan
 		}
-		foreach ch $chanlist {
-			#
+		set found 0
+		foreach cl $chanlist {
+			foreach ul [chanlist $cl] {
+				set ch [getchanhost $ul $cl]
+				if [string match *!* $who] { set ch ${ul}!$ch }
+				if [string match -nocase $who $ch] {
+					set who \\$ul
+					set who2 \\$ul
+					set break 1
+					break
+				}
+			}
+			if $found break
 		}
 	}
 
@@ -4272,7 +4421,7 @@ proc whois { who { who2 "" } { chan "" } } {
 	# Let's look for a user whose nick matches a known handle, but, doesn't mask-match it (user needing an ADDMASK)
 	lassign [findonchans nick $who] nick host handle chan
 #debug -log 7 who nick host handle chan
-	if { [isempty handle] && [validuser $who] } {
+	if { [onchan $who] && [isempty handle] && [validuser $who] } {
 #debug who host handle chan authed_nick authed_hand
 		empty authed_nick authed_hand
 		return [list 4 $who $host "" $chan $authed_nick $authed_hand]
@@ -4617,7 +4766,7 @@ proc effects { text args } {
 
 	foreach a $args {
 		# Let DEFAULT handle the error ....
-putlog "\[EFFECTS\] A($a):TEXT($text)"
+#putlog "\[EFFECTS\] A($a):TEXT($text)"
 		switch -regexp -- [string tolower $a] {
 
 			{^\d{1,2}(,\d{1,2})?$} { append open [color $a] ; prepend close [color] }
@@ -4702,7 +4851,7 @@ proc print:ident { list { spacing 3 } { space " " } } {
 
 # All-inclusive PRINT command (including line-splitting)
 proc print args {
-	set validflags [list -tabs -none -strip -mute -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -channel -private -msg -notice -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
+	set validflags [list -channel -notice -msg -chan -tabs -none -strip -mute -ctcp -ctcr -reset -debug -error -help -nouserdata -quick -burst -raw -noraw -normal -private -next -header -header:short -short -return -wallops -home -keepdcc -dummy]
 	# -DUMMY is for a variable to hold a "-private" or "-dummy" flag (based on need) within a variable
 	flags -simple $args $validflags text flags
 
@@ -4770,7 +4919,7 @@ if $debug { debug =2 flags target }
 		# What if it's the user's first command? (Trac #10)
 		if [data array get -isempty @output $target] {
 			data array set @output $target [list $target * $target [home] PUB]
-			set type NOTICE 
+			set type NOTICE
 		} {
 			set type [data array value -default CONFIG OUTPUT NOTICE]
 		}
@@ -4780,6 +4929,7 @@ if $debug { debug =2 flags target }
 #putlog "\[PRINT\] TARGET($target):CHAN($chan)"
 #		if { [lsearch -exact [list "" *] $chan] != -1 } { set flags [ldestroy -replacewith $flags -msg -notice] ; set:all temp temp_type notice ; set output $target }
 		if { [lsearch -exact [list "" *] $chan] != -1 } { set chan [lindex [concat [home] [channels]] 0] ; set flags [ldestroy -replacewith $flags -msg -notice] ; set:all temp temp_type notice ; set output $target }
+
 		if [validuser $handle] {
 			if [boolean -integer [userinfo get $handle BURST]] { set:all burst_ok user_setting_burst 1 ; lprepend flags -burst }
 			set pre [userinfo get $handle prefix]
@@ -4818,6 +4968,12 @@ if $debug { debug =2 flags target }
 			}
 
 		}
+
+		# Overrides
+		if [validflag -notice] { set type NOTICE ; set output $target }
+		if [validflag -msg] { set type PRIVMSG ; set output $target }
+		if [validflag -channel] { set type PRIVMSG ;  set output $chan }
+
 		set color [userinfo get $handle COLOR]
 		if ![validflag -nouserdata] { if [notempty color] { set open $color } }
 	}
@@ -5323,14 +5479,14 @@ proc shell:findcmd cmd {
 	return
 }
 
-proc shell:which cmd { 
+proc shell:which cmd {
 	set error [ catch { set which [lindex [exec which [string tolower $cmd]] 0] } null ]
 	if $error return
 	lremove which *.gz *.man *.1
 	return $which
 }
 
-proc shell:whereis cmd { 
+proc shell:whereis cmd {
 	set error [ catch { set whereis [exec whereis $cmd] } null ]
 	if $error return
 	if [string eq ${cmd}: [lindex $whereis 0]] {set whereis [lreplace $whereis 0 0]}
@@ -5340,11 +5496,22 @@ proc shell:whereis cmd {
 
 # --- Other commands ---
 
+proc context args {
+	set context ""
+	lappend context "# [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S %z (%Z)"] on: $::botnick -- CONTEXT marker"
+	if ![string eq "" $args] { lappend context "# Note: $args" }
+	set c 0
+	set f [info frame]
+	incr f -1
+	for { set i $f ; set u 1 } { $i > 0 } { incr i -1 ; incr u } { lappend context "Frame #${i}: [info frame $i]" }
+	data set @context $context
+}
+
 proc hexdump { text { size 16 } } {
 	set max [string length [format %X [string length $text]]]
 	set length [expr $size * 2] ; # Double it due to HEX
 	set hexdump ""
-	binary scan $text H* hex 
+	binary scan $text H* hex
 	set count 0
 	while { ![string eq "" $hex] } {
 		set line [string range $hex 0 [expr $length - 1]]
@@ -6018,7 +6185,7 @@ proc get { cmd args } {
 			if [notempty var_text] { upvar 1 $var_text text }
 #debug =0 time text
 
-			empty time
+			empty time text
 			set _ [lindex $arg 0]
 #debug =1 time text
 
@@ -6039,7 +6206,7 @@ proc get { cmd args } {
 				set time [expr $current_time $sign $timeval]
 				set text [join [lreplace $arg 0 0]]
 				return $time
-			} 
+			}
 #debug =4 time text timeval
 
 			# Guess'timates show that a valid timestamp can consist of MANY(!) elements!
@@ -6054,12 +6221,13 @@ proc get { cmd args } {
 			for { set count 0 } { $count < $ll } { incr count } {
 #debug =LRANGE([lrange $arg 0 $count])
 				set error [ catch { set time [clock scan [lrange $arg 0 $count]] } ]
-#debug error time 
+#debug error time
 				if $error { # Return the last valid value
 					if [isempty time] { set text [join $arg] } { set text [join [lreplace $arg 0 [expr $count - 1]]] }
 					return $time
 				}
 			}
+#debug =8 time text arg
 			if [notempty time] { return $time }
 #debug =9 arg time text
 
@@ -6473,20 +6641,18 @@ proc debug args {
 }
 
 proc procdef { proc { tab2space 5 } } {
-#debug tab2space
+	set alias [interp alias {} $proc]
+	if ![string eq "" $alias] { return "interp alias \{\} $proc \{\} $alias" }
+	if [string eq "" [info procs $proc]] {
+		if ![string eq "" [info commands $proc]] { error "\[PROCDEF\] Command \"${proc}\" is intrinsic (binary) code and can not be displayed." }
+		error "\[PROCDEF\] No such PROC: $proc"
+	}
 	if { [lsearch -exact [list tab \t] [string tolower $tab2space]] != -1 } {
-#debug =TAB
 		set tab \t
 		set tab2space 0
 	} {
-#debug =No\ tab
 		set tab [string repeat " " $tab2space]
 	}
-#binary scan $tab H* h
-#debug tab h
-	set alias [interp alias {} $proc]
-	if ![string eq "" $alias] { return "interp alias {} $proc {} $alias" }
-	if [string eq "" [info procs $proc]] { error "\[DEFPROC\] No such PROC: $proc"  }
 	empty args code
 	foreach arg [info args $proc] {
 		set def [info default $proc $arg a]
@@ -6494,22 +6660,38 @@ proc procdef { proc { tab2space 5 } } {
 	}
 	set body [info body $proc]
 	if $tab2space { regsub -all -- \t $body $tab body }
-#	return "proc $proc \{ $args \} \{[iff ![instr $body \n] " "][string trim ${body} " "][iff ![instr $body \n] " "]\}"
 	return "proc $proc \{ $args \} \{[regsub -all -- {[ \t]+\n} $body \n]\}"
 }
 
 proc findinprocs text {
-	set list ""
-	foreach proc [info commands *] {
-		if [catch {set null [info args $proc]}] continue
+	empty list
+	foreach proc [lsort -inc -uni -dict [info procs *]] {
 		set body [info body $proc]
 		zero count
 		foreach line [split $body \n] {
 			incr count
-			if [instr $line $text] { lappend list "${proc}: line ${count}: $line" }
+			if { [string match -nocase $text $line] || [instr $line $text] } { lappend list "${proc}\\${count}: $line" }
 		}
 	}
+	set ll [llength $list]
+	for { set _ 0 ; set c 1 } { $_ < $ll } { incr _ ; incr c } { lset list $_ "${c}/${ll}: [lindex $list $_]" }
 	return $list
+}
+
+proc findinvars text {
+	empty o
+	foreach _ [lsort -inc -uni -dict [info vars ::*]] {
+		if [array exists $_] {
+			foreach __ [lsort -inc -uni -dict [array names $_]] {
+				set value [set ${_}($__)]
+				if [string match -nocase *${text}* $value] { lappend o "${_}\[$__\]: $value" }
+			}
+		} {
+			set value [set $_]
+			if [string match -nocase *${text}* $value] { lappend o "${_}: [set $_]" }
+		}
+	}
+	return $o
 }
 
 proc validflag args {
@@ -6865,7 +7047,7 @@ proc bytes { number { decimal * } { align_bytes "false" } } {
 		if { $number >= pow( 1024 , $x ) } {
 			set multiple [fixmath $number / pow( 1024 , $x ) ]
 			if { ( $multiple < 1 ) && ( $multiple >= 0.975 ) } { incr x }
-			if [string eq * $decimal] { 
+			if [string eq * $decimal] {
 				if !$x { return "$number [lindex $powers $x]B" }
 				set expr [ expr $number / pow( 1024 , $x ) ]
 				if { $expr == int( $expr ) } { int expr }
@@ -6876,9 +7058,9 @@ proc bytes { number { decimal * } { align_bytes "false" } } {
 	}
 	# How do we get here: if $NUMBER < 1 ? (otherwise, it would pass the "$number >= pow( 1024 , $x ) " test above even with $X = 0)
 	# Respect $ALIGN_BYTES
-	if [string eq * $decimal] { 
+	if [string eq * $decimal] {
 		if [isint $number] { int number }
-		return "$number [lindex $powers 0]B" 
+		return "$number [lindex $powers 0]B"
 	}
 	return "[format %.${decimal}f $number] [lindex $powers 0]B"
 }
@@ -7401,6 +7583,19 @@ proc sb7:parseflags args { msghome "\[SB7:PARSEFLAGS\] FROM(<--[info level [expr
 #############################################################################
 #############################################################################
 
+proc @encrypt:bitch { command nick } {
+	if [isfalse [data get @ENCRYPT:compensated]] {
+		print -raw -notice $nick "\[[string toupper ${command}]\] [stu $command] failure: command no longer available."
+		print -raw -notice $nick "Due to Eggdrop core making the blowfish->ENCRYPT/DECRYPT mode change (ecb->cbc) in Eggdrop 1.8.1+sslserverlist, ENCRYPTION IS BROKEN IN A NON-BACKWARD-COMPATIBLE WAY!"
+		print -raw -notice $nick "Because of this change, ENCRYPT works mode like MD5 where different hashes are created (but all verify to the original message). As such, I can not safely transmit encrypted data to other bots. The [stu $command] command is broken until this situation is fixed properly."
+		print -raw -notice $nick "For more information, see:"
+		print -raw -notice $nick "[space 5]https://github.com/eggheads/eggdrop/issues/384"
+		print -raw -notice $nick "[space 5]https://github.com/eggheads/eggdrop/commit/33b12cf5297aeb3895facbb2f6a5a484f576fdc9"
+		return 1
+	}
+	return 0
+}
+
 proc sb7:bootstrap args {
 	bind DCC  t dcc  *dcc:dccstat
 	bind DCC  - /w   *dcc:whois
@@ -7429,6 +7624,20 @@ proc sb7:bootstrap args {
 	catch { bind evnt - sigill  @event:sigill }
 	catch { bind evnt - sigquit @event:sigquit }
 	utimer 0 sb7:check_data_command_integrity ; # =MUST= be on a timer!
+
+	# 2017-04-28 
+	# ENCRYPT/DECRYPT ECB (old) vs CBC (new) issue
+	# Do not combine with other version checks below
+	if [string eq * [string index [encrypt testing 0] 0]] {
+		foreach _ [list en de] {
+			if [string eq "" [info commands ${_}crypt:original]] {
+				rename ${_}crypt ${_}crypt:original
+				proc ${_}crypt { key string } " ${_}crypt:original ecb:\$key \$string "
+			}
+		}
+	}
+	data set @ENCRYPT:compensated true
+
 	return
 }
 

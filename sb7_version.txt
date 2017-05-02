@@ -1,1 +1,1 @@
-stormbot7.00.0001.zenkai.tar.gz 1459588304 quick
+stormbot7.00.0012 1490130967 {normal distribution build}
