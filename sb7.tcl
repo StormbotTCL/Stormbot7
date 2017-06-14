@@ -1033,6 +1033,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 #putlog [effects DISPATCH:20 11,12 bold]:ARG($arg)
 	# Dispatch command
+	data set @CONTEXT
 	set time(1) [clock clicks -milliseconds]
 #putlog [effects DISPATCH:20.1:TIME\[1\]($time(1)) 11,12 bold]:CMDINFO\[PROC\]($cmdinfo(proc)):NICK($nick):HOST($host):HANDLE($handle):CHAN($chan):ARG($arg)
 	set error [ catch { $cmdinfo(proc) $nick $host $handle $chan $arg } uh_oh ]
@@ -1101,6 +1102,12 @@ proc sb7:dispatch { nick host handle chan arg } {
 		if [isempty debuglevel] { set debuglevel 2 }
 #putlog [effects DISPATCH:24.2:DEBUGLEVEL($debuglevel) 11,12 bold]
 
+		# Don't dump stack trace on auth commands!
+		if { [lsearch -exact $cmdinfo(flags) -auth] != -1 } {
+			set original "<-AUTH: password command redacted>"
+			empty stack
+		}
+
 		# Force timestamps to GMT
 		switch -exact -- $debuglevel {
 
@@ -1110,7 +1117,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 
 			1 {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
-				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) -auth] == -1} $original "<password blocked>"]"
+				print $nick "Syntax: $original"
 				print $nick "Time/Stamp:[clock format $time(0) -format [data array value -default CONFIG format:time %c]]-0000 Time/Elapsed:$time(3)"
 				print $nick "Error message: $uh_oh"
 			}
@@ -1118,7 +1125,7 @@ proc sb7:dispatch { nick host handle chan arg } {
 			2 {
 				print $nick "An error occurred in the command [string toupper $cmd]:"
 				print $nick "$uh_oh"
-				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) -auth] == -1} $original "<password blocked>"]"
+				print $nick "Syntax: $original"
 				print $nick "Please include the following debug information when reporting this bug (the coder will need all these details):"
 				set tag_threaded ""
 				if [info exists ::tcl_platform(threaded)] { set tag_threaded " OSTH:$::tcl_platform(threaded)" }
@@ -1133,11 +1140,9 @@ proc sb7:dispatch { nick host handle chan arg } {
 			}
 
 			3 {
-				# Don't dump stack trace on auth commands!
-				if { [lsearch -exact $cmdinfo(flags) -auth] != -1 } { empty stack }
 				print $nick "An error occurred in the command [string toupper $cmd]:"
 				print $nick "$uh_oh"
-				print $nick "Syntax: [iff {[lsearch -exact $cmdinfo(flags) -auth] == -1} $original "<password blocked>"]"
+				print $nick "Syntax: $original"
 				print $nick "Please include the following debug information when reporting this bug (the coder will need all these details):"
 				set tag_threaded ""
 				if [info exists ::tcl_platform(threaded)] { set tag_threaded " OSTH:$::tcl_platform(threaded)" }
@@ -1930,6 +1935,14 @@ proc data args {
 				}
 
 				list {
+					# Version 3
+					empty list
+					set matchme *
+					if ![string eq "" $arg3] { set matchme $arg3 }
+					foreach a [data array find $arg2 [string tolower $matchme]] {
+						lappend list $a [data array get $arg2 $a]
+					}
+					return $list
 					# Version 2
 					set list ""
 					if [string eq "" [data get %data:array]] return
@@ -4103,6 +4116,20 @@ proc userlist:level { { range "1-1001" } { chan "" } } {
 		if [inrange $range $level] { set list [concat $list [lsort -inc -dict $userlist($level)]] }
 	}
 	return $list
+}
+
+proc userlist:sort args {
+	if [isempty args] { return [lsort -increasing -unique -dictionary [userlist]] }
+	flags:simple $args -list text flags
+	empty userlist
+	foreach flag $args {
+		if [validflag -list] {
+			lappend userlist [userlist $flag]
+		} {
+			set userlist [concat $userlist [userlist $flag]]
+		}
+	}
+	return $userlist
 }
 
 proc nph { nick handle { join " " } { open "(" } { close ")" } } {
@@ -7106,11 +7133,11 @@ proc double { number { times_double "1" } } {
 proc timeval { value { convert_to s } } {
 	array set mult [list l .001 n .01 t .1 s 1 m 60 h 3600 d 86400 w 604800 y 31536000 e 315360000 c 3153600000]
 	empty time marker
-	if ![regexp -nocase -- {^([\+\-]?[\d\.]+[ceywdhmstnl]){1,}$} $value] return
+	if ![regexp -nocase -- {^([\+\-]*[\d\.]+[ceywdhmstnl]){1,}$} $value] return
 	if [isempty marker] { set marker s }
 	set timeval 0
-	foreach regexp [regexp -inline -all -nocase -- {[\+\-]?[\d\.]+[lntsmhdwyec]} $value] {
-		regexp -nocase -- {^([\+\-]?)([\d\.]+)([lntsmhdwyec]?)$} $regexp - sign time marker
+	foreach regexp [regexp -inline -all -nocase -- {[\+\-]*[\d\.]+[lntsmhdwyec]} $value] {
+		regexp -nocase -- {^([\+\-]?)[+-]*([\d\.]+)([lntsmhdwyec]?)$} $regexp - sign time marker
 		if [isempty time] return
 		if ![info exists mult($marker)] return
 		set timeval [expr $timeval + ${sign}$time * $mult($marker)]

@@ -1,1 +1,1111 @@
+sb7 command add FIX 501 -none
+
+proc @fix { nick host handle chan arg } {
+
+	set validflags [list -leaf -leaves -all -show]
+
+	empty numberflags
+	set totalvalues 27 ; # Removing -23 (SB data scan) from service until I can tweak the loops
+	foreach a [sequence 0 .. $totalvalues] {
+		lappend numberflags -$a
+		if { $a < 10 } { lappend numberflags -[format %02i $a] }
+	}
+	set validflags [concat -leaf -leaves -all $validflags $numberflags]
+	sb7 parseflags $validflags
+	if { [lsearch -glob [stl $flags] -lea*] > -1 } { lappend flags -leaf }
+	if ![regexp -- {\-\d+} $flags] { set flags [concat $flags -all] }
+	if [validflag -all] { set flags [concat $flags $numberflags] }
+	set repair [string eq -nocase REPAIR $1]
+	set show [validflag -show]
+	switch -exact -- $1l {
+		help {
+			print -help $nick "\[FIX\]:"
+			print -help $nick "The FIX command will draw, to your attention, anything that needs to be addressed and fixed immediately for successful operation or your bot, or StormBot.TCL in general. It is an extension of the DEBUG command (which just gives general information)."
+			print -help $nick ""
+			print -help $nick "Syntax: $::botnick FIX HELP (this help)"
+			print -help $nick "Syntax: $::botnick FIX LIST (lists the things, generically, that it checks)"
+			print -help $nick "Syntax: $::botnick FIX \[-LEAF\] \[-XX -XX -XX ... -XX | -ALL\] CHECK (run a suite of tests and report problems, and how to fix them, if it can be guessed. You =MUST= use at least one -XX flag, or -ALL, for CHECK to do anything useful.)"
+			print -help $nick "Syntax: $::botnick FIX \[-LEAF\] \[-XX -XX -XX ... -XX | -ALL\] -SHOW CHECK (show all offending items individually: only works for certain tests)"
+			print -help $nick "Syntax: $::botnick FIX \[-XX -XX -XX ... -XX | -ALL\] REPAIR (attempts to repair the reported problems: may not always succeed. \"-XX\" refers to the number listed in regular FIX usage (e.g. \"To fix, use: FIX -00 REPAIR\"), or in FIX LIST)\002. You may combine flags as desired to fix multiple issues at once"
+			print -help $nick "The -LEAF flag is for test #10, +a/+h/+l/+r bot checks: by default, +l bots are ignored but -LEAF will force their inclusion."
+			return 1
+		}
+
+		list {
+			print $nick "FIX currently checks the following issues:"
+			print $nick "(0-4) =1000 / Permanent owners (\$OWNER)"
+			print $nick "(5) Server list"
+			print $nick "(6) Bot can't get into channels"
+			print $nick "(7) DCC / FILESEND ability"
+			print $nick "(8) Users without passwords"
+			print $nick "(9) Useless user entries"
+			print $nick "(10) +a / +h BOTNET links that are failing to connect"
+			print $nick "(11) Test for extraneous +h / +a BOTNET flags"
+			print $nick "(12) Users with +x who are not =[sbdget USERLEVEL:botowner]"
+			print $nick "(13) Users who have compound masks (a multi-element LIST as a single mask)"
+			print $nick "(14) Users who have masks with ~ in the ident vs \$STRICT-HOST"
+			print $nick "(15) Users with open masks ( \"*!*@*\" and the like)"
+			print $nick "(16) Users with no hosts at all"
+			print $nick "(17) Users with no flags at all"
+			print $nick "(18) Users with both +c (common-access) flag and other \"important\" global flags)"
+			print $nick "(19) Users with flags but no StormBot.TCL userlevel data"
+			print $nick "(20) Users with invalid masks (not matching an acceptable *!*@* format)"
+			print $nick "(21) Users with crossover masks"
+			print $nick "(22) Bots with multiple hub / alt-hub records"
+			print $nick "(23) Revenge user accounts (\"bad1\" and the like)"
+			print $nick "(24) Users who haven't been \"seen\" (in channel or partyline) for more than 30 days"
+			print $nick "(25) Obsolete user data that is no longer valid (only processes XTRA data), based on StormBot.TCL data registration"
+			print $nick "(26) Obsolete global data in the data file that is no longer valid (only processes XTRA data), based on StormBot.TCL data registration"
+			print $nick "(27) CMDLEVEL values for core commands"
+			print $nick "> Done."
+			return
+		}
+
+		"" - check - repair {
+			if ![regexp -- {\d+} $flags] { lappend flags -all }
+
+			zero errors save writedata
+
+			if [validflag -0 -00] {
+			# No permanent owners #
+				if [isempty ::owner] {
+					one errors
+					print $nick "I have no permanent owners defined! I'll try to determine why ...."
+					set data [readfile $::config \n]
+					set m [lsearch -glob $data "*set owner *"]
+					set m_pos [ expr $m + 1 ]
+					set line [lindex $data $m]
+					zero lineerror
+					if [string match "#set owner *" $line] {one lineerror; print $nick "The OWNER line in my config file ($::config) is currently commented-out (has a \"#\" mark in front of it). Please uncomment it so the value can be set. Search for this line: $line"}
+					if [string match {set owner ""} $line] {one lineerror; print $nick "The OWNER line in my config file ($::config) has a null value (\"\"). Please set SOMEONE as the permanent (protected) owner, such as yourself. Adjust line $m_pos to: set owner \"${handle}\""}
+					if [string match "unset owner*" $line] {one lineerror; print $nick "The OWNER line in my config file ($::config) has been changed to UNSET! Therefore, I have no permanent (protected) owners!"}
+					if !($lineerror) {print $nick "I have no permanent owners listed! Give me, at least ONE (such as yourself), by adding this line: set owner \"${handle}\""}
+					if $show { print $nick "\[FIX -00 -SHOW\] No users listed as owner!" }
+					if $repair {print $nick "-- Repair: have my owner set the \$::OWNER variable !! --"}
+				}
+			}
+
+			# Any (botowner) users? #
+			set owner [split $::owner {, ;}]
+			set owner_ul [userlist:level >=1000]
+
+			if [validflag -01] {
+				if [isempty owner_ul] {
+					one errors
+					empty tag
+					if [notempty owner] {set tag "[space](but yet, I have users identified in my config file as permenant [plural owner [llength $owner]]: [ajl $owner]. The WHOAMI command will help the [plural user [llength $owner] in question)"}
+					print $nick "Currently, no users have =1000 access to me${tag}. Repair flag: -01"
+					if $show { foreach _ $owner { print $nick "\[FIX -01 -SHOW\] ${_}: currently listed at: [access get $_]" } }
+					if $repair {
+						foreach user $owner {
+							access set $user 0
+							access get $user ; # Force 1000 / 1001 calculations
+						}
+						print $nick "-- Repair: gave =1000 level access to: [ajl $owner] --"
+						one save
+					}
+				}
+			}
+
+			# Mismatch on permanent owners and =(botowner)'s? #
+			set owner    [lsort -inc -uni -dict $owner   ] ; # From above
+			set owner_ul [lsort -inc -uni -dict $owner_ul] ; # From above
+
+#msghome FIX:OWNER($owner):OWNER_UL($owner_ul)
+			if {[validflag -2 -02] || [validflag -3 -03]} {
+				# -03 relies on variables set within -02, but, will error-out 
+				# (variable unset) if both flags aren't used
+				if [validflag -2 -02] {
+					if ![string eq -nocase $owner $owner_ul] {
+						one errors
+						set temp_owner_ul $owner_ul
+						set temp_owner $owner
+						foreach a $owner    {set temp_owner_ul [ldestroy -all -nocase -nonull $temp_owner_ul $a]}
+						foreach a $owner_ul {set temp_owner    [ldestroy -all -nocase -nonull $temp_owner    $a]}
+#msghome FIX:TEMP_OWNER($temp_owner):TEMP_OWNER_UL($temp_owner_ul)
+						if [notempty temp_owner_ul] {
+							print $nick "The config file ($::config) lists my permanent owners as: [ajl $owner]. However, the active userlist has additional =1000+ access people: [ajl $temp_owner_ul]. Repair flag: -02"
+							if $show { foreach _ $temp_owner_ul { print $nick "\[FIX -02 -SHOW\] User with fake =1000+ access: $_" } }
+							if $repair {
+								emptyarray array_temp_owner_ul
+								foreach a $temp_owner_ul {
+									# Forcefully clear, then reset level #
+									access set $a 0
+									set level_new [access get $a]
+									if ![info exists array_temp_owner_ul($level_new)] {empty array_temp_owner_ul($level_new)}
+									lappend array_temp_owner_ul($level_new) $a
+								}
+
+								# Require SAVE #
+								one save
+
+								empty list_owner_ul_new
+								foreach a [sort [array names array_temp_owner_ul]] {
+									lappend list_owner_ul_new "$a ([ajl $array_temp_owner_ul($a)])"
+								}
+								print $nick "-- Repair: reassigned global user levels: [join $list_owner_ul_new ", "] --"
+							}
+						}
+					}
+				}
+
+				if [validflag -3 -03] {
+					if [notempty temp_owner] {
+						print $nick "The active userlist has the following =1000+ access: [ajl $owner_ul]. However, the config file ($::config) additionally lists: [ajl $temp_owner]. Repair flag: -03"
+						if $show { foreach _ $temp_owner { print $nick "\[FIX -03 -SHOW\] User listed in SET \$OWNER but doesn't have 1000 access: $_" } }
+						if $repair {
+							empty upgrade_user upgrade_user_fail
+							foreach a $temp_owner {
+								if [validuser $a] {
+									access get $a
+									lappend upgrade_user $a
+									one save
+								} else {
+									lappend upgrade_user_fail $a
+								}
+							}
+							print $nick "-- Repair: reassigned global user level =1000: [ajl $upgrade_user] --"
+							if [notempty upgrade_user] {
+								print $nick "-- Repair: the following users did not exist in the user file (and need to be deleted from the \$OWNER variable in my config file): [ajl $upgrade_user_fail]"
+							}
+						}
+					}
+				}
+			}
+
+			if [validflag -4 -04] {
+				# Faked =(botowner) access users #
+				empty owner owner_hack
+				foreach user [userlist] {
+					if [string match 100? [normalize [access get $user]]] {
+						if {[lsearch -exact $owner_ul $user] < 0} {lappend owner_hack $user}
+					}
+				}
+
+				if [notempty owner_hack] {
+					one errors
+					print $nick "PERMANENT OWNER hack to gain =1000, although my level checks thwart this idiocy (ADMIN MOD to fix): [ajl $owner_hack]. Repair flag: -04"
+					if $show { foreach _ $owner_hack { print $nick "\[FOX -04 -SHOW\] User with hacked =1000 access: $_" } }
+					if $repair {
+						emptyarray owner_hack_newlevels
+						foreach user $owner_hack {
+							access set $user 0 ; # Clear it!
+							set new [access get $user]
+							if ![info exists owner_hack_newlevels($new)] { empty owner_hack_newlevels($new) }
+							lappend owner_hack_newlevels($new) $user
+						}
+						empty output
+						foreach a [lsort -int -dec [array names owner_hack_newlevels]] {
+							lappend output "$a ([lsort -inc -uni -dict -command lsort:alphaonly $owner_hack_newlevels($a)])"
+						}
+							print $nick "-- Repair: restored user levels to: [join $output ", "] --"
+						one save
+					}
+				}
+			}
+
+			if [validflag -5 -05] {
+				# Empty server list #
+				if [isempty ::server] {
+					print $nick "EGGDROP's server list is currently empty. Populate it in the config file (\"$::config\"), or through the SERVERS command."
+				} {
+					if [string eq "" [data get servers]] {
+						data set servers $::servers
+						print $nick "Server data was not saved\; list copied from current config server list."
+						one writedata
+					}
+				}
+				if [string eq "" [data get servers]] {
+					one errors
+					print $nick "StormBot.TCL's server list is currently empty. Populate it using the SERVERS command. Use \"$::botnick SERVERS ADD servername/IP\[:port\[:password\]\]\" to add some. Repair flag: -05"
+					if $show { print $nick "\[FIX -05 -SHOW\] Server data is empty! Add some servers!" }
+					if $repair {
+						if [validflag -5 -05] {
+							empty servers_new
+							zero bad
+							if [notempty ::server] {lappend servers_new $::server}
+							if ![string eq [null] [data get SERVERS:original]] {
+								foreach a [data get SERVERS:original] {lappend servers_new $a}
+							}
+							if [isempty servers_new] {
+								print $nick "-- Repair fail: I'm not on any server now, nor do I have any default servers on my CONFIG file, so I can't copy any valid info --"
+							} else {
+								sbdset SERVERS $servers_new
+								one writedata
+								print $nick "-- Repair: added the following servers: [join [lsort -inc -uni -dict $servers_new] ", "] --"
+							}
+						}
+					}
+				}
+			}
+
+			if [validflag -6 -06] {
+				# Not on channel? #
+				empty notonchan
+				foreach a [channels] {
+					if ![botonchan $a] {lappend notonchan $a}
+				}
+				if [notempty notonchan] {
+					one errors
+
+					# Leave spaces between the chan names to allow right-click-and-join for user (clients) #
+					print $nick "I am not able to join the following channels: [ajl $notonchan " - "]. Repair flag: -06"
+					if $repair {
+						print $nick "-- Repair: there are various reasons for me not being on channel. I can't arbitrarily repair that. The NEED & GETOPS commands may be of help --"
+						print $nick "-- Repair: unable to automatically repair this issue. Look at the NEED & GETOPS commands for information how to help me get into my channels --"
+					}
+				}
+			}
+
+			if [validflag -7 -07] {
+				# DCC & FILESEND issues re: IP #
+				empty list_ip my_ip my_hostname nat_ip vhost4 vhost6 listen_addr
+				if [info exists ::my-ip      ] {set my_ip       ${::my-ip} ;       lappend list_ip $my_ip }
+				if [info exists ::nat-ip     ] {set nat_ip      ${::nat-ip} ;      lappend list_ip $nat_ip }
+				if [info exists ::my-hostname] {set my_hostname ${::my-hostname} ; lappend list_ip $my_hostname }
+				if [info exists ::vhost4     ] {set vhost4      ${::vhost4} ;      lappend list_ip $vhost4 }
+				if [info exists ::vhost6     ] {set vhost6      ${::vhost6} ;      lappend list_ip $vhost6 }
+				if [info exists ::listen-addr] {set listen_addr ${::listen-addr} ; lappend list_ip $listen_addr }
+
+				set list_localhost [list localhost 0.0.0.0 127.0.0.1 192.168.*.* 10.*.*.* ff80:* ::0 ::1]
+				foreach a $list_localhost {
+					set m [lsearch -glob $list_ip $a]
+					if {$m > -1} {set list_ip [lreplace $list_ip $m $m]}
+				}
+				if [isempty list_ip] {
+					one errors
+					empty tag
+					set hostname [lindex [split $::botname @] 1]
+					if [SB:commandlist iscmd DNS] {
+						set tag "[SB:commandlist proc DNS] $nick $host $handle $chan \"DNS ${hostname}\""
+ 						if [notempty tag] { if ![string eq 0 $tag] { set tag ", which resolves to: $tag" } }
+					}
+					print $nick "According to current values, DCC CHAT & FILESEND are not available (to anyone but LOCALHOSTers) because my interal IP settings aren't real-world values: MY-IP ([ifemptyval $my_ip NULL]), MY-HOSTNAME ([ifemptyval $my_hostname NULL]), NAT-IP ([ifemptyval $nat_ip NULL]), VHOST4 ([ifemptyval $vhost4 NULL]), VHOST6 ([ifemptyval $vhost6 NULL]), & LISTEN-ADDR ([ifemptyval $listen_addr NULL]). Repair flag: -07"
+					if $repair {
+						if [validflag -7 -07] {
+							print $nick "-- Repair: you could set my NAT-IP to the rDNS of my current host (${hostname})${tag}. That might help --"
+						}
+					}
+				}
+			}
+
+			if [validflag -8 -08] {
+				# User passwords set? #
+				# Bots can be password-less for anonymous botnet connections
+				empty nopw
+				foreach user [userlist] {
+					if [passwdok $user ""] {lappend nopw $user}
+				}
+				if [notempty nopw] {
+					one errors
+					print $nick "The following users have no passwords: [ajl $nopw]. Repair flag: -08"
+					if $repair {
+						if [validflag -8 -08] {
+							foreach user $nopw {
+								setuser $user PASS [left [rand [rand [rand 999999999]]][rand [rand [rand 999999999]]][rand [rand [rand 999999999]]][rand [rand [rand 999999999]]][rand [rand [rand 999999999]]][rand [rand [rand 999999999]]] 15]
+								if ![SB:checkbot $user] {
+									if ![matchattr $user Z] {chattr $user +Z}
+								}
+							}
+							print $nick "-- Repair: The only ways to repair this are (1) block access to these accounts, (2) install random passwords, or (3) delete the account. I'll do the first two. Suspensions & temporary passwords set for: [ajl $nopw] --"
+						}
+					}
+				}
+			}
+
+			if [validflag -9 -09] {
+				# Useless userlist entries #
+				empty useless
+				foreach user [userlist -b] {
+					if [matchattr $user fvo] continue
+					zero user_ok
+					foreach ch [channels] {
+						if [matchattr $user |fvlo $ch] {one user_ok; break}
+					}
+					if $user_ok continue
+					lappend useless $user
+				}
+
+				if [notempty useless] {
+					one errors
+					print $nick "The following users are in the USERLIST, but have no APPARENT value to be there: [ajl $useless]. Repair flag: -09"
+					if $repair {
+						if [validflag -9 -09] {
+							foreach user $useless {
+								deluser $user
+								# SB6 only -- SB:deluserrecs $user
+								foreach a [sbdfind *-${user}-*] {sbdset $a}
+							}
+							print $nick "-- Repair: deleted the following users: [ajl $useless] --"
+						}
+					}
+				}
+			}
+
+			if [validflag -10] {
+				# Failed +a / +h botnet links #
+				array set botlinks [list a "" h "" r "" l ""]
+				foreach bot [userlist b] {
+					foreach flag [list a h l r] {
+						if [string match *${flag}* [getuser $bot botfl]] {lappend botlinks($flag) $bot}
+					}
+				}
+
+				set list_botlinks [concat $botlinks(a) $botlinks(h)]
+				zero ok
+				foreach bot $list_botlinks { if [islinked $bot] { one ok } }
+				if !($ok) {
+					one errors
+					print $nick "I'm not linked to either my main [plural hub [llength $botlinks(h)]] ([join $botlinks(h) ", "]) or my alt-[plural hub [llength $botlinks(a)]] ([join $botlinks(a) ", "])!"
+					if $repair {print $nick "-- Repair: this is an automatic, minutely process. There's nothing I can do that isn't already being done every minute. I recommend verifying the address / port / password combinations of all your uplink bots. The BOTNET command may be of some help --"}
+				}
+
+				if [validflag -leaf] {
+					empty bad
+					foreach bot $botlinks(l) {
+						if ![islinked $bot] {
+							one errors
+							lappend bad $bot
+						}
+					}
+					if [notempty bad] { print $nick "There are missing leaf bots: [ajl $bad] }
+				}
+
+				empty bad
+				foreach bot $botlinks(r) {
+					if [islinked $bot] {
+						one errors
+						lappend bad $bot
+					}
+				}
+				if [notempty bad] {
+					print $nick "There are linked bots that are currently marked as auto-reject: [ajl $bad]. Repair flag: -10"
+					if $repair {
+						if [validflag -10] {
+							print $nick "-- Repair: There's nothing I can do from here. Use the BOTNET command on your missing leaf bots and verify they're trying to connect to the proper address / port combination --"
+						}
+					}
+				}
+			}
+
+			if [validflag -11] {
+				# Too many botnet +h / +a flags? (move this to -11 instead?)
+				# I'm going to anticipate the addition of the +t flag as a ternary link option
+				# https://github.com/eggheads/eggdrop/issues/357
+				empty bad bad_h bad_a bad_t h a t
+				foreach _ [userlist b] {
+					foreach type [list h a t] {
+						if [string match *${type}* [getuser $_ botfl]] { lappend $type $user }
+					}
+				}
+				# Make this a SWITCH for length of each: 0 (needs a bot with that flag!),
+				# 1 (perfect), & 2+ (throw a fit)
+				foreach type [list h a t] {
+					if { [llength [set $type]] > 1 } {
+						set bad [concat $bad [set $type]]
+						lappend bad_$type [set $type]
+					}
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "\[FIX -11\] The following bots are sharing botnet priority connection flags: [ajl $bad]. Repair flag: -11"
+					if [validflag -show] {
+						foreach type [list h a t] {
+							if [info exists bad_$type] { print $nick "[space 5]${type}: [ajl [set bad_$type]]" }
+						}
+					}
+					if [string eq -n REPAIR $1] {
+						print $nick "\[FIX -11\] -- Repair: automatic repair not possible: user must manually choose which bot within each connection priority shall keep its flag --"
+					}
+				}
+			}
+
+			if [validflag -12] {
+				# +x users who aren't =(botowner) #
+				array set users_x [list bad "" bot "" default_flags ""]
+				if [info exists ::default-flags] {
+					if [instr ${::default-flags} x] {
+						one errors
+						set users_x(default_flags) 1
+					}
+				}
+				foreach user [userlist] {
+					if [matchattr $user x] {
+						zero ack
+						if [matchattr b $user] {lappend users_x(bot) $user; one ack}
+						if {[access get $user] < 800} {lappend users_x(bad) $user; one ack}
+						if $ack {one errors; continue}
+					}
+				}
+
+				if [notempty users_x(bot)] {
+					print $nick "Bots with the +x flag (there's no reason for this!): [ajl $users_x(bot)]. Repair flag: -12"
+					if $repair {
+						foreach a $users_x(bot) {chattr $a -x}
+						print $nick "-- Repair: removed +x from bots: [ajl $users_x(bot)] --"
+					}
+				}
+				if [notempty users_x(bad)] {
+					print $nick "Non-owners with the +x flag (normally used on file-transfer bots, but is a general security risk): [ajl $users_x(bad)]. Repair flag: -12"
+					if $repair {
+						if [validflag -12] {
+							foreach a $users_x(bad) {chattr $a -x}
+							print $nick "-- Repair: removed +x from users: [ajl $users_x(bad)] --"
+							print $nick "Note: anyone with the +n or +m flags will also have the +x flag. I can't override that. I'd rather restrict +x to =1000 users, but alas ...."
+						}
+					}
+				}
+				if [notempty users_x(default_flags)] {
+					print $nick "Of course, it would REALLY HELP if the bot's config owner wouldn't put +x within \$DEFAULT-FLAGS so all added users automatically get it !! Repair flag: -12"
+					if $repair {
+						if [validflag -12] {
+							regsub -all -- x ${::default-flags} "" ::default-flags
+							print $nick "-- Repair: removed +x flag from \$DEFAULT-FLAGS for now. However, it will return during the next REHASH / RESTART / cold start --"
+						}
+					}
+				}
+			}
+
+			if [validflag -13] {
+				# Multi-element masks? #
+				empty bad
+				emptyarray multielement
+				foreach user [userlist] {
+					# Include bots! (how I found this error)
+					zero multi
+					foreach host [getuser $user HOSTS] {
+						if {[llength $host] > 1} {
+							one multi
+							lappend multielement($user) $host
+						}
+					}
+					if $multi {lappend bad $user}
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "The following users have multi-element masks: [ajl $bad]. Repair flag: -13"
+					if $show {
+						foreach user $bad { foreach _ $multielement($user) { print $nick "\[FIX -13 -SHOW\] ${user}: $_" } }
+					}
+					if $repair {
+						print $nick "-- Repair: a combination mask is probably due to a bad userfile / COPYUSER transfer. Splitting the mask and adding each one individually (and deleting the multi-element one) will repair the problem --"
+						foreach user $bad {
+							foreach hosts $multielement($user) {
+								delhost $user $hosts
+								foreach host $hosts { setuser $user HOSTS $host }
+							}
+						}
+						one save
+						print $nick "-- Repair: masks separated (& multi-element mask removed) --"
+					}
+				}
+			}
+
+			if [validflag -14] {
+				# *!~*@* masks vs $STRICT-HOST? #
+
+				# Per thommey, TCL / eggdrop core coder (1349642248),
+				# Strict host will become the default in 1.8.
+
+				if ![info exists ::strict-host] {set ::strict-host 0}
+
+				empty bad
+				if !(${::strict-host}) {
+					foreach user [userlist] {
+						foreach host [getuser $user HOSTS] {
+							if [instr $host !~] {lappend bad $user}
+						}
+					}
+				}
+				set bad [lsort -inc -uni -dict $bad]
+				if [notempty bad] {
+					one errors
+					print $nick "\$STRICT-HOST is off, yet the following users have *!~*@* masks: [ajl $bad]. Repair flag: -14"
+					if $repair {print $nick "-- Repair: from eggdrop 1.8 on, \$STRICT-HOST will be defaulted to \037ON\037 (\"1\"). As a result, we're now going to check: if it's turned \037OFF\037, remove the \"~\" character from all masks --"}
+					if {$repair && [validflag -14]} {
+						foreach user $bad {
+							foreach host [getuser $user HOSTS] {
+								if [instr $host !~] {
+									delhost $user $host
+									regsub !~ $host ! new
+									setuser $user HOSTS $new
+								}
+							}
+						}
+						one save
+						print $nick "-- Repair: masks repaired by removing \"~\" from affected users --"
+					}
+				}
+			}
+
+			if [validflag -15] {
+				# *!*@* and other "open" masks #
+
+				empty bad
+				emptyarray hostfixme
+				foreach user [userlist] {
+					set hosts [getuser $user HOSTS]
+					if [isempty hosts] {
+						lappend bad $user
+						#lappend hostfixme($user) "<no hosts listed!>"
+						continue
+					}
+					foreach host [getuser $user HOSTS] {
+						# Check for *!*@* masks
+						if [string eq $host *!*@*] { lappend bad $user ; lappend hostfixme($user) $host }
+
+						# Check for wildcard-only masks
+						if {[percentwildcard $host] == 100} { lappend bad $user ; lappend hostfixme($user) $host }
+
+						# Check for masks that are 50% wildcard (or more)
+						if {[percentwildcard $host] >= 50} { lappend bad $user ; lappend hostfixme($user) $host }
+
+						# Check for domain-only masks
+						if [left $host 4 *!*@] { lappend bad $user ; lappend hostfixme($user) $host }
+
+						# Check for ident@-only masks
+						if [regexp -nocase -- {^[^\!]+\![^\@]+@\*$} $host] { lappend bad $user ; lappend hostfixme($user) $host }
+
+						# Check for malformed masks ( !*@* or *!@* or *!*@ )
+						# (None of these would allow a properly-formatted mask)
+						if [left $host 1 !] { lappend bad $user ; lappend hostfixme($user) $host }
+						if [instr $host !@] { lappend bad $user ; lappend hostfixme($user) $host }
+						if [right $host 1 @] { lappend bad $user ; lappend hostfixme($user) $host }
+						if [string match *@*@* $host] { lappend bad $user ; lappend hostfixme($user) $host }
+						if [string match *!*!* $host] { lappend bad $user ; lappend hostfixme($user) $host }
+						if [string match *@*!* $host] { lappend bad $user ; lappend hostfixme($user) $host }
+						if ![string match *!* $host] { lappend bad $user; lappend hostfixme($user) $host }
+					}
+					# Check +c users vs NICK!*@*
+					if ![matchattr $user c] {
+						if [right $host 4 !*@*] { lappend bad $user ; lappend hostfixme($user) $host }
+					}
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "The following users have bad masks: [ajl [nodup $bad]]. Repair flag: -15"
+					if [validflag -show] {
+						foreach user [lsort -inc -uni -dict [array names hostfixme]] {
+							foreach host $hostfixme($user) {
+								print $nick "\[FIX -15 -SHOW\] ${user}: [none $host <null>]"
+							}
+						}
+					}
+					if $repair {
+						print $nick "-- Repair: users have masks that do not conform to standard *!*@* format, or, are too \"open\" and will match many (or all) users. This causes confusion during LOGIN and will potentially allow users to masquerade as others: remove all offending masks --"
+						if [validflag -15] {
+							foreach user [array names hostfixme] {
+								foreach host $hostfixme($user) {
+									delhost $user $host
+								}
+							}
+							one save
+							print $nick "-- Repair: deleted bad masks from affected users --"
+						}
+					}
+				}
+			}
+
+			if [validflag -16] {
+				# Checking for users with no hosts
+				empty bad
+				foreach user [userlist] {
+					set hosts [getuser $user hosts]
+					if [isempty hosts] { lappend bad $user }
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "The following users have no hosts: [ajl $bad]. Repair flag: -16"
+					if [validflag -show] {
+						foreach user $bad { # } ; # Nothing to show that isn't shown in the line above
+					}
+					if $repair {
+						foreach user $bad { chattr $user +Z }
+						one save
+						print $nick "-- Repair: The only ways to repair this are (1) block access to these accounts, (2) install random passwords, or (3) delete the account. I'll do the second one. Suspensions for: [ajl $bad] --"
+					}
+				}
+			}
+
+			if [validflag -17] {
+				# Checking for users with no flags at all
+				empty bad
+				set default ""
+				if [info exists ::default-flags] { set default ${::default-flags} }
+				foreach user [userlist] {
+					set ok 0
+					foreach ch [channels] {
+						lassign [split [chattr $user $ch] |] g l
+						if { [lsearch -exact [list "" - $default] $g] == -1 } {
+							set ok 1
+							break
+						} {
+							if { [lsearch -exact [list "" -] $l] == -1 } {
+								set ok 1
+								break
+							}
+						}
+					}
+					if !$ok { lappend bad $user }
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "The following users have no useful flags (either globally or locally): [ajl $bad]. Repair flag: -17"
+					if [validflag -show] {
+						foreach user $bad {
+							print $nick "\[FIX -17 -SHOW\] ${user}: [chattr $user]"
+						}
+					}
+					if $repair {
+						print $nick "-- Repair: users have no useful flags either globally or locally. Either these users need access flags added, or, the user was removed from all channels (and wasn't a global user) and needs to be completely deleted. --"
+						foreach user $bad {
+							deluser $user
+						}
+						one save
+						print $nick "-- Repair: removed users --"
+					}
+				}
+			}
+
+			if [validflag -18] {
+				# Checking for global +c with other important global flags #
+
+				empty bad
+				foreach user [userlist] {
+					if [matchattr $user c] {
+						if [matchattr $user nmtjxaoylgvfe] { lappend bad $user }
+					}
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "The following users have the +c (common-access) flag \037\002AND\002\037 important global flags (+n +m +t +j +x +o +v +f): [ajl $bad]. Repair flag: -18"
+					if [validflag -show] {
+						foreach user $bad {
+							print $nick "\[FIX -18 -SHOW\] ${user}: [chattr $user]"
+						}
+					}
+					if $repair {
+						print $nick "-- Repair: users have the common-access +c flag (which means: they are one of many users who will share a common hostmask, such as: people who LOGIN from a cyber caf). These users general need NICK!*@* masks. This is a problem if the account also has critical flags like +n (owner), +m (master), et cetera. There is no simple solution. Options: (1) delete the +c flag, (2) remove the global flags, (3) manually adjust hostmasks to lock them down better, or (4) delete the account. We will do: (2) remove all global access --"
+						foreach user $bad {
+							chattr $user -nmtjxaoylgvfe
+							access set $user 0
+						}
+						one save
+						print $nick "-- Repair: removed all global access from affected users --"
+					}
+				}
+			}
+
+			if [validflag -19] {
+				# Users with flags but zero for a userlevel internally
+				empty bad bad_global bad_local
+				foreach user [userlist -b] { # Don't include bots
+					set ok 1
+					if [matchattr $user fvhotmn] {
+						if ![normalize [access get $user]] {
+							lappend bad $user
+							lappend bad_global $user
+							continue
+						}
+					}
+					foreach ch [channels] {
+						if [matchattr $user &fvhomn $ch] {
+							if ![normalize [access get $user $ch]] {
+								lappend bad $user
+								lappend bad_local [list $user $ch]
+								break
+							}
+						}
+					}
+				}
+				if [notempty bad] {
+					one errors
+					if [notempty bad_global] { print $nick "The following users have global flags but no userlevel stored: [ajl $bad_global]. Repair flag: -19" }
+					if [notempty bad_local] { print $nick "The following users have local flags but no userlevel stored: [ajl $bad_local]. Repair flag: -19" }
+					if [validflag -show] {
+						empty o
+						foreach user $bad {
+							lappend o "Global: [chattr $user]/[access get $user]"
+							foreach ch [channels] {
+								lappend o "${ch} ([lindex [split [chattr $user $ch] |] 1]/[access get $user $ch])"
+							}
+							print $nick "\[FIX -19 -SHOW\] ${user}: [join $o ", "]"
+						}
+					}
+					if $repair {
+						foreach user $bad { access fix $user }
+						print $nick "-- Repair: Reset all users userlevel data to match default values for their flags --"
+					}
+					one save
+				}
+			}
+
+			if [validflag -20] {
+				# Checking for bad (non-*!*@*) hosts
+				empty bad bad_hosts
+				foreach user [userlist] {
+					set hosts [getuser $user hosts]
+					foreach host $hosts {
+						if ![string match *!*@* $host] { lappend bad $user ; lappend bad_hosts [list $user $host] }
+					}
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "The following users have invalid hosts: [ajl $bad]. Repair flag: -20"
+					if [validflag -show] {
+						foreach a $bad_hosts {
+							lassign $a b c
+							print $nick "\[FIX -20 -SHOW\] ${b}: [none $c <null>]"
+						}
+					}
+					if $repair {
+						foreach a $bad_hosts { lassign $a b c ; delhost $b $c }
+						one save
+						print $nick "-- Repair: Offending masks removed --"
+					}
+				}
+			}
+
+			if [validflag -21] {
+				# Checking for users with crossover masks
+				empty bad bad_hosts bad_duplicates
+				foreach user [lsort -inc -dict -uni [userlist]] {
+					set hosts [getuser $user hosts]
+					# Order: [list: USER host:GENERIC host:SPECIFIC]
+					for { set loop1 0 } { $loop1 < [ expr [ llength $hosts ] - 1 ] } { incr loop1 } {
+						for { set loop2 [ expr $loop1 + 1 ] } { $loop2 < [llength $hosts] } { incr loop2 } {
+							set host1 [lindex $hosts $loop1]
+							set host2 [lindex $hosts $loop2]
+							if [string eq -nocase $host1 $host2] {
+								lappend bad $user ; lappend bad_duplicates $host1
+							} elseif [string match -nocase $host1 $host2] {
+								lappend bad $user ; lappend bad_hosts [list $user $host1 $host2]
+							} elseif [string match -nocase $host2 $host1] {
+								lappend bad $user ; lappend bad_hosts [list $user $host2 $host1]
+							}
+						}
+					}
+				}
+				if [notempty bad] {
+					set bad [lsort -inc -uni -dict $bad]
+					one errors
+					print $nick "The following users have crossover hosts: [ajl $bad]. Repair flag: -21"
+					if [validflag -show] {
+						foreach a $bad_duplicates {
+							lassign $a b c
+							print $nick "[space 5]${b}: duplicate host: $c"
+						}
+						foreach a $bad_hosts {
+							lassign $a b c d
+							print $nick "[space 5]${b}: $d is covered by the more-generic mask $c"
+						}
+					}
+					if $repair {
+						foreach a $bad_hosts {
+							lassign $a b c d
+							delhost $b $c
+						}
+						foreach a $bad_duplicates {
+							lassign $a b c
+							while { [validhost $b $c] } { delhost $b $c }
+							setuser $b hosts $c ; # Put one copy back
+						}
+						one save
+						print $nick "-- Repair: Duplicate masks removed. \"Generic\" masks removed in favor of the tighter masks --"
+					}
+				}
+			}
+
+			if [validflag -22] {
+				# Checking for multiple hub / alt-hub records
+				empty bad bad_h bad_a
+				set bad_h [userlist ||h]
+				set bad_a [userlist ||a]
+				if { [llength $bad_h] > 1 } { lappend bad "+h ([ajl $bad_h])" }
+				if { [llength $bad_a] > 1 } { lappend bad "+a ([ajl $bad_a])" }
+				if [notempty bad] {
+					one errors
+					print $nick "The following bots are listed as hubs (more than one of either: hubs or alt-hubs). Repair flag: -22"
+					if [validflag -show] {
+						if { [llength $bad_h] > 1 } { print $nick "[space 5]Multiple hubs (+h): [ajl $bad_h]" }
+						if { [llength $bad_a] > 1 } { print $nick "[space 5]Multiple alt-hubs (+a): [ajl $bad_a]" }
+						#print $nick "\[FIX -22 -SHOW\] Total number of items to purge: [comma [llength $delete]]"
+					}
+					if $repair {
+						# Nothing to do
+						#one save
+						print $nick "-- Repair: The only way to repair this is to select one of each (hub and alt-hub) and remove the extra flag from the others --"
+					}
+				}
+			}
+
+			if [validflag -23] {
+				if 0 {
+				# Holdover SB data streams
+				empty ok bad master list
+				array set _ [sbd:get @custom]
+				foreach a [list global user channel] { set master [concat $master $_($a)] }
+				foreach type [sbd:find *] {
+					if { [lsearch -exact [list @ # $ % ^ & *] [left $type 1]] != -1 } continue
+					lappend list $type
+				}
+#empty o
+#lappend o "\[MASTER\]:"
+#foreach a [using <p*80 $master] { lappend o "[space 5]$a" }
+#lappend o ""
+#lappend o "\[LIST\]:"
+#foreach a [using <p*80 $list] { lappend o "[space 5]$a" }
+#lappend o ""
+				foreach element [stl $master] {
+					foreach user [userlist] {
+						foreach ch [channels] {
+							set template $element
+							regsub -all -nocase -- ! $template $user template
+							regsub -all -nocase -- # $template $ch template
+#putlog "\[FIX -20\] ELEMENT($element):USER($user):CHAN($chan):TEMPLATE($template):LSEARCH([lsearch -exact $master [stl $template]])"
+lappend o "[space 5]ELEMENT($element):USER($user):CHAN($chan):TEMPLATE($template):LSEARCH([lsearch -glob [stl $list] [stl $template]])"
+							if { [lsearch -glob [stl $list] [stl $template]] != -1 } {
+								lappend ok $template
+							} {
+								lappend bad $template
+							}
+						}
+					}
+				}
+				set delete [concat $bad [ldestroy -all -nocase -multiple -exact --$master $ok]]
+				foreach a [list ok bad delete] { set $a [lsort -inc -dict -uni [set $a]] }
+#foreach a [list ok bad delete] {
+#	lappend o "\[RESULT: [stu $a]\]"
+#	foreach b [lsort -uni -dict -inc [stl [set $a]]] { lappend o "[space 5]$b" }
+#	lappend o ""
+#}
+#dumpfile fix-20.txt $o 1
+#foreach a [lsort -inc -dict $ok] { putlog "\[FIX -23\] OK: $a" }
+#foreach a [lsort -inc -dict $bad] { putlog "\[FIX -23\] BAD: $a" }
+#foreach a [lsort -inc -dict $delete] { putlog "\[FIX -23\] DELETE: $a" }
+				if [notempty delete] {
+					one errors
+					print $nick "The following data stream count requires purging: [comma [llength $delete]]. Repair flag: -23"
+					if [validflag -show] {
+						print $nick "\[FIX -23 -SHOW\] Total number of items to purge: [comma [llength $delete]]"
+					}
+					if $repair {
+						foreach item $delete { sbd:set $item }
+						one writedata
+						print $nick "-- Repair: Repair method is to purge invalid data: [plural -show -comma item [llength $delete]] purged --"
+					}
+				}
+				} ; # End IF 0
+			}
+
+			if [validflag -24] {
+				# Checking for users gone > 30 days ("laston" will give most recent time & where)
+				empty bad bad_users bad_bots
+				foreach user [lsort -inc -uni -dict [userlist]] {
+					set core [lindex [list user bot] [matchattr $user b]]s
+					lassign [getuser $user laston] when where
+#debug user when =[formattime $when $handle] where
+					if [isempty when] { lassign [concat [getuser $user xtra created] [list "globally added"]] when where}
+					if [isempty when] {
+						lappend bad $user
+						lappend bad_$core [list $user "" ""]
+					} elseif { ( [clock seconds] - $when ) > 2592000 } { # +30d
+						lappend bad $user
+						lappend bad_$core [list $user $when $where]
+					}
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "The following users have been offline for more then 30 days: [ajl $bad]. Repair flag: -24"
+					if $show {
+						foreach a [concat $bad_users $bad_bots] {
+							lassign $a who when where
+							set type [lindex [list user bot] [matchattr $who b]]
+							if [isempty when] {
+								print $nick "[space 5]\[[stt $type]\] ${who}: has never \[re-\]joined the channel since being added"
+							} {
+								print $nick "[space 5]\[[stt $type]\] ${who}: [formattime $when $handle] ($where)"
+							}
+						}
+					}
+					if $repair {
+						# Nothing to do
+						#one save
+						print $nick "-- Repair: the only way to repair this is to remove the offending persons from the userlist. Some may be old bots, offline bots, bots on other networks, or persons on extended vacations\; offending users must be manually removed --"
+					}
+				}
+			}
+
+			if [validflag -25] {
+				print $nick "\[FIX -25\] Unable to perform -25: user settings are not allocated (i.e.: burst, gmt, et cetera)"
+if 0 {
+				# Checking for obsolete data in userlist
+				empty bad
+				emptyarray bad_xtra
+				set exempt [list created]
+				foreach _ [list whois-fields olduserinfo-fields userinfo-fields] {
+					if [info exists ::$_] { set exempt [concat $exempt [set ::$_]] }
+				}
+
+				empty full ; # :)
+				array set custom [data array list %variables]
+				foreach type [array names custom] {
+					foreach element $custom($type) {
+						foreach channel [concat global [channels]] {
+							lappend full [regsub -all -- # $element $channel]
+						}
+					}
+				}
+				foreach user [userlist:sort -b b] {
+					set bad_user 0
+					set x ""
+					set error [ catch { set list [lmap a [getuser $user xtra] { list [string tolower [lindex $a 0]] }] } ]
+					if $error { set list [getfirst [getuser $user xtra]] }
+					foreach _ [lsort -increasing -unique -dictionary [string tolower $list]] {
+						set type [string tolower [lindex $_ 0]]
+						set matched 0
+						foreach a [lsort -increasing -unique -dictionary $full] {
+							if { ( [lsearch -exact $exempt $type] != -1 ) || [string match -nocase $a $type] } {
+								set matched 1
+								break
+							}
+						}
+						if !$matched {
+							set bad_user 1
+							lappend x $type
+						}
+					}
+					if $bad_user {
+						lappend bad $user
+						set bad_xtra($user) $x
+					}
+				}
+				if [notempty bad] {
+					one errors
+					# set bad [nodup $bad]
+					print $nick "\[FIX -25\] The following users had obsolete / unregistered data in the userfile: [ajl $bad]. Repair flag: -25"
+					if [validflag -show] {
+						foreach a $bad {
+							print $nick "[space 5]$a"
+							foreach b $bad_xtra($a) { print $nick "[space 10]$b" }
+						}
+					}
+					if [string eq -n REPAIR $1] {
+						foreach a $bad { foreach b $bad_xtra($a) { setuser $a xtra $b "" } }
+						print $nick "\[FIX -25\] -- Repair: deleted extraneous data from all affected users: [ajl $bad] --"
+						one save
+					}
+				}
+} ; # End of IF 0 for -25
+			}
+
+			if [validflag -26] {
+				# Checking for obsolete data in the data file
+
+				# Gather up all possible legal combinations (that we can guess in advance)
+				array set custom [sbd:get @CUSTOM]
+				# 2017-03-26 13:57:00 -0700 (1490561820)
+				# Types we need to check: global
+				# Ignorable: binds, standard, channel, chanflags, & user
+
+				# Version 2 
+				# 45.1 seconds: LDESTROY
+				# 0.211 seconds: loop: !match ^[chars]
+				# 0.146 seconds: loop: match ^[^chars]
+				empty bad list
+				foreach type [list global] { set list [concat $list [string tolower $custom($type)]] }
+#set t1 [clock clicks -microseconds]
+				empty found
+				foreach _ [sbd:find *] {
+					if [regexp -- {^[^\@\#\$\%\^\&\*]} $_] { lappend found [string tolower $_] }
+				}
+#set t2 [clock clicks -microseconds]
+#debug =LLENGTH\\FOUND([llength $found]) =[expr $t2 - $t1]\xCE\xBC
+				foreach channel [string tolower [concat global [channels]]] { regsub -nocase -- $channel $found # found }
+				foreach user [userlist] { regsub -nocase -- $user $found ! found }
+				set found [lsort -increasing -unique -dictionary $found]
+				empty ok
+				foreach registered $list {
+					if { [lsearch -glob $found $registered] == -1 } {
+						lappend bad $registered
+					} {
+						lappend ok $registered
+					}
+				}
+				# What about data that is registered but not assigned yet? (adduser:message)
+				foreach valid $list {
+					foreach _ $bad { if [string match -nocase $valid $_] { lremove bad $_ } }
+				}
+				if [notempty bad] {
+					one errors
+					print $nick "\[FIX -26\] The following obsolete data was found in the data file: [plural -comma -show entry [llength $bad]]. Repair flag: -26"
+					if [validflag -show] {
+						foreach a $bad { print $nick "[space 5]${a}" }
+					}
+					if [string eq -n REPAIR $1] {
+						foreach a $bad { foreach b $bad { sbd:set $a } }
+						print $nick "\[FIX -26\] -- Repair: deleted extraneous data from data file. --"
+						one save
+					}
+				}
+			}
+
+			if [validflag -27] {
+				if 0 {
+				# (DEFAULT)CMDLEVEL for core commands #
+				zero bad
+				emptyarray problem cmdlevel
+				array set temp_cmdlevel [defaultcommandlevels]
+				foreach a [array names temp_cmdlevel] {
+					set b $temp_cmdlevel($a)
+					foreach c $b {
+						if ![info exists cmdlevel($c)] {empty cmdlevel($c)}
+						lappend cmdlevel($c) $a
+					}
+
+				}
+debug.print 1 TEMP_CMDLEVEL([array get temp_cmdlevel]):CMDLEVEL([array get cmdlevel])
+				set source_age [file mtime [sbdget directory_script]/sb6.tcl]
+				set source_flags -none
+
+				foreach cmd [list maintenance version] {
+					foreach type [list "" default] {
+						if [string eq [null] [sbdget ${type}cmdlevel-${cmd}]] {
+							one errors
+							set base [stl $type]cmdlevel
+							if ![info exists problem($base)] {empty problem($base)}
+							lappend problem($base) $cmd
+							one bad
+							print $nick "\[FIX -11\] Uninitialized [stu $cmd] command level data: $base"
+							if [string eq -n REPAIR $1] {
+								sbdset ${base}-$cmd $cmdlevel($cmd)
+								set newcmdentry [list -command $cmd -source sb6.tcl -age $source_age -flags $source_flags -procname call_$cmd -globallevel $cmdlevel($cmd)]
+								SB:newcommandentry $newcmdentry
+								verifycmddata $cmd 1
+								print $nick "\[FIX -11\] -- Repair: re-activated [stu $cmd] command (via restoring $base) --"
+							}
+						}
+					}
+				}
+				}; # End IF 0
+			}
+
+			# Save files to disk (if necessary) #
+			if $save save
+			if $writedata { data save }
+
+			# Wrap it up #
+			if $errors {
+				print $nick "\[${0u}\] Errors found[iff $repair " and repaired" "\; repairs needed"]."
+			} {
+				print $nick "\[${0u}\] No FIX repairs needed."
+			}
+			return
+		}
+
+		default { print -help $nick "\[${0u}\] [jtext hen_no_kotae_ga_atta]"; return }
+
+	}
+	return
+}
 
